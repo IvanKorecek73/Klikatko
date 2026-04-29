@@ -345,6 +345,19 @@ p {
   font-family: inherit;
 }
 
+.auth-profile-hint {
+  border-radius: 8px;
+  padding: 9px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.auth-profile-hint.anonymous {
+  background: #eef6ff;
+  border: 1px solid #b9d7f5;
+  color: #1d5b93;
+}
+
 .auth-status {
   line-height: 1.45;
 }

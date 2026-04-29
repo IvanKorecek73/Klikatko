@@ -67,24 +67,6 @@
               }
             },
             {
-              "id": "pidlitacka-anonymous",
-              "label": "Anonymní uživatel",
-              "authRequest": "anonymous",
-              "noteDisabled": true,
-              "hiddenFields": [
-                "email",
-                "password"
-              ],
-              "values": {
-                "deviceId": "9d31e2d8-c3f4-4896-aefd-0d885b134c73",
-                "deviceName": "Anonymous iPhone",
-                "platform": "iOS",
-                "osVersion": "17.4",
-                "appVersion": "2.0.0",
-                "model": "iPhone 15 Pro"
-              }
-            },
-            {
               "id": "pidlitacka-petr-burian",
               "label": "petr.burian@litacka.cz",
               "note": "Doplňte lokální poznámku podle toho, pro jaké scénáře je účet vhodný.",
@@ -112,6 +94,24 @@
                 "osVersion": "14",
                 "appVersion": "2.0.0",
                 "model": "Samsung Galaxy S24"
+              }
+            },
+            {
+              "id": "pidlitacka-anonymous",
+              "label": "Anonymní uživatel",
+              "authRequest": "anonymous",
+              "noteDisabled": true,
+              "hiddenFields": [
+                "email",
+                "password"
+              ],
+              "values": {
+                "deviceId": "9d31e2d8-c3f4-4896-aefd-0d885b134c73",
+                "deviceName": "Anonymous iPhone",
+                "platform": "iOS",
+                "osVersion": "17.4",
+                "appVersion": "2.0.0",
+                "model": "iPhone 15 Pro"
               }
             }
           ],

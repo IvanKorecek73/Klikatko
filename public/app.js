@@ -747,6 +747,10 @@ function createAuthProfileSelector(authConfig) {
   const selectedProfile = getSelectedAuthProfile(authConfig);
 
   if (selectedProfile?.noteDisabled) {
+    const hint = document.createElement("div");
+    hint.className = "auth-profile-hint anonymous";
+    hint.textContent = "Anonymní session bez e-mailu a hesla";
+    wrapper.appendChild(hint);
     return wrapper;
   }
 
