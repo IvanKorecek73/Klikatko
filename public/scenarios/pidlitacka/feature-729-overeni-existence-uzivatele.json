@@ -375,6 +375,399 @@
           }
         }
       ]
+    },
+    {
+      "id": "password-recovery-active-user",
+      "title": "Obnova hesla - hladký průběh",
+      "description": "Ověří obnovení hesla pro existující aktivní účet přes e-mailový token.",
+      "smoke": false,
+      "manualInputRequired": true,
+      "requiresAuth": true,
+      "requiresAnonymousAuth": true,
+      "tags": ["account", "password"],
+      "instructions": [
+        "V panelu Přihlášení vyberte Anonymní uživatel a vytvořte anonymní session.",
+        "Použijte e-mail existujícího aktivního uživatele.",
+        "Po odeslání recovery e-mailu otevřete schránku, zkopírujte token z odkazu a vložte ho do kroku Resetovat heslo."
+      ],
+      "steps": [
+        {
+          "id": "password-recovery-request-active",
+          "title": "Požádat o obnovu hesla",
+          "description": "Pošle e-mail s odkazem pro obnovu hesla.",
+          "fields": [
+            {
+              "name": "email",
+              "label": "E-mail",
+              "value": "",
+              "placeholder": "např. aktivni.uzivatel@example.com"
+            },
+            {
+              "name": "language",
+              "label": "Jazyk",
+              "type": "select",
+              "value": "cs",
+              "options": [
+                { "value": "cs", "text": "Čeština" },
+                { "value": "en", "text": "English" }
+              ]
+            },
+            {
+              "name": "daysValid",
+              "label": "Platnost odkazu ve dnech",
+              "type": "number",
+              "value": 1,
+              "min": 1,
+              "step": 1
+            }
+          ],
+          "remember": {
+            "email": "{{form.email}}"
+          },
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/password/recovery",
+            "body": {
+              "email": "{{form.email}}",
+              "language": "{{form.language}}",
+              "daysValid": "{{form.daysValid}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.expiresAtUtc", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "password-recovery-reset-active",
+          "title": "Resetovat heslo",
+          "description": "Nastaví nové heslo pomocí tokenu z e-mailu.",
+          "instructions": [
+            "Do pole Token vložte hodnotu query parametru token z odkazu v e-mailu.",
+            "Nové heslo musí splňovat pravidla backendu."
+          ],
+          "fields": [
+            {
+              "name": "token",
+              "label": "Token z e-mailu",
+              "value": "",
+              "placeholder": "Vložte token z query parametru token"
+            },
+            {
+              "name": "newPassword",
+              "label": "Nové heslo",
+              "type": "password",
+              "value": "",
+              "placeholder": "Zadejte nové heslo"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/password/reset",
+            "body": {
+              "token": "{{form.token}}",
+              "newPassword": "{{form.newPassword}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.passwordChanged", "equals": true }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "password-recovery-inactive-user",
+      "title": "Obnova hesla - neaktivní účet",
+      "description": "Prověří, co backend dovolí u účtu založeného přes initialize, ale zatím nedokončeného přes complete.",
+      "smoke": false,
+      "manualInputRequired": true,
+      "requiresAuth": true,
+      "requiresAnonymousAuth": true,
+      "tags": ["account", "password"],
+      "instructions": [
+        "V panelu Přihlášení použijte anonymní session.",
+        "Použijte nový e-mail, který ještě není aktivovaný.",
+        "Scénář záměrně nedokončuje AccountCreation complete před obnovou hesla."
+      ],
+      "steps": [
+        {
+          "id": "password-recovery-inactive-initialize",
+          "title": "Založit neaktivní účet",
+          "description": "Založí účet přes initialize, ale neprovede complete.",
+          "fields": [
+            {
+              "name": "userName",
+              "label": "E-mail",
+              "value": "",
+              "placeholder": "např. test+inactive@example.com"
+            },
+            {
+              "name": "password",
+              "label": "Heslo",
+              "type": "password",
+              "value": "",
+              "placeholder": "Zadejte testovací heslo"
+            },
+            {
+              "name": "language",
+              "label": "Jazyk",
+              "type": "select",
+              "value": "cs",
+              "options": [
+                { "value": "cs", "text": "Čeština" },
+                { "value": "en", "text": "English" }
+              ]
+            }
+          ],
+          "remember": {
+            "email": "{{form.userName}}"
+          },
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/register/initialize",
+            "body": {
+              "userName": "{{form.userName}}",
+              "password": "{{form.password}}",
+              "language": "{{form.language}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.expiresAtUtc", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "password-recovery-request-inactive",
+          "title": "Požádat o obnovu hesla",
+          "description": "Zkusí poslat recovery e-mail pro zatím neaktivní účet.",
+          "fields": [
+            {
+              "name": "email",
+              "label": "E-mail",
+              "value": "{{context.email}}",
+              "trackDirty": false
+            },
+            {
+              "name": "language",
+              "label": "Jazyk",
+              "type": "select",
+              "value": "cs",
+              "options": [
+                { "value": "cs", "text": "Čeština" },
+                { "value": "en", "text": "English" }
+              ]
+            },
+            {
+              "name": "daysValid",
+              "label": "Platnost odkazu ve dnech",
+              "type": "number",
+              "value": 1,
+              "min": 1,
+              "step": 1
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/password/recovery",
+            "body": {
+              "email": "{{form.email}}",
+              "language": "{{form.language}}",
+              "daysValid": "{{form.daysValid}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.expiresAtUtc", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "password-recovery-reset-inactive",
+          "title": "Resetovat heslo",
+          "description": "Zkusí nastavit nové heslo přes token z recovery e-mailu.",
+          "fields": [
+            {
+              "name": "token",
+              "label": "Token z e-mailu",
+              "value": "",
+              "placeholder": "Vložte token z query parametru token"
+            },
+            {
+              "name": "newPassword",
+              "label": "Nové heslo",
+              "type": "password",
+              "value": "",
+              "placeholder": "Zadejte nové heslo"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/password/reset",
+            "body": {
+              "token": "{{form.token}}",
+              "newPassword": "{{form.newPassword}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.passwordChanged", "equals": true }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "password-recovery-invalid-token",
+      "title": "Obnova hesla - neplatný token",
+      "description": "Ověří, že reset hesla s neplatným tokenem skončí očekávanou chybou.",
+      "smoke": false,
+      "manualInputRequired": true,
+      "requiresAuth": true,
+      "requiresAnonymousAuth": true,
+      "tags": ["account", "password", "negative"],
+      "steps": [
+        {
+          "id": "password-recovery-reset-invalid-token",
+          "title": "Reset s neplatným tokenem",
+          "fields": [
+            {
+              "name": "token",
+              "label": "Token",
+              "value": "invalid-token",
+              "placeholder": "Neplatný token"
+            },
+            {
+              "name": "newPassword",
+              "label": "Nové heslo",
+              "type": "password",
+              "value": "Test!Password123",
+              "placeholder": "Zadejte nové heslo"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/password/reset",
+            "body": {
+              "token": "{{form.token}}",
+              "newPassword": "{{form.newPassword}}"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "outcome": "expectedError"
+          }
+        }
+      ]
+    },
+    {
+      "id": "password-recovery-weak-password",
+      "title": "Obnova hesla - slabé heslo",
+      "description": "Ověří validační pravidla pro nové heslo.",
+      "smoke": false,
+      "manualInputRequired": true,
+      "requiresAuth": true,
+      "requiresAnonymousAuth": true,
+      "tags": ["account", "password", "negative"],
+      "steps": [
+        {
+          "id": "password-recovery-reset-weak-password",
+          "title": "Reset se slabým heslem",
+          "fields": [
+            {
+              "name": "token",
+              "label": "Token",
+              "value": "invalid-token",
+              "placeholder": "Token může být pro validační scénář neplatný"
+            },
+            {
+              "name": "newPassword",
+              "label": "Slabé heslo",
+              "type": "password",
+              "value": "short",
+              "placeholder": "Zadejte slabé heslo"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/password/reset",
+            "body": {
+              "token": "{{form.token}}",
+              "newPassword": "{{form.newPassword}}"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "outcome": "expectedError"
+          }
+        }
+      ]
+    },
+    {
+      "id": "password-recovery-unknown-email",
+      "title": "Obnova hesla - neznámý e-mail",
+      "description": "Prověří chování backendu pro e-mail, který v systému neexistuje.",
+      "smoke": false,
+      "manualInputRequired": true,
+      "requiresAuth": true,
+      "requiresAnonymousAuth": true,
+      "tags": ["account", "password"],
+      "instructions": [
+        "Použijte e-mail, o kterém víte, že není v systému registrovaný.",
+        "Scénář pomáhá potvrdit, jestli API vrací neutrální úspěch nebo business chybu."
+      ],
+      "steps": [
+        {
+          "id": "password-recovery-request-unknown-email",
+          "title": "Požádat o obnovu pro neznámý e-mail",
+          "fields": [
+            {
+              "name": "email",
+              "label": "E-mail",
+              "value": "",
+              "placeholder": "např. unknown@example.com"
+            },
+            {
+              "name": "language",
+              "label": "Jazyk",
+              "type": "select",
+              "value": "cs",
+              "options": [
+                { "value": "cs", "text": "Čeština" },
+                { "value": "en", "text": "English" }
+              ]
+            },
+            {
+              "name": "daysValid",
+              "label": "Platnost odkazu ve dnech",
+              "type": "number",
+              "value": 1,
+              "min": 1,
+              "step": 1
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/password/recovery",
+            "body": {
+              "email": "{{form.email}}",
+              "language": "{{form.language}}",
+              "daysValid": "{{form.daysValid}}"
+            }
+          },
+          "expected": {
+            "status": 200
+          }
+        }
+      ]
     }
   ]
 }

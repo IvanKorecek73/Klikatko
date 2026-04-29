@@ -225,8 +225,12 @@ function requiresAuth(item) {
   return item?.requiresAuth === true;
 }
 
+function requiresAnonymousAuth(item) {
+  return item?.requiresAnonymousAuth === true;
+}
+
 function requiresAuthorization(item) {
-  return requiresJwt(item) || requiresAuth(item);
+  return requiresJwt(item) || requiresAuth(item) || requiresAnonymousAuth(item);
 }
 
 function getAuthorizationBadgeLabel() {
@@ -1255,8 +1259,28 @@ function hasUsableAuthorization() {
   return getJwtInfo(getCurrentJwtToken()).valid;
 }
 
+function hasRequiredAuthorizationFor(item) {
+  if (!requiresAuthorization(item)) {
+    return true;
+  }
+
+  if (!hasUsableAuthorization()) {
+    return false;
+  }
+
+  if (requiresAnonymousAuth(item)) {
+    return Boolean(state.authSession?.isAnonymous);
+  }
+
+  return true;
+}
+
 function requiresAuthorizationForStep(step) {
   return requiresAuthorization(step) || requiresAuthorization(state.scenario);
+}
+
+function requiresAnonymousAuthForStep(step) {
+  return requiresAnonymousAuth(step) || requiresAnonymousAuth(state.scenario);
 }
 
 function isSessionExpired(session) {
@@ -1273,12 +1297,26 @@ async function ensureAuthorizationReady() {
 
   if (authConfig.type === "login") {
     if (state.authSession?.accessToken && !isSessionExpired(state.authSession)) {
+      if (requiresAnonymousAuthForStep(currentStep()) && !state.authSession.isAnonymous) {
+        return {
+          ok: false,
+          message: "Tento scénář vyžaduje anonymní přihlášení. V panelu Přihlášení vyberte Anonymní uživatel."
+        };
+      }
+
       return { ok: true };
     }
 
     if (state.authSession?.refreshToken && authConfig.refresh) {
       try {
         await performAuthRequest("refresh", authConfig.refresh);
+        if (requiresAnonymousAuthForStep(currentStep()) && !state.authSession?.isAnonymous) {
+          return {
+            ok: false,
+            message: "Tento scénář vyžaduje anonymní přihlášení. V panelu Přihlášení vyberte Anonymní uživatel."
+          };
+        }
+
         return { ok: true, refreshed: true };
       } catch (error) {
         return {
@@ -1479,6 +1517,7 @@ function collectForms() {
         description: step.description || scenario.description || "",
         manualInputRequired: requiresManualInput(scenario) || requiresManualInput(step),
         requiresAuth: requiresAuthorization(scenario) || requiresAuthorization(step),
+        requiresAnonymousAuth: requiresAnonymousAuth(scenario) || requiresAnonymousAuth(step),
         tags: deriveScenarioTags({
           id: step.id,
           title: step.title,
@@ -1581,6 +1620,7 @@ function selectFreeForm(formId) {
     title: form.step.title,
     description: `Voln\u00fd formul\u00e1\u0159 z: ${form.scenarioTitle}`,
     requiresAuth: form.requiresAuth,
+    requiresAnonymousAuth: form.requiresAnonymousAuth,
     steps: [form.step]
   };
   state.stepIndex = 0;
@@ -1621,9 +1661,9 @@ function renderStep() {
   const stepRequiresAuth = requiresAuthorizationForStep(step);
   const missingContextKeys = getMissingContextKeys(step);
   elements.resetScenario.disabled = !state.scenario;
-  elements.runStep.disabled = !step || state.batchRunning || missingContextKeys.length > 0 || (stepRequiresAuth && !hasUsableAuthorization());
-  elements.autoRun.disabled = !state.scenario || state.freeForm || state.batchRunning || scenarioRequiresManualInput || (requiresAuthorization(state.scenario) && !hasUsableAuthorization());
-  elements.autoRunTarget.disabled = !state.scenario || state.freeForm || state.batchRunning || scenarioRequiresManualInput || (requiresAuthorization(state.scenario) && !hasUsableAuthorization());
+  elements.runStep.disabled = !step || state.batchRunning || missingContextKeys.length > 0 || (stepRequiresAuth && (!hasRequiredAuthorizationFor(step) || !hasRequiredAuthorizationFor(state.scenario)));
+  elements.autoRun.disabled = !state.scenario || state.freeForm || state.batchRunning || scenarioRequiresManualInput || !hasRequiredAuthorizationFor(state.scenario);
+  elements.autoRunTarget.disabled = !state.scenario || state.freeForm || state.batchRunning || scenarioRequiresManualInput || !hasRequiredAuthorizationFor(state.scenario);
   elements.runStep.textContent = "Spustit krok";
   elements.nextStep.disabled = !step || !state.lastStepResult || state.batchRunning;
 
@@ -2965,6 +3005,12 @@ function renderModeBanner() {
     return;
   }
 
+  if (requiresAnonymousAuth(state.scenario) && hasUsableAuthorization() && !state.authSession?.isAnonymous) {
+    elements.modeBanner.textContent = "Tento scénář vyžaduje anonymní přihlášení. V panelu Přihlášení vyberte Anonymní uživatel.";
+    elements.modeBanner.className = "mode-banner";
+    return;
+  }
+
   if (requiresAuthorization(state.scenario) && !hasUsableAuthorization()) {
     elements.modeBanner.textContent = getProjectAuthConfig().type === "login"
       ? "Tento scénář vyžaduje platné přihlášení v panelu Přístup."
@@ -3344,6 +3390,30 @@ function buildAppCardsHtml(body, step = currentStep()) {
     }));
   }
 
+  if (body.expiresAtUtc) {
+    return buildCardListHtml([body], item => ({
+      title: "E-mail pro obnovu hesla odeslán",
+      text: `Odkaz pro obnovu hesla je platný do ${formatDate(item.expiresAtUtc)}.`,
+      chips: [
+        "obnova hesla",
+        item.expiresAtUtc ? `platnost ${formatDate(item.expiresAtUtc)}` : null
+      ]
+    }));
+  }
+
+  if (typeof body.passwordChanged === "boolean") {
+    return buildCardListHtml([body], item => ({
+      title: item.passwordChanged ? "Heslo změněno" : "Heslo nebylo změněno",
+      text: item.passwordChanged
+        ? "Nové heslo bylo úspěšně nastaveno."
+        : "Backend nevrátil potvrzení o změně hesla.",
+      chips: [
+        item.passwordChanged ? "změněno" : "nezměněno",
+        item.createNewPasswordResult?.type || null
+      ]
+    }));
+  }
+
   if (body.sent === true) {
     return buildCardListHtml([body], () => ({
       title: "Aktivace znovu odeslána",
@@ -3661,6 +3731,7 @@ function summarizeBody(body) {
   addSummary(rows, "Aktivováno", typeof body.activateLoginCalled === "boolean" ? (body.activateLoginCalled ? "ano" : "ne") : null);
   addSummary(rows, "Platnost do", body.expiresAtUtc ? formatDate(body.expiresAtUtc) : null);
   addSummary(rows, "E-mail odeslán", typeof body.sent === "boolean" ? (body.sent ? "ano" : "ne") : null);
+  addSummary(rows, "Heslo změněno", typeof body.passwordChanged === "boolean" ? (body.passwordChanged ? "ano" : "ne") : null);
   addSummary(rows, "Booking", body.bookingId);
   addSummary(rows, "Platba", body.paymentId || body.paymentAttemptId);
   addSummary(rows, "Platebn\u00ed flow", getPaymentFlowLabel(body, false));
@@ -4063,7 +4134,7 @@ function createFormCard(form) {
         <span>${escapeHtml(form.step.request.method || "GET")}</span>
         <span>${escapeHtml(form.step.request.path)}</span>
         ${renderTagChips(form.tags)}
-        ${form.requiresAuth ? `<span class="meta-badge meta-badge-auth">${escapeHtml(getAuthorizationBadgeLabel())}</span>` : ""}
+        ${form.requiresAnonymousAuth ? `<span class="meta-badge meta-badge-auth">Anonym</span>` : form.requiresAuth ? `<span class="meta-badge meta-badge-auth">${escapeHtml(getAuthorizationBadgeLabel())}</span>` : ""}
         ${form.manualInputRequired ? `<span class="meta-badge meta-badge-manual">Ru\u010dn\u00ed vstup</span>` : ""}
       </div>
     </button>
@@ -4135,7 +4206,7 @@ function createScenarioCard(scenario) {
       <p>${escapeHtml(scenario.description)}</p>
       <div class="form-meta">
         ${renderTagChips(scenario.tags)}
-        ${requiresAuthorization(scenario) ? `<span class="meta-badge meta-badge-auth">${escapeHtml(getAuthorizationBadgeLabel())}</span>` : ""}
+        ${requiresAnonymousAuth(scenario) ? `<span class="meta-badge meta-badge-auth">Anonym</span>` : requiresAuthorization(scenario) ? `<span class="meta-badge meta-badge-auth">${escapeHtml(getAuthorizationBadgeLabel())}</span>` : ""}
         ${requiresManualInput(scenario) ? `<span class="meta-badge meta-badge-manual">Ru\u010dn\u00ed vstup</span>` : ""}
         ${!isSmokeEligible(scenario) ? `<span class="meta-badge meta-badge-smoke">Mimo smoke</span>` : ""}
       </div>
@@ -4432,6 +4503,8 @@ function getCategoryLabel(category) {
       return "Za\u0159\u00edzen\u00ed";
     case "account":
       return "U\u017eivatelsk\u00fd \u00fa\u010det";
+    case "password":
+      return "Heslo";
     case "parking":
       return "Parkování";
     case "zones":
