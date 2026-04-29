@@ -658,12 +658,12 @@ function getAuthorizationSummary(info) {
   const authConfig = getProjectAuthConfig();
 
   if (authConfig.type === "login") {
-    if (info.valid && state.authSession?.displayName) {
-      return `Přihlášen: ${state.authSession.displayName}`;
-    }
-
     if (info.valid && state.authSession?.isAnonymous) {
       return "Přihlášen: anonymní uživatel";
+    }
+
+    if (info.valid && state.authSession?.displayName) {
+      return `Přihlášen: ${state.authSession.displayName}`;
     }
 
     if (info.valid && state.authSession?.email) {
@@ -991,16 +991,17 @@ function updateSessionFromAuthResponse(body, config) {
   const displayNamePath = responseConfig.displayNamePath || "$.displayName";
   const identityIdPath = responseConfig.identityIdPath || "$.identityId";
   const deviceIdField = responseConfig.deviceIdField || "deviceId";
+  const isAnonymousSession = config.sessionKind === "anonymous" || Boolean(state.authSession?.isAnonymous);
 
   state.authSession = {
     accessToken: getPath(body, accessTokenPath) || state.authSession?.accessToken || "",
     refreshToken: getPath(body, refreshTokenPath) || state.authSession?.refreshToken || "",
     expiresAt: getPath(body, expiresAtPath) || state.authSession?.expiresAt || "",
-    email: getPath(body, emailPath) || state.authSession?.email || "",
-    displayName: getPath(body, displayNamePath) || state.authSession?.displayName || "",
+    email: isAnonymousSession ? "" : (getPath(body, emailPath) || state.authSession?.email || ""),
+    displayName: isAnonymousSession ? "" : (getPath(body, displayNamePath) || state.authSession?.displayName || ""),
     identityId: getPath(body, identityIdPath) || state.authSession?.identityId || "",
     deviceId: state.authFormValues?.[deviceIdField] || state.authSession?.deviceId || "",
-    isAnonymous: config.sessionKind === "anonymous" || Boolean(state.authSession?.isAnonymous)
+    isAnonymous: isAnonymousSession
   };
 }
 
@@ -1165,7 +1166,9 @@ function getLoginSessionInfo() {
 
   const tokenInfo = getJwtInfo(state.authSession.accessToken);
   const expiresAt = state.authSession.expiresAt || "";
-  const userLabel = state.authSession.displayName || state.authSession.email || "";
+  const userLabel = state.authSession.isAnonymous
+    ? "anonymní uživatel"
+    : (state.authSession.displayName || state.authSession.email || "");
   const refreshState = state.authSession.refreshToken ? "refresh token uložen" : "bez refresh tokenu";
 
   return {
