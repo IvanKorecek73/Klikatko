@@ -67,6 +67,24 @@
               }
             },
             {
+              "id": "pidlitacka-anonymous",
+              "label": "Anonymní uživatel",
+              "authRequest": "anonymous",
+              "noteDisabled": true,
+              "hiddenFields": [
+                "email",
+                "password"
+              ],
+              "values": {
+                "deviceId": "9d31e2d8-c3f4-4896-aefd-0d885b134c73",
+                "deviceName": "Anonymous iPhone",
+                "platform": "iOS",
+                "osVersion": "17.4",
+                "appVersion": "2.0.0",
+                "model": "iPhone 15 Pro"
+              }
+            },
+            {
               "id": "pidlitacka-petr-burian",
               "label": "petr.burian@litacka.cz",
               "note": "Doplňte lokální poznámku podle toho, pro jaké scénáře je účet vhodný.",
@@ -151,6 +169,28 @@
               "osVersion": "{{auth.osVersion}}",
               "appVersion": "{{auth.appVersion}}",
               "model": "{{auth.model}}"
+            }
+          },
+          "anonymous": {
+            "path": "/v1/auth/anonymous",
+            "buttonText": "Vytvořit anonymní session",
+            "sessionKind": "anonymous",
+            "body": {
+              "deviceId": "{{auth.deviceId}}",
+              "deviceName": "{{auth.deviceName}}",
+              "deviceMetadata": {
+                "platform": "{{auth.platform}}",
+                "osVersion": "{{auth.osVersion}}",
+                "appVersion": "{{auth.appVersion}}",
+                "model": "{{auth.model}}"
+              }
+            },
+            "response": {
+              "accessTokenPath": "$.accessToken",
+              "refreshTokenPath": "$.refreshToken",
+              "expiresAtPath": "$.expiresAt",
+              "identityIdPath": "$.identityId",
+              "deviceIdField": "deviceId"
             }
           },
           "response": {

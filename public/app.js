@@ -402,6 +402,32 @@ function getAuthProfileNote(profile) {
   return state.authProfileNotes?.[profile.id] ?? profile.note ?? "";
 }
 
+function getActiveLoginRequestConfig(authConfig = getProjectAuthConfig()) {
+  const loginConfig = authConfig?.login || null;
+
+  if (!loginConfig) {
+    return null;
+  }
+
+  const selectedProfile = getSelectedAuthProfile(authConfig);
+  const requestKey = selectedProfile?.authRequest;
+
+  if (requestKey && loginConfig[requestKey]) {
+    return loginConfig[requestKey];
+  }
+
+  return loginConfig;
+}
+
+function isAuthFieldVisibleForProfile(field, profile = getSelectedAuthProfile()) {
+  if (!field?.name) {
+    return false;
+  }
+
+  const hiddenFields = new Set(profile?.hiddenFields || []);
+  return !hiddenFields.has(field.name);
+}
+
 function loadSavedAuthFormValues(project) {
   if (!project?.id) {
     return {};
@@ -606,10 +632,11 @@ function renderTargetInfo() {
 
 function renderAuthPanel() {
   const authConfig = getProjectAuthConfig();
+  const activeLoginConfig = getActiveLoginRequestConfig(authConfig);
   elements.authPanelTitle.textContent = authConfig.panelTitle || (authConfig.type === "login" ? "Přihlášení" : "Přístup (JWT)");
   renderAuthForm();
   renderAuthPanelStatus();
-  elements.authLoginAction.textContent = authConfig.login?.buttonText || (authConfig.type === "login" ? "Přihlásit" : "Uložit");
+  elements.authLoginAction.textContent = activeLoginConfig?.buttonText || authConfig.login?.buttonText || (authConfig.type === "login" ? "Přihlásit" : "Uložit");
   elements.authRefreshAction.textContent = authConfig.refresh?.buttonText || "Obnovit";
   elements.authLogoutAction.textContent = authConfig.logout?.buttonText || "Odhlásit";
   elements.authResetAction.textContent = authConfig.type === "login" ? "Vymazat" : "Vyčistit";
@@ -633,6 +660,10 @@ function getAuthorizationSummary(info) {
   if (authConfig.type === "login") {
     if (info.valid && state.authSession?.displayName) {
       return `Přihlášen: ${state.authSession.displayName}`;
+    }
+
+    if (info.valid && state.authSession?.isAnonymous) {
+      return "Přihlášen: anonymní uživatel";
     }
 
     if (info.valid && state.authSession?.email) {
@@ -668,7 +699,13 @@ function renderAuthForm() {
       elements.authForm.appendChild(createAuthProfileSelector(authConfig));
     }
 
+    const selectedProfile = getSelectedAuthProfile(authConfig);
+
     for (const field of authConfig.login?.fields || []) {
+      if (!isAuthFieldVisibleForProfile(field, selectedProfile)) {
+        continue;
+      }
+
       elements.authForm.appendChild(createAuthField(field));
     }
 
@@ -707,6 +744,12 @@ function createAuthProfileSelector(authConfig) {
   selectWrapper.appendChild(select);
   wrapper.appendChild(selectWrapper);
 
+  const selectedProfile = getSelectedAuthProfile(authConfig);
+
+  if (selectedProfile?.noteDisabled) {
+    return wrapper;
+  }
+
   const noteWrapper = document.createElement("label");
   noteWrapper.className = "base-url auth-profile-note";
   noteWrapper.textContent = "Poznámka k účtu";
@@ -715,7 +758,7 @@ function createAuthProfileSelector(authConfig) {
   noteInput.name = "__profileNote";
   noteInput.rows = 3;
   noteInput.placeholder = "Např. má 3 uložená auta, 2 oblíbené zóny...";
-  noteInput.value = getAuthProfileNote(getSelectedAuthProfile(authConfig));
+  noteInput.value = getAuthProfileNote(selectedProfile);
   noteWrapper.appendChild(noteInput);
   wrapper.appendChild(noteWrapper);
 
@@ -765,8 +808,7 @@ function handleAuthFormInput(event) {
 
   if (target.name === "__selectedProfileId") {
     applyAuthProfileSelection(target.value, { overwrite: true });
-    renderAuthForm();
-    renderAuthPanelStatus();
+    renderAuthPanel();
     renderModeBanner();
     return;
   }
@@ -802,7 +844,7 @@ async function executeAuthLogin() {
     return;
   }
 
-  await performAuthRequest("login", authConfig.login);
+  await performAuthRequest("login", getActiveLoginRequestConfig(authConfig));
 }
 
 async function executeAuthRefresh() {
@@ -953,7 +995,8 @@ function updateSessionFromAuthResponse(body, config) {
     email: getPath(body, emailPath) || state.authSession?.email || "",
     displayName: getPath(body, displayNamePath) || state.authSession?.displayName || "",
     identityId: getPath(body, identityIdPath) || state.authSession?.identityId || "",
-    deviceId: state.authFormValues?.[deviceIdField] || state.authSession?.deviceId || ""
+    deviceId: state.authFormValues?.[deviceIdField] || state.authSession?.deviceId || "",
+    isAnonymous: config.sessionKind === "anonymous" || Boolean(state.authSession?.isAnonymous)
   };
 }
 
