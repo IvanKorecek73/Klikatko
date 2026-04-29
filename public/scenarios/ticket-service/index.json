@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "defaultPackId": "ticket-service-active",
+  "packs": [
+    {
+      "id": "ticket-service-baseline",
+      "name": "Ticket Service - baseline",
+      "description": "Zmrazena zaloha aktualniho stavu scenaru pred dalsim rozsirovanim.",
+      "file": "../ticket-service-baseline.json"
+    },
+    {
+      "id": "ticket-service-active",
+      "name": "Ticket Service - active",
+      "description": "Aktivni balicek scenaru urceny pro dalsi rozvoj.",
+      "file": "../ticket-service-active.json"
+    }
+  ]
+}

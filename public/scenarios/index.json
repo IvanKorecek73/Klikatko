@@ -1,0 +1,208 @@
+{
+  "version": 2,
+  "defaultProjectId": "ticket-service",
+  "projects": [
+    {
+      "id": "ticket-service",
+      "name": "Ticket Service",
+      "description": "Historické a aktivní packy pro původní Ticket Service testy.",
+      "manifest": "ticket-service/index.json",
+      "defaultBaseUrl": "/api",
+      "auth": {
+        "type": "jwt",
+        "panelTitle": "Přístup (JWT)",
+        "jwtLabel": "Bearer token",
+        "jwtPlaceholder": "Vložte platný JWT bearer token"
+      },
+      "defaultEnvironmentId": "ticket-local",
+      "environments": [
+        {
+          "id": "ticket-local",
+          "name": "LOCAL",
+          "targetBaseUrl": "http://localhost:5087"
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka",
+      "name": "PidLitacka",
+      "description": "Obecná infrastruktura pro nové packy nad cílovým řešením bez zásahu do backendu.",
+      "manifest": "pidlitacka/index.json",
+      "defaultBaseUrl": "/api",
+      "auth": {
+        "type": "login",
+        "panelTitle": "Přihlášení",
+        "login": {
+          "path": "/v1/auth/login",
+          "buttonText": "Přihlásit",
+          "profiles": [
+            {
+              "id": "pidlitacka-default",
+              "label": "adams.k@litacka.cz",
+              "note": "Výchozí testovací účet pro ruční scénáře. Poznámku můžete v klikátku lokálně upravit podle aktuálního stavu účtu.",
+              "values": {
+                "email": "adams.k@litacka.cz",
+                "password": "Test!7958c6cb13a54",
+                "deviceId": "b862b4eb-cbba-40b2-9e60-fa2b58c990dd",
+                "deviceName": "iPhone 15 Pro",
+                "platform": "iOS",
+                "osVersion": "17.4",
+                "appVersion": "2.0.0",
+                "model": "iPhone 15 Pro"
+              }
+            },
+            {
+              "id": "pidlitacka-anna-berankova",
+              "label": "anna.berankova@litacka.cz",
+              "note": "Doplňte lokální poznámku podle toho, pro jaké scénáře je účet vhodný.",
+              "values": {
+                "email": "anna.berankova@litacka.cz",
+                "password": "Test!bde2a7f60e124",
+                "deviceId": "2b2f7300-fd24-4d79-a6c7-9d6b5d6f6b57",
+                "deviceName": "iPhone 14",
+                "platform": "iOS",
+                "osVersion": "17.3",
+                "appVersion": "2.0.0",
+                "model": "iPhone 14"
+              }
+            },
+            {
+              "id": "pidlitacka-petr-burian",
+              "label": "petr.burian@litacka.cz",
+              "note": "Doplňte lokální poznámku podle toho, pro jaké scénáře je účet vhodný.",
+              "values": {
+                "email": "petr.burian@litacka.cz",
+                "password": "Test!bdeyyf60e124",
+                "deviceId": "6d7cf3e8-1462-4200-b302-2cfb773084f0",
+                "deviceName": "Pixel 8",
+                "platform": "Android",
+                "osVersion": "14",
+                "appVersion": "2.0.0",
+                "model": "Pixel 8"
+              }
+            },
+            {
+              "id": "pidlitacka-test-generic",
+              "label": "test@litacka.cz",
+              "note": "Obecný testovací účet. Doplňte lokální poznámku podle aktuálního použití.",
+              "values": {
+                "email": "test@litacka.cz",
+                "password": "Test123+",
+                "deviceId": "f2e0ea0d-7c6e-4f10-bad2-e4085ea4a0a8",
+                "deviceName": "Samsung Galaxy S24",
+                "platform": "Android",
+                "osVersion": "14",
+                "appVersion": "2.0.0",
+                "model": "Samsung Galaxy S24"
+              }
+            }
+          ],
+          "fields": [
+            {
+              "name": "email",
+              "label": "E-mail",
+              "value": "adams.k@litacka.cz"
+            },
+            {
+              "name": "password",
+              "label": "Heslo",
+              "type": "password",
+              "value": "Test!7958c6cb13a54",
+              "persist": false
+            },
+            {
+              "name": "deviceId",
+              "label": "Device ID",
+              "value": "b862b4eb-cbba-40b2-9e60-fa2b58c990dd"
+            },
+            {
+              "name": "deviceName",
+              "label": "Název zařízení",
+              "value": "iPhone 15 Pro"
+            },
+            {
+              "name": "platform",
+              "label": "Platforma",
+              "value": "iOS"
+            },
+            {
+              "name": "osVersion",
+              "label": "Verze OS",
+              "value": "17.4"
+            },
+            {
+              "name": "appVersion",
+              "label": "Verze aplikace",
+              "value": "2.0.0"
+            },
+            {
+              "name": "model",
+              "label": "Model",
+              "value": "iPhone 15 Pro"
+            }
+          ],
+          "body": {
+            "email": "{{auth.email}}",
+            "password": "{{auth.password}}",
+            "deviceId": "{{auth.deviceId}}",
+            "deviceName": "{{auth.deviceName}}",
+            "deviceMetadata": {
+              "platform": "{{auth.platform}}",
+              "osVersion": "{{auth.osVersion}}",
+              "appVersion": "{{auth.appVersion}}",
+              "model": "{{auth.model}}"
+            }
+          },
+          "response": {
+            "accessTokenPath": "$.accessToken",
+            "refreshTokenPath": "$.refreshToken",
+            "expiresAtPath": "$.expiresAt",
+            "identityIdPath": "$.identityId",
+            "emailPath": "$.email",
+            "displayNamePath": "$.displayName",
+            "deviceIdField": "deviceId"
+          }
+        },
+        "refresh": {
+          "path": "/v1/auth/token",
+          "buttonText": "Obnovit přihlášení",
+          "body": {
+            "refreshToken": "{{session.refreshToken}}",
+            "deviceId": "{{session.deviceId}}"
+          },
+          "response": {
+            "accessTokenPath": "$.accessToken",
+            "refreshTokenPath": "$.refreshToken",
+            "expiresAtPath": "$.expiresAt",
+            "identityIdPath": "$.identityId",
+            "emailPath": "$.email",
+            "displayNamePath": "$.displayName",
+            "deviceIdField": "deviceId"
+          }
+        },
+        "logout": {
+          "path": "/v1/auth/logout",
+          "buttonText": "Odhlásit",
+          "attachAccessToken": true,
+          "body": {
+            "deviceId": "{{session.deviceId}}",
+            "refreshToken": "{{session.refreshToken}}"
+          }
+        }
+      },
+      "defaultEnvironmentId": "pidlitacka-local",
+      "environments": [
+        {
+          "id": "pidlitacka-local",
+          "name": "LOCAL",
+          "targetBaseUrl": "https://localhost:7261"
+        },
+        {
+          "id": "pidlitacka-integration",
+          "name": "INTEGRAČNÍ",
+          "targetBaseUrl": "https://pidl2-backend.int.pidlitacka.cz/"
+        }
+      ]
+    }
+  ]
+}

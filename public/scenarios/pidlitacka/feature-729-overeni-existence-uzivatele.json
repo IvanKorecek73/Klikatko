@@ -1,0 +1,380 @@
+{
+  "version": 1,
+  "name": "PidLitacka - AccountCreation",
+  "scenarios": [
+    {
+      "id": "account-creation-new-user",
+      "title": "Nový uživatel - hladký průběh",
+      "description": "Ověří založení nového účtu od kontroly e-mailu přes initialize až po complete s tokenem z doručeného e-mailu.",
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["account"],
+      "instructions": [
+        "Použijte dosud nepoužitý e-mail.",
+        "Po kroku Initialize otevřete testovací schránku, zkopírujte hodnotu query parametru token z aktivačního odkazu a vložte ji do kroku Complete."
+      ],
+      "steps": [
+        {
+          "id": "account-check-new-user",
+          "title": "Ověřit, že uživatel neexistuje",
+          "description": "Před založením ověří, že zadaný e-mail ještě neexistuje v MOSu.",
+          "instructions": [
+            "Doplňte e-mail, který ještě nebyl v MOSu použit."
+          ],
+          "fields": [
+            {
+              "name": "userName",
+              "label": "E-mail",
+              "value": "",
+              "placeholder": "např. test+novy@example.com",
+              "help": "Musí jít o dosud nepoužitý e-mail."
+            }
+          ],
+          "remember": {
+            "userName": "{{form.userName}}"
+          },
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/register/check",
+            "body": {
+              "userName": "{{form.userName}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.exists", "equals": false },
+              { "path": "$.isActive", "equals": false }
+            ]
+          }
+        },
+        {
+          "id": "account-initialize-new-user",
+          "title": "Initialize account creation",
+          "description": "Založí neaktivní login a odešle aktivační e-mail.",
+          "instructions": [
+            "Heslo zvolte podle pravidel testovacího prostředí.",
+            "Jazyk lze nechat na výchozí hodnotě cs."
+          ],
+          "fields": [
+            {
+              "name": "userName",
+              "label": "E-mail",
+              "value": "{{context.userName}}",
+              "placeholder": "např. test+novy@example.com",
+              "trackDirty": false
+            },
+            {
+              "name": "password",
+              "label": "Heslo",
+              "type": "password",
+              "value": "",
+              "placeholder": "Zadejte testovací heslo"
+            },
+            {
+              "name": "language",
+              "label": "Jazyk",
+              "type": "select",
+              "value": "cs",
+              "options": [
+                { "value": "cs", "text": "Čeština" },
+                { "value": "en", "text": "English" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/register/initialize",
+            "body": {
+              "userName": "{{form.userName}}",
+              "password": "{{form.password}}",
+              "language": "{{form.language}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.expiresAtUtc", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "account-complete-new-user",
+          "title": "Complete account creation",
+          "description": "Dokončí aktivaci uživatele z tokenu, který přišel v e-mailu.",
+          "instructions": [
+            "Otevřete doručený aktivační e-mail.",
+            "Zkopírujte hodnotu query parametru token z URL a vložte ji do pole Token."
+          ],
+          "fields": [
+            {
+              "name": "token",
+              "label": "Token z e-mailu",
+              "value": "",
+              "placeholder": "Vložte token z query parametru token"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/register/complete",
+            "body": {
+              "token": "{{form.token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.activateLoginCalled", "equals": true },
+              { "path": "$.finalStatus", "equals": "Activated" },
+              { "path": "$.userName", "notEmpty": true }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "account-creation-inactive-user",
+      "title": "Existující neaktivní uživatel",
+      "description": "Ověří resend activation pro existující neaktivní login a následně complete s novým tokenem z e-mailu.",
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["account"],
+      "instructions": [
+        "Použijte e-mail existujícího, ale dosud neaktivního uživatele.",
+        "Po kroku Resend activation otevřete nový aktivační e-mail, zkopírujte token a vložte ho do kroku Complete."
+      ],
+      "steps": [
+        {
+          "id": "account-check-inactive-user",
+          "title": "Ověřit neaktivního uživatele",
+          "description": "První kontrola musí potvrdit, že uživatel existuje, ale ještě není aktivní.",
+          "instructions": [
+            "Doplňte e-mail existujícího neaktivního uživatele."
+          ],
+          "fields": [
+            {
+              "name": "userName",
+              "label": "E-mail",
+              "value": "",
+              "placeholder": "např. test+inactive@example.com",
+              "help": "Musí jít o existující neaktivní účet."
+            }
+          ],
+          "remember": {
+            "userName": "{{form.userName}}"
+          },
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/register/check",
+            "body": {
+              "userName": "{{form.userName}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.exists", "equals": true },
+              { "path": "$.isActive", "equals": false }
+            ]
+          }
+        },
+        {
+          "id": "account-resent-activation",
+          "title": "Resend activation",
+          "description": "Znovu pošle aktivační e-mail pro existující neaktivní login.",
+          "instructions": [
+            "Jazyk lze ponechat na výchozí hodnotě cs."
+          ],
+          "fields": [
+            {
+              "name": "userName",
+              "label": "E-mail",
+              "value": "{{context.userName}}",
+              "trackDirty": false
+            },
+            {
+              "name": "language",
+              "label": "Jazyk",
+              "type": "select",
+              "value": "cs",
+              "options": [
+                { "value": "cs", "text": "Čeština" },
+                { "value": "en", "text": "English" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/register/resend-activation",
+            "body": {
+              "userName": "{{form.userName}}",
+              "language": "{{form.language}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.sent", "equals": true }
+            ]
+          }
+        },
+        {
+          "id": "account-complete-inactive-user",
+          "title": "Complete account creation",
+          "description": "Dokončí aktivaci z tokenu, který přišel po resend activation.",
+          "instructions": [
+            "Otevřete nový aktivační e-mail.",
+            "Zkopírujte token z URL a vložte ho do pole Token."
+          ],
+          "fields": [
+            {
+              "name": "token",
+              "label": "Token z e-mailu",
+              "value": "",
+              "placeholder": "Vložte token z query parametru token"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/register/complete",
+            "body": {
+              "token": "{{form.token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.activateLoginCalled", "equals": true },
+              { "path": "$.finalStatus", "equals": "Activated" },
+              { "path": "$.userName", "notEmpty": true }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "account-creation-active-user",
+      "title": "Existující aktivní uživatel",
+      "description": "Ověří, že pro již aktivní účet nemá smysl pokračovat do initialize ani resend activation.",
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["account"],
+      "instructions": [
+        "Použijte e-mail existujícího aktivního uživatele.",
+        "Pokud kontrola vrátí exists=true a isActive=true, scénář je splněn a nemá následovat další krok."
+      ],
+      "steps": [
+        {
+          "id": "account-check-active-user",
+          "title": "Ověřit aktivního uživatele",
+          "description": "Kontrola potvrdí, že účet už existuje a je aktivní.",
+          "instructions": [
+            "Doplňte e-mail existujícího aktivního uživatele."
+          ],
+          "fields": [
+            {
+              "name": "userName",
+              "label": "E-mail",
+              "value": "",
+              "placeholder": "např. test+active@example.com",
+              "help": "Musí jít o existující aktivní účet."
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/register/check",
+            "body": {
+              "userName": "{{form.userName}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.exists", "equals": true },
+              { "path": "$.isActive", "equals": true }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "account-creation-resend-active-user",
+      "title": "Reaktivační e-mail pro aktivní účet",
+      "description": "Ověří, že pokus o resend activation pro již aktivní účet skončí očekávaným neúspěchem.",
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["account", "negative"],
+      "instructions": [
+        "Použijte e-mail existujícího aktivního uživatele.",
+        "Scénář má správně skončit business chybou, protože účet už je aktivní."
+      ],
+      "steps": [
+        {
+          "id": "account-check-active-user-before-resend",
+          "title": "Ověřit aktivní účet",
+          "description": "Nejprve potvrďte, že účet existuje a je aktivní.",
+          "fields": [
+            {
+              "name": "userName",
+              "label": "E-mail",
+              "value": "",
+              "placeholder": "např. test+active@example.com"
+            }
+          ],
+          "remember": {
+            "userName": "{{form.userName}}"
+          },
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/register/check",
+            "body": {
+              "userName": "{{form.userName}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.exists", "equals": true },
+              { "path": "$.isActive", "equals": true }
+            ]
+          }
+        },
+        {
+          "id": "account-resend-active-user",
+          "title": "Zkusit znovu odeslat aktivaci",
+          "description": "Pokusí se znovu poslat aktivační e-mail pro již aktivní účet.",
+          "fields": [
+            {
+              "name": "userName",
+              "label": "E-mail",
+              "value": "{{context.userName}}",
+              "trackDirty": false
+            },
+            {
+              "name": "language",
+              "label": "Jazyk",
+              "type": "select",
+              "value": "cs",
+              "options": [
+                { "value": "cs", "text": "Čeština" },
+                { "value": "en", "text": "English" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/register/resend-activation",
+            "body": {
+              "userName": "{{form.userName}}",
+              "language": "{{form.language}}"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "outcome": "expectedError"
+          }
+        }
+      ]
+    }
+  ]
+}

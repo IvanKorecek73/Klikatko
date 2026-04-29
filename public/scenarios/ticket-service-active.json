@@ -1,0 +1,1861 @@
+{
+  "version": 1,
+  "name": "Ticket Service refactoring coverage",
+  "scenarios": [
+    {
+      "id": "persistence-diagnostics",
+      "title": "Persistence diagnostics",
+      "description": "Ov\u011b\u0159\u00ed, jakou persistence konfiguraci pr\u00e1v\u011b pou\u017e\u00edv\u00e1 spu\u0161t\u011bn\u00fd backend.",
+      "steps": [
+        {
+          "id": "persistence-info",
+          "title": "Stav persistence",
+          "description": "Development endpoint vr\u00e1t\u00ed provider katalogu, stav datab\u00e1zov\u00e9ho kontextu a po\u010det dostupn\u00fdch produkt\u016f.",
+          "request": {
+            "method": "GET",
+            "path": "/_test/ticket-service/persistence/info"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "READY" },
+              { "path": "$.products.count", "atLeast": 1 }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "persistence-roundtrip",
+      "title": "Persistence roundtrip",
+      "description": "Vytvo\u0159\u00ed booking a platbu p\u0159es b\u011b\u017en\u00e9 API a n\u00e1sledn\u011b je znovu na\u010dte. P\u0159i Postgres profilu lze ID pou\u017e\u00edt i po restartu backendu.",
+      "steps": [
+        {
+          "id": "persistence-info",
+          "title": "Stav persistence",
+          "description": "Nejd\u0159\u00edve ov\u011b\u0159\u00ed, nad jak\u00fdm persistence providerem backend b\u011b\u017e\u00ed.",
+          "request": {
+            "method": "GET",
+            "path": "/_test/ticket-service/persistence/info"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "READY" },
+              { "path": "$.products.count", "atLeast": 1 }
+            ]
+          }
+        },
+        {
+          "id": "offer",
+          "title": "Vybrat j\u00edzdenku",
+          "fields": [
+            {
+              "name": "productId",
+              "label": "Produkt",
+              "type": "select",
+              "value": "1",
+              "valueType": "number",
+              "options": [
+                { "value": "1", "text": "Jednotliv\u00e1 j\u00edzdenka 30 minut" },
+                { "value": "2", "text": "Jednotliv\u00e1 j\u00edzdenka 90 minut" }
+              ]
+            },
+            { "name": "amount", "label": "Po\u010det", "type": "number", "value": "1", "min": 1, "step": 1 },
+            {
+              "name": "zones",
+              "label": "Z\u00f3ny",
+              "type": "tag-list",
+              "value": ["P", "0", "B"],
+              "emptyText": "Vyberte z\u00f3ny, pro kter\u00e9 m\u00e1 b\u00fdt nab\u00eddka p\u0159ipravena.",
+              "options": [
+                { "value": "P", "text": "P - Praha" },
+                { "value": "0", "text": "0 - P\u00e1smo 0" },
+                { "value": "B", "text": "B - Vn\u011bj\u0161\u00ed p\u00e1smo B" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/offers",
+            "body": {
+              "productId": "{{form.productId}}",
+              "amount": "{{form.amount}}",
+              "zones": "{{form.zones}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.offers", "lengthAtLeast": 1 }
+            ]
+          },
+          "extract": {
+            "offerId": "$.offers[0].offerId"
+          }
+        },
+        {
+          "id": "create-booking",
+          "title": "Vytvo\u0159it booking",
+          "description": "Booking by m\u011bl b\u00fdt ulo\u017een\u00fd do aktu\u00e1ln\u00ed persistence vrstvy.",
+          "fields": [
+            { "name": "offerId", "label": "Offer ID", "value": "{{context.offerId}}" },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/bookings",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "offerId": "{{form.offerId}}",
+              "amount": 1
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.bookingId", "notEmpty": true },
+              { "path": "$.status", "equals": "PREBOOKED" }
+            ]
+          },
+          "extract": {
+            "bookingId": "$.bookingId"
+          }
+        },
+        {
+          "id": "create-payment",
+          "title": "Vytvo\u0159it platbu",
+          "description": "Payment attempt by m\u011bl b\u00fdt ulo\u017een\u00fd ke stejn\u00e9mu bookingu.",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" },
+            {
+              "name": "method",
+              "label": "Zp\u016fsob platby",
+              "type": "select",
+              "value": "card",
+              "options": [
+                { "value": "card", "text": "Platebn\u00ed karta" },
+                { "value": "card_lvp", "text": "Platebn\u00ed karta LVP" }
+              ]
+            },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}/payments",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "method": "{{form.method}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.paymentId", "notEmpty": true },
+              { "path": "$.status", "equals": "CREATED" }
+            ]
+          },
+          "extract": {
+            "paymentId": "$.paymentId"
+          }
+        },
+        {
+          "id": "reload-booking",
+          "title": "Znovu na\u010d\u00edst booking",
+          "description": "Po restartu backendu lze do pole vlo\u017eit d\u0159\u00edve vytvo\u0159en\u00e9 Booking ID a ov\u011b\u0159it, zda z\u016fstalo ulo\u017een\u00e9.",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.bookingId", "notEmpty": true },
+              { "path": "$.status", "equals": "PREBOOKED" }
+            ]
+          }
+        },
+        {
+          "id": "reload-payment",
+          "title": "Znovu na\u010d\u00edst platbu",
+          "description": "Po restartu backendu lze do pol\u00ed vlo\u017eit d\u0159\u00edve vytvo\u0159en\u00e9 Booking ID a Payment ID.",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" },
+            { "name": "paymentId", "label": "Payment ID", "value": "{{context.paymentId}}" }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}/payments/{{form.paymentId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.paymentAttemptId", "notEmpty": true },
+              { "path": "$.state", "equals": "CREATED" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "payment-cards",
+      "title": "Ulo\u017een\u00e9 platebn\u00ed karty",
+      "description": "Zalo\u017e\u00ed novou kartu, ov\u011b\u0159\u00ed seznam, uprav\u00ed jej\u00ed n\u00e1zev a nakonec ji sma\u017ee.",
+      "steps": [
+        {
+          "id": "create-payment-card",
+          "title": "P\u0159idat kartu",
+          "description": "U\u017eivatel si zalo\u017e\u00ed novou ulo\u017eenou kartu pro dal\u0161\u00ed platby.",
+          "fields": [
+            { "name": "name", "label": "N\u00e1zev karty", "value": "Moje hlavn\u00ed karta" },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/payment-cards",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "name": "{{form.name}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.cardId", "notEmpty": true },
+              { "path": "$.registrationUrl", "notEmpty": true }
+            ]
+          },
+          "extract": {
+            "cardId": "$.cardId"
+          }
+        },
+        {
+          "id": "list-payment-cards",
+          "title": "Zobrazit ulo\u017een\u00e9 karty",
+          "description": "Seznam ulo\u017een\u00fdch karet u\u017e vrac\u00ed kartu jako aktivn\u00ed bez registra\u010dn\u00ed URL.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/payment-cards"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$", "lengthAtLeast": 1 },
+              { "path": "$[0].registrationUrl", "equals": null }
+            ]
+          }
+        },
+        {
+          "id": "update-payment-card",
+          "title": "Upravit n\u00e1zev karty",
+          "description": "U\u017eivatel si zm\u011bn\u00ed vlastn\u00ed popisek karty.",
+          "fields": [
+            { "name": "cardId", "label": "Card ID", "value": "{{context.cardId}}" },
+            { "name": "name", "label": "Nov\u00fd n\u00e1zev", "value": "Firemn? karta" }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/tickets/payment-cards/{{form.cardId}}",
+            "body": {
+              "name": "{{form.name}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.name", "equals": "Firemn? karta" }
+            ]
+          }
+        },
+        {
+          "id": "delete-payment-card",
+          "title": "Smazat kartu",
+          "description": "U?ivatel kartu odebere ze sv?ho seznamu ulo?en?ch karet.",
+          "fields": [
+            { "name": "cardId", "label": "Card ID", "value": "{{context.cardId}}" }
+          ],
+          "request": {
+            "method": "DELETE",
+            "path": "/v1/tickets/payment-cards/{{form.cardId}}"
+          },
+          "expected": {
+            "status": 204
+          }
+        }
+      ]
+    },
+    {
+      "id": "purchase-with-saved-card",
+      "title": "Platba ulo\u017eenou kartou",
+      "description": "Zalo\u017e\u00ed kartu, vytvo\u0159\u00ed booking a inicializuje platbu s `savedCardToken` m\u00edsto b\u011b\u017en\u00e9ho card-only flow.",
+      "steps": [
+        {
+          "id": "create-payment-card",
+          "title": "P\u0159idat kartu",
+          "fields": [
+            { "name": "name", "label": "N\u00e1zev karty", "value": "Karta pro n?kup" },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/payment-cards",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "name": "{{form.name}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.cardId", "notEmpty": true }
+            ]
+          },
+          "extract": {
+            "cardId": "$.cardId"
+          }
+        },
+        {
+          "id": "offer",
+          "title": "Vybrat j\u00edzdenku",
+          "fields": [
+            {
+              "name": "productId",
+              "label": "Produkt",
+              "type": "select",
+              "value": "1",
+              "valueType": "number",
+              "options": [
+                { "value": "1", "text": "Jednotliv\u00e1 j\u00edzdenka 30 minut" },
+                { "value": "2", "text": "Jednotliv\u00e1 j\u00edzdenka 90 minut" }
+              ]
+            },
+            { "name": "amount", "label": "Po\u010det", "type": "number", "value": "1", "min": 1, "step": 1 },
+            {
+              "name": "zones",
+              "label": "Z\u00f3ny",
+              "type": "tag-list",
+              "value": ["P", "0", "B"],
+              "emptyText": "Vyberte z\u00f3ny, pro kter\u00e9 m\u00e1 b\u00fdt nab\u00eddka p\u0159ipravena.",
+              "options": [
+                { "value": "P", "text": "P - Praha" },
+                { "value": "0", "text": "0 - P\u00e1smo 0" },
+                { "value": "B", "text": "B - Vn\u011bj\u0161\u00ed p\u00e1smo B" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/offers",
+            "body": {
+              "productId": "{{form.productId}}",
+              "amount": "{{form.amount}}",
+              "zones": "{{form.zones}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.offers[0].offerId", "notEmpty": true }
+            ]
+          },
+          "extract": {
+            "offerId": "$.offers[0].offerId"
+          }
+        },
+        {
+          "id": "booking",
+          "title": "Potvrdit nab?dku",
+          "fields": [
+            { "name": "offerId", "label": "Offer ID", "value": "{{context.offerId}}" },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/bookings",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "offerId": "{{form.offerId}}",
+              "amount": 1
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.bookingId", "notEmpty": true },
+              { "path": "$.status", "equals": "PREBOOKED" }
+            ]
+          },
+          "extract": {
+            "bookingId": "$.bookingId"
+          }
+        },
+        {
+          "id": "create-payment-saved-card",
+          "title": "Zaplatit ulo\u017eenou kartou",
+          "description": "Platba pou\u017eije `savedCardToken` odpov\u00eddaj\u00edc\u00ed d\u0159\u00edve zalo\u017een\u00e9 kart\u011b.",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" },
+            {
+              "name": "method",
+              "label": "Zp\u016fsob platby",
+              "type": "select",
+              "value": "card",
+              "options": [
+                { "value": "card", "text": "Platebn\u00ed karta" }
+              ]
+            },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}/payments",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "method": "{{form.method}}",
+              "savedCardToken": "saved-card-{{context.cardId}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.paymentId", "notEmpty": true },
+              { "path": "$.status", "equals": "CREATED" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "saved-card-lvp-rejected",
+      "title": "Ulo\u017een\u00e1 karta a LVP odm\u00edtnuto",
+      "description": "Ulo\u017een\u00e1 karta sm\u00ed j\u00edt jen standardn\u00edm card token flow. Kombinace se zp\u016fsobem `card_lvp` m\u00e1 skon\u010dit valida\u010dn\u00ed chybou.",
+      "steps": [
+        {
+          "id": "create-payment-card",
+          "title": "P\u0159idat kartu",
+          "fields": [
+            { "name": "name", "label": "N\u00e1zev karty", "value": "Karta pro LVP test" },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/payment-cards",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "name": "{{form.name}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.cardId", "notEmpty": true }
+            ]
+          },
+          "extract": {
+            "cardId": "$.cardId"
+          }
+        },
+        {
+          "id": "offer",
+          "title": "Vybrat j\u00edzdenku",
+          "fields": [
+            {
+              "name": "productId",
+              "label": "Produkt",
+              "type": "select",
+              "value": "1",
+              "valueType": "number",
+              "options": [
+                { "value": "1", "text": "Jednotliv\u00e1 j\u00edzdenka 30 minut" },
+                { "value": "2", "text": "Jednotliv\u00e1 j\u00edzdenka 90 minut" }
+              ]
+            },
+            { "name": "amount", "label": "Po\u010det", "type": "number", "value": "1", "min": 1, "step": 1 },
+            {
+              "name": "zones",
+              "label": "Z\u00f3ny",
+              "type": "tag-list",
+              "value": ["P", "0", "B"],
+              "emptyText": "Vyberte z\u00f3ny, pro kter\u00e9 m\u00e1 b\u00fdt nab\u00eddka p\u0159ipravena.",
+              "options": [
+                { "value": "P", "text": "P - Praha" },
+                { "value": "0", "text": "0 - P\u00e1smo 0" },
+                { "value": "B", "text": "B - Vn\u011bj\u0161\u00ed p\u00e1smo B" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/offers",
+            "body": {
+              "productId": "{{form.productId}}",
+              "amount": "{{form.amount}}",
+              "zones": "{{form.zones}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.offers[0].offerId", "notEmpty": true }
+            ]
+          },
+          "extract": {
+            "offerId": "$.offers[0].offerId"
+          }
+        },
+        {
+          "id": "booking",
+          "title": "Potvrdit nab?dku",
+          "fields": [
+            { "name": "offerId", "label": "Offer ID", "value": "{{context.offerId}}" },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/bookings",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "offerId": "{{form.offerId}}",
+              "amount": 1
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.bookingId", "notEmpty": true },
+              { "path": "$.status", "equals": "PREBOOKED" }
+            ]
+          },
+          "extract": {
+            "bookingId": "$.bookingId"
+          }
+        },
+        {
+          "id": "create-payment-saved-card-lvp",
+          "title": "Zkusit ulozenou kartu s LVP",
+          "description": "Tato kombinace nem\u00e1 proj\u00edt, proto\u017ee `savedCardToken` pou\u017e\u00edv\u00e1 standardn\u00ed card token flow.",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" },
+            {
+              "name": "method",
+              "label": "Zp\u016fsob platby",
+              "type": "select",
+              "value": "card_lvp",
+              "options": [
+                { "value": "card_lvp", "text": "Platebn\u00ed karta LVP" }
+              ]
+            },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}/payments",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "method": "{{form.method}}",
+              "savedCardToken": "saved-card-{{context.cardId}}"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "outcome": "expectedError"
+          }
+        }
+      ]
+    },
+    {
+      "id": "device-registration",
+      "title": "Registrace za\u0159\u00edzen\u00ed",
+      "description": "Zalo\u017e\u00ed mobiln\u00ed za\u0159\u00edzen\u00ed a pot\u00e9 aktualizuje jeho Firebase token pro dal\u0161\u00ed push notifikace.",
+      "steps": [
+        {
+          "id": "create-device",
+          "title": "Registrovat za\u0159\u00edzen\u00ed",
+          "description": "Mobiln\u00ed aplikace se zaregistruje pod u\u017eivatelem a z\u00edsk\u00e1 `deviceId` pro dal\u0161\u00ed use case.",
+          "fields": [
+            { "name": "deviceIdentifier", "label": "Device identifier", "value": "ios-simulator-001" },
+            { "name": "deviceModel", "label": "Model", "value": "iPhone 15" },
+            {
+              "name": "platform",
+              "label": "Platforma",
+              "type": "select",
+              "value": "iOS",
+              "options": [
+                { "value": "iOS", "text": "iOS" },
+                { "value": "Android", "text": "Android" }
+              ]
+            },
+            { "name": "firebaseToken", "label": "Firebase token", "value": "firebase-token-001" },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/devices",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "deviceIdentifier": "{{form.deviceIdentifier}}",
+              "deviceModel": "{{form.deviceModel}}",
+              "platform": "{{form.platform}}",
+              "firebaseToken": "{{form.firebaseToken}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.deviceId", "notEmpty": true },
+              { "path": "$.deviceIdentifier", "equals": "ios-simulator-001" }
+            ]
+          },
+          "extract": {
+            "deviceId": "$.deviceId"
+          }
+        },
+        {
+          "id": "update-firebase-token",
+          "title": "Aktualizovat Firebase token",
+          "description": "P\u0159i dal\u0161\u00edm startu aplikace lze token obnovit bez nov\u00e9 registrace za\u0159\u00edzen\u00ed.",
+          "fields": [
+            { "name": "deviceId", "label": "Device ID", "value": "{{context.deviceId}}" },
+            { "name": "firebaseToken", "label": "Novy Firebase token", "value": "firebase-token-002" }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/tickets/devices/{{form.deviceId}}/firebase-token",
+            "body": {
+              "firebaseToken": "{{form.firebaseToken}}"
+            }
+          },
+          "expected": {
+            "status": 200
+          }
+        }
+      ]
+    },
+    {
+      "id": "purchase-with-device",
+      "title": "Booking a platba na za\u0159\u00edzen\u00ed",
+      "description": "Zaregistruje za\u0159\u00edzen\u00ed, vytvo\u0159\u00ed booking sv\u00e1zan\u00fd s `deviceId` a ov\u011b\u0159\u00ed, \u017ee se device propsal i do payment flow.",
+      "steps": [
+        {
+          "id": "create-device",
+          "title": "Registrovat za\u0159\u00edzen\u00ed",
+          "fields": [
+            { "name": "deviceIdentifier", "label": "Device identifier", "value": "ios-device-booking-001" },
+            { "name": "deviceModel", "label": "Model", "value": "iPhone 15" },
+            {
+              "name": "platform",
+              "label": "Platforma",
+              "type": "select",
+              "value": "iOS",
+              "options": [
+                { "value": "iOS", "text": "iOS" },
+                { "value": "Android", "text": "Android" }
+              ]
+            },
+            { "name": "firebaseToken", "label": "Firebase token", "value": "firebase-token-booking-001" },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/devices",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "deviceIdentifier": "{{form.deviceIdentifier}}",
+              "deviceModel": "{{form.deviceModel}}",
+              "platform": "{{form.platform}}",
+              "firebaseToken": "{{form.firebaseToken}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.deviceId", "notEmpty": true }
+            ]
+          },
+          "extract": {
+            "deviceId": "$.deviceId"
+          }
+        },
+        {
+          "id": "offer",
+          "title": "Vybrat j\u00edzdenku",
+          "fields": [
+            {
+              "name": "productId",
+              "label": "Produkt",
+              "type": "select",
+              "value": "1",
+              "valueType": "number",
+              "options": [
+                { "value": "1", "text": "Jednotliv\u00e1 j\u00edzdenka 30 minut" },
+                { "value": "2", "text": "Jednotliv\u00e1 j\u00edzdenka 90 minut" }
+              ]
+            },
+            { "name": "amount", "label": "Po\u010det", "type": "number", "value": "1", "min": 1, "step": 1 },
+            {
+              "name": "zones",
+              "label": "Z\u00f3ny",
+              "type": "tag-list",
+              "value": ["P", "0", "B"],
+              "emptyText": "Vyberte z\u00f3ny, pro kter\u00e9 m\u00e1 b\u00fdt nab\u00eddka p\u0159ipravena.",
+              "options": [
+                { "value": "P", "text": "P - Praha" },
+                { "value": "0", "text": "0 - P\u00e1smo 0" },
+                { "value": "B", "text": "B - Vn\u011bj\u0161\u00ed p\u00e1smo B" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/offers",
+            "body": {
+              "productId": "{{form.productId}}",
+              "amount": "{{form.amount}}",
+              "zones": "{{form.zones}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.offers[0].offerId", "notEmpty": true }
+            ]
+          },
+          "extract": {
+            "offerId": "$.offers[0].offerId"
+          }
+        },
+        {
+          "id": "booking-with-device",
+          "title": "Vytvo\u0159it booking pro za\u0159\u00edzen\u00ed",
+          "fields": [
+            { "name": "offerId", "label": "Offer ID", "value": "{{context.offerId}}" },
+            { "name": "deviceId", "label": "Device ID", "value": "{{context.deviceId}}" },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/bookings",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "offerId": "{{form.offerId}}",
+              "amount": 1,
+              "deviceId": "{{form.deviceId}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.bookingId", "notEmpty": true },
+              { "path": "$.deviceId", "notEmpty": true }
+            ]
+          },
+          "extract": {
+            "bookingId": "$.bookingId"
+          }
+        },
+        {
+          "id": "payment-for-device-booking",
+          "title": "Zalozit platbu pro booking",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" },
+            { "name": "deviceId", "label": "Device ID", "value": "{{context.deviceId}}" },
+            {
+              "name": "method",
+              "label": "Zp\u016fsob platby",
+              "type": "select",
+              "value": "card",
+              "options": [
+                { "value": "card", "text": "Platebn\u00ed karta" },
+                { "value": "card_lvp", "text": "Platebn\u00ed karta LVP" }
+              ]
+            },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}/payments",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "method": "{{form.method}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.paymentId", "notEmpty": true },
+              { "path": "$.booking.deviceId", "notEmpty": true }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "catalog-smoke",
+      "title": "Katalog a zóny",
+      "description": "Ověří module-info, seznam produktů, detail produktu, vyhledávání a zóny.",
+      "steps": [
+        {
+          "id": "module-info",
+          "title": "Informace o modulu",
+          "description": "Backend musí vrátit základní informace Ticket Service modulu.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/module-info"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.moduleName", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "products",
+          "title": "Seznam produktů",
+          "description": "Načtení produktů pro výběr v mobilní aplikaci.",
+          "fields": [
+            { "name": "limit", "label": "Po\u010det polozek", "type": "number", "value": "20", "min": 1, "step": 1 },
+            { "name": "offset", "label": "Posun", "type": "number", "value": "0", "min": 0, "step": 1 }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/products?limit={{form.limit}}&offset={{form.offset}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.items", "lengthAtLeast": 1 }
+            ]
+          },
+          "extract": {
+            "productId": "$.items[0].productId"
+          }
+        },
+        {
+          "id": "product-detail",
+          "title": "Detail produktu",
+          "description": "Detail prvního produktu ze seznamu.",
+          "fields": [
+            { "name": "productId", "label": "Product ID", "type": "number", "value": "{{context.productId}}" }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/products/{{form.productId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.productId", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "zones",
+          "title": "Seznam zón",
+          "description": "Zóny použitelné pro nabídky a validitu jízdenek.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/zones"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$", "lengthAtLeast": 1 }
+            ]
+          }
+        },
+        {
+          "id": "search-products",
+          "title": "Vyhledání produktu podle zón",
+          "description": "Vyhledání produktů kompatibilních se zónami.",
+          "fields": [
+            {
+              "name": "zones",
+              "label": "Zóny",
+              "type": "tag-list",
+              "value": ["P", "0", "B"],
+              "emptyText": "Vyberte zóny, pro které chcete vyhledat produkt.",
+              "options": [
+                { "value": "P", "text": "P - Praha" },
+                { "value": "0", "text": "0 - Pásmo 0" },
+                { "value": "B", "text": "B - Vnější pásmo B" }
+              ]
+            },
+            {
+              "name": "productType",
+              "label": "Typ produktu",
+              "type": "select",
+              "value": "FARE_SINGLE",
+              "options": [
+                { "value": "FARE_SINGLE", "text": "Jednotlivá jízdenka" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/products/search",
+            "body": {
+              "zones": "{{form.zones}}",
+              "validFrom": "{{now}}",
+              "productType": "{{form.productType}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.items", "lengthAtLeast": 1 }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ticket-purchase-current-happy-path",
+      "title": "Nákup jízdenky - payment a fulfillment",
+      "description": "Nabídka, booking, payment init, GD Pay return bridge, dev dispatch worker commandů a kontrola fulfillmentu.",
+      "steps": [
+        {
+          "id": "offer",
+          "title": "Vybrat jízdenku",
+          "description": "Mobilní výběr produktu, počtu a zón vytvoří nabídku.",
+          "fields": [
+            {
+              "name": "productId",
+              "label": "Produkt",
+              "type": "select",
+              "value": "1",
+              "valueType": "number",
+              "options": [
+                { "value": "1", "text": "Jednotlivá jízdenka 30 minut" },
+                { "value": "2", "text": "Jednotlivá jízdenka 90 minut" }
+              ]
+            },
+            { "name": "amount", "label": "Počet", "type": "number", "value": "1", "min": 1, "step": 1 },
+            {
+              "name": "zones",
+              "label": "Zóny",
+              "type": "tag-list",
+              "value": ["P", "0", "B"],
+              "emptyText": "Vyberte zóny, pro které má být nabídka připravena.",
+              "options": [
+                { "value": "P", "text": "P - Praha" },
+                { "value": "0", "text": "0 - Pásmo 0" },
+                { "value": "B", "text": "B - Vnější pásmo B" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/offers",
+            "body": {
+              "productId": "{{form.productId}}",
+              "amount": "{{form.amount}}",
+              "zones": "{{form.zones}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.offers[0].offerId", "notEmpty": true }
+            ]
+          },
+          "extract": {
+            "offerId": "$.offers[0].offerId",
+            "productId": "$.offers[0].productId"
+          }
+        },
+        {
+          "id": "booking",
+          "title": "Potvrdit nabídku",
+          "description": "Vytvoří pre-booking a uloží snapshot nabídky.",
+          "fields": [
+            { "name": "offerId", "label": "Offer ID", "value": "{{context.offerId}}" },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/bookings",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "offerId": "{{form.offerId}}",
+              "amount": 1,
+              "activateAfterPayment": false
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.bookingId", "notEmpty": true },
+              { "path": "$.status", "equals": "PREBOOKED" }
+            ]
+          },
+          "extract": {
+            "bookingId": "$.bookingId"
+          }
+        },
+        {
+          "id": "payment",
+          "title": "Založit platbu",
+          "description": "Vytvoří payment attempt u GD Pay boundary.",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" },
+            {
+              "name": "method",
+              "label": "Zp\u016fsob platby",
+              "type": "select",
+              "value": "card",
+              "options": [
+                { "value": "card", "text": "Platebn\u00ed karta" },
+                { "value": "card_lvp", "text": "Platebn\u00ed karta LVP" }
+              ]
+            },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}/payments",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "method": "{{form.method}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.paymentId", "notEmpty": true },
+              { "path": "$.status", "equals": "CREATED" }
+            ]
+          },
+          "extract": {
+            "paymentId": "$.paymentId"
+          }
+        },
+        {
+          "id": "gdpay-return",
+          "title": "Návrat z platební brány",
+          "description": "Redirect/return je jen bridge; sám nesmí vydat fulfillment.",
+          "fields": [
+            { "name": "paymentGWData", "label": "Data z platebn\u00ed br\u00e1ny", "value": "{{context.paymentId}}|PAID" }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/webhooks/gdpay/return",
+            "contentType": "text/plain",
+            "body": "{{form.paymentGWData}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "ACCEPTED" }
+            ]
+          },
+          "extract": {
+            "gatewayCommandId": "$.commandId"
+          }
+        },
+        {
+          "id": "booking-after-return",
+          "title": "Kontrola bookingu po return bridge",
+          "description": "Return bridge sám nesmí vydat jízdenku; booking proto před worker zpracováním zůstává PREBOOKED.",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "PREBOOKED" },
+              { "path": "$.fulfillments", "equals": [] }
+            ]
+          }
+        },
+        {
+          "id": "dispatch-payment-result-command",
+          "title": "Zpracovat platební výsledek",
+          "description": "Development endpoint předá první čekající command worker handleru.",
+          "request": {
+            "method": "POST",
+            "path": "/_test/ticket-service/commands/dispatch-next"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "DISPATCHED" },
+              { "path": "$.messageType", "equals": "ticket-service.commands.process-payment-gateway-result.v1" }
+            ]
+          }
+        },
+        {
+          "id": "documents-before-fulfillment",
+          "title": "Doklady p\u0159ed vyd\u00e1n\u00edm",
+          "description": "Po potvrzen\u00ed platby m\u016f\u017ee b\u00fdt booking u\u017e potvrzen\u00fd, ale doklady je\u0161t\u011b nevznikly, dokud neprob\u011bhne fulfillment.",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}/documents"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$", "equals": [] }
+            ]
+          }
+        },
+        {
+          "id": "document-pdf-before-fulfillment",
+          "title": "Zkusit otev\u0159\u00edt PDF p\u0159ed vyd\u00e1n\u00edm",
+          "description": "Dokud fulfillment nevytvo\u0159\u00ed doklad, konkr\u00e9tn\u00ed PDF pro booking je\u0161t\u011b nem\u00e1 b\u00fdt dostupn\u00e9.",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" },
+            { "name": "documentId", "label": "Document ID", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}/documents/{{form.documentId}}"
+          },
+          "expected": {
+            "status": 404,
+            "outcome": "expectedError"
+          }
+        },
+        {
+          "id": "dispatch-fulfillment-command",
+          "title": "Vydat fulfillment",
+          "description": "Další worker command vytvoří fulfillment pro potvrzenou rezervaci.",
+          "request": {
+            "method": "POST",
+            "path": "/_test/ticket-service/commands/dispatch-next"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "DISPATCHED" },
+              { "path": "$.messageType", "equals": "ticket-service.commands.issue-fulfillment.v1" }
+            ]
+          }
+        },
+        {
+          "id": "booking-after-fulfillment",
+          "title": "Jízdenka v rezervaci",
+          "description": "Po worker zpracování je booking potvrzený a obsahuje vydaný fulfillment.",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "CONFIRMED" },
+              { "path": "$.fulfillments", "lengthAtLeast": 1 }
+            ]
+          }
+        },
+        {
+          "id": "queue-duplicate-fulfillment-command",
+          "title": "Znovu za\u0159adit fulfillment",
+          "description": "Testovac\u00ed endpoint znovu za\u0159ad\u00ed stejn\u00fd `IssueFulfillment` command pro u\u017e potvrzen\u00fd booking.",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" },
+            { "name": "paymentId", "label": "Payment ID", "value": "{{context.paymentId}}" }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/_test/ticket-service/commands/fulfillment",
+            "body": {
+              "bookingId": "{{form.bookingId}}",
+              "paymentAttemptId": "{{form.paymentId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "QUEUED" },
+              { "path": "$.queued", "equals": true }
+            ]
+          }
+        },
+        {
+          "id": "dispatch-duplicate-fulfillment-command",
+          "title": "Zpracovat duplicitn\u00ed fulfillment",
+          "description": "Opakovan\u00e9 zpracov\u00e1n\u00ed commandu nesm\u00ed vytvo\u0159it druh\u00fd fulfillment.",
+          "request": {
+            "method": "POST",
+            "path": "/_test/ticket-service/commands/dispatch-next"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "DISPATCHED" },
+              { "path": "$.messageType", "equals": "ticket-service.commands.issue-fulfillment.v1" }
+            ]
+          }
+        },
+        {
+          "id": "booking-after-duplicate-fulfillment",
+          "title": "Kontrola bez duplicity",
+          "description": "Booking m\u00e1 i po druh\u00e9m commandu po\u0159\u00e1d jen jeden fulfillment.",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "CONFIRMED" },
+              { "path": "$.fulfillments", "lengthEquals": 1 },
+              { "path": "$.fulfillments[0].paymentAttemptId", "equals": "{{context.paymentId}}" }
+            ]
+          }
+        },
+        {
+          "id": "documents-after-duplicate-fulfillment",
+          "title": "Doklady bez duplicity",
+          "description": "Ani po opakovan\u00e9m fulfillment commandu nevznikne druh\u00fd doklad.",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}/documents"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$", "lengthEquals": 1 },
+              { "path": "$[0].documentId", "equals": "{{context.documentId}}" },
+              { "path": "$[0].type", "equals": "USE_CONFIRMATION" }
+            ]
+          }
+        },
+        {
+          "id": "payment-after-confirmation",
+          "title": "Zkusit zalo\u017eit dal\u0161\u00ed platbu",
+          "description": "Po potvrzen\u00ed platby u\u017e nesm\u00ed vzniknout dal\u0161\u00ed payment flow pro stejn\u00fd booking.",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" },
+            {
+              "name": "method",
+              "label": "Zp\u016fsob platby",
+              "type": "select",
+              "value": "card",
+              "options": [
+                { "value": "card", "text": "Platebn\u00ed karta" },
+                { "value": "card_lvp", "text": "Platebn\u00ed karta LVP" }
+              ]
+            },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}/payments",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "method": "{{form.method}}"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "outcome": "expectedError"
+          }
+        },
+        {
+          "id": "cancel-after-confirmation",
+          "title": "Zkusit zru\u0161it potvrzen\u00fd booking",
+          "description": "Jakmile je booking potvrzeny, public storno endpoint ho uz nema prijmout.",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "DELETE",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "outcome": "expectedError"
+          }
+        },
+        {
+          "id": "booking-documents",
+          "title": "Doklady k jízdence",
+          "description": "Mobilní aplikace načte doklady vytvořené z fulfillmentu.",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}/documents"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$", "lengthAtLeast": 1 },
+              { "path": "$[0].type", "equals": "USE_CONFIRMATION" }
+            ]
+          },
+          "extract": {
+            "documentId": "$[0].documentId"
+          }
+        },
+        {
+          "id": "booking-documents-repeat",
+          "title": "Znovu na\u010d\u00edst doklady",
+          "description": "Opakovan\u00e9 na\u010dten\u00ed m\u00e1 vr\u00e1tit stejn\u00fd doklad i po p\u0159edchoz\u00edm otev\u0159en\u00ed detailu rezervace.",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" },
+            { "name": "documentId", "label": "Document ID", "value": "{{context.documentId}}", "hidden": true }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}/documents"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$", "lengthAtLeast": 1 },
+              { "path": "$[0].documentId", "equals": "{{context.documentId}}" },
+              { "path": "$[0].type", "equals": "USE_CONFIRMATION" }
+            ]
+          }
+        },
+        {
+          "id": "booking-document-pdf",
+          "title": "Otevřít PDF doklad",
+          "description": "Mobilní aplikace stáhne PDF obsah vybraného dokladu.",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" },
+            { "name": "documentId", "label": "Document ID", "value": "{{context.documentId}}" }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}/documents/{{form.documentId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.contentType", "equals": "application/pdf" },
+              { "path": "$.downloadUrl", "notEmpty": true }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "payment-reconciliation-fallback",
+      "title": "Payment reconciliation fallback",
+      "description": "Nabidka, booking a platba bez return bridge; potvrzeni probehne pres reconciliation command.",
+      "steps": [
+        {
+          "id": "offer",
+          "title": "Vybrat j\u00edzdenku",
+          "fields": [
+            {
+              "name": "productId",
+              "label": "Produkt",
+              "type": "select",
+              "value": "1",
+              "valueType": "number",
+              "options": [
+                { "value": "1", "text": "Jednotliv\u00e1 j\u00edzdenka 30 minut" },
+                { "value": "2", "text": "Jednotliv\u00e1 j\u00edzdenka 90 minut" }
+              ]
+            },
+            { "name": "amount", "label": "Po\u010det", "type": "number", "value": "1", "min": 1, "step": 1 },
+            {
+              "name": "zones",
+              "label": "Z\u00f3ny",
+              "type": "tag-list",
+              "value": ["P", "0", "B"],
+              "emptyText": "Vyberte z\u00f3ny, pro kter\u00e9 m\u00e1 b\u00fdt nab\u00eddka p\u0159ipravena.",
+              "options": [
+                { "value": "P", "text": "P - Praha" },
+                { "value": "0", "text": "0 - P\u00e1smo 0" },
+                { "value": "B", "text": "B - Vn\u011bj\u0161\u00ed p\u00e1smo B" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/offers",
+            "body": {
+              "productId": "{{form.productId}}",
+              "amount": "{{form.amount}}",
+              "zones": "{{form.zones}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.offers[0].offerId", "notEmpty": true }
+            ]
+          },
+          "extract": {
+            "offerId": "$.offers[0].offerId"
+          }
+        },
+        {
+          "id": "booking",
+          "title": "Potvrdit nab?dku",
+          "fields": [
+            { "name": "offerId", "label": "Offer ID", "value": "{{context.offerId}}" },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/bookings",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "offerId": "{{form.offerId}}",
+              "amount": 1
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.bookingId", "notEmpty": true },
+              { "path": "$.status", "equals": "PREBOOKED" }
+            ]
+          },
+          "extract": {
+            "bookingId": "$.bookingId"
+          }
+        },
+        {
+          "id": "payment",
+          "title": "Zalozit platbu",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" },
+            {
+              "name": "method",
+              "label": "Zp\u016fsob platby",
+              "type": "select",
+              "value": "card",
+              "options": [
+                { "value": "card", "text": "Platebn\u00ed karta" },
+                { "value": "card_lvp", "text": "Platebn\u00ed karta LVP" }
+              ]
+            },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}/payments",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "method": "{{form.method}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.paymentId", "notEmpty": true },
+              { "path": "$.status", "equals": "CREATED" }
+            ]
+          },
+          "extract": {
+            "paymentId": "$.paymentId"
+          }
+        },
+        {
+          "id": "run-reconciliation-scheduler",
+          "title": "Spustit reconciliation scheduler",
+          "description": "Development endpoint spusti scheduler job, ktery najde cekajici platbu a vlozi reconciliation command do fronty.",
+          "fields": [
+            { "name": "paymentId", "label": "Payment ID", "value": "{{context.paymentId}}" }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/_test/ticket-service/scheduler/payment-reconciliation/run"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "TRIGGERED" },
+              { "path": "$.triggered", "equals": true },
+              { "path": "$.queuedCommandCount", "atLeast": 1 }
+            ]
+          }
+        },
+        {
+          "id": "dispatch-reconciliation-command",
+          "title": "Zpracovat reconciliation command",
+          "request": {
+            "method": "POST",
+            "path": "/_test/ticket-service/commands/dispatch-next"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "DISPATCHED" },
+              { "path": "$.messageType", "equals": "ticket-service.commands.reconcile-payment-attempt.v1" }
+            ]
+          }
+        },
+        {
+          "id": "dispatch-fulfillment-command",
+          "title": "Vydat fulfillment",
+          "request": {
+            "method": "POST",
+            "path": "/_test/ticket-service/commands/dispatch-next"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "DISPATCHED" },
+              { "path": "$.messageType", "equals": "ticket-service.commands.issue-fulfillment.v1" }
+            ]
+          }
+        },
+        {
+          "id": "booking-after-reconciliation",
+          "title": "Kontrola bookingu po reconciliation",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "CONFIRMED" },
+              { "path": "$.fulfillments", "lengthAtLeast": 1 }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "booking-cancel",
+      "title": "Booking cancel",
+      "description": "Vytvoření bookingu a jeho zrušení před platbou.",
+      "steps": [
+        {
+          "id": "offer",
+          "title": "Vytvořit nabídku",
+          "fields": [
+            {
+              "name": "productId",
+              "label": "Produkt",
+              "type": "select",
+              "value": "1",
+              "valueType": "number",
+              "options": [
+                { "value": "1", "text": "Jednotlivá jízdenka 30 minut" },
+                { "value": "2", "text": "Jednotlivá jízdenka 90 minut" }
+              ]
+            },
+            {
+              "name": "zones",
+              "label": "Zóny",
+              "type": "tag-list",
+              "value": ["P", "0", "B"],
+              "emptyText": "Vyberte zóny, pro které má být nabídka připravena.",
+              "options": [
+                { "value": "P", "text": "P - Praha" },
+                { "value": "0", "text": "0 - Pásmo 0" },
+                { "value": "B", "text": "B - Vnější pásmo B" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/offers",
+            "body": {
+              "productId": "{{form.productId}}",
+              "amount": 1,
+              "zones": "{{form.zones}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.offers[0].offerId", "notEmpty": true }
+            ]
+          },
+          "extract": {
+            "offerId": "$.offers[0].offerId"
+          }
+        },
+        {
+          "id": "booking",
+          "title": "Vytvořit booking",
+          "fields": [
+            { "name": "offerId", "label": "Offer ID", "value": "{{context.offerId}}" },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/bookings",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "offerId": "{{form.offerId}}",
+              "amount": 1
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.status", "equals": "PREBOOKED" }
+            ]
+          },
+          "extract": {
+            "bookingId": "$.bookingId"
+          }
+        },
+        {
+          "id": "cancel",
+          "title": "Zrušit booking",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "DELETE",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            }
+          },
+          "expected": {
+            "status": 204
+          }
+        },
+        {
+          "id": "cancelled-detail",
+          "title": "Ověřit zrušený booking",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "CANCELLED" }
+            ]
+          }
+        },
+        {
+          "id": "payment-after-cancel",
+          "title": "Zkusit zaplatit zruseny booking",
+          "description": "Po zruseni bookingu uz nesmi vzniknout novy payment flow.",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{context.bookingId}}" },
+            {
+              "name": "method",
+              "label": "Zp\u016fsob platby",
+              "type": "select",
+              "value": "card",
+              "options": [
+                { "value": "card", "text": "Platebn\u00ed karta" },
+                { "value": "card_lvp", "text": "Platebn\u00ed karta LVP" }
+              ]
+            },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}/payments",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "method": "{{form.method}}"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "outcome": "expectedError"
+          }
+        }
+      ]
+    },
+    {
+      "id": "missing-gdpay-data",
+      "title": "GD Pay bez paymentGWData",
+      "description": "Negativní scénář: endpoint musí odmítnout prázdný callback.",
+      "steps": [
+        {
+          "id": "empty-webhook",
+          "title": "Odeslat prázdný webhook",
+          "description": "Tady je očekávaná chyba. Pokud backend vrátí úspěch, scenario harness to označí jako selhání očekávání.",
+          "fields": [
+            { "name": "paymentGWData", "label": "Data z platebn\u00ed br\u00e1ny", "value": "" }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/webhooks/gdpay",
+            "contentType": "text/plain",
+            "body": "{{form.paymentGWData}}"
+          },
+          "expected": {
+            "status": 400,
+            "outcome": "expectedError"
+          }
+        }
+      ]
+    },
+    {
+      "id": "payment-for-missing-booking",
+      "title": "Platba pro neexistující booking",
+      "description": "Negativní scénář: payment init pro neexistující booking má skončit 404.",
+      "steps": [
+        {
+          "id": "missing-booking-payment",
+          "title": "Založit platbu k neexistujícímu bookingu",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "{{uuid}}" },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/bookings/{{form.bookingId}}/payments",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "method": "card"
+            }
+          },
+          "expected": {
+            "status": 404,
+            "outcome": "expectedError"
+          }
+        }
+      ]
+    },
+    {
+      "id": "booking-without-idempotency",
+      "title": "Booking bez Idempotency-Key",
+      "description": "Negativní scénář: booking command bez povinné hlavičky musí skončit 400.",
+      "steps": [
+        {
+          "id": "offer",
+          "title": "Nejprve vytvořit validní nabídku",
+          "fields": [
+            {
+              "name": "productId",
+              "label": "Produkt",
+              "type": "select",
+              "value": "1",
+              "valueType": "number",
+              "options": [
+                { "value": "1", "text": "Jednotlivá jízdenka 30 minut" },
+                { "value": "2", "text": "Jednotlivá jízdenka 90 minut" }
+              ]
+            },
+            {
+              "name": "zones",
+              "label": "Zóny",
+              "type": "tag-list",
+              "value": ["P", "0", "B"],
+              "emptyText": "Vyberte zóny, pro které má být nabídka připravena.",
+              "options": [
+                { "value": "P", "text": "P - Praha" },
+                { "value": "0", "text": "0 - Pásmo 0" },
+                { "value": "B", "text": "B - Vnější pásmo B" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/offers",
+            "body": {
+              "productId": "{{form.productId}}",
+              "amount": 1,
+              "zones": "{{form.zones}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.offers[0].offerId", "notEmpty": true }
+            ]
+          },
+          "extract": {
+            "offerId": "$.offers[0].offerId"
+          }
+        },
+        {
+          "id": "booking-no-header",
+          "title": "Odeslat booking bez Idempotency-Key",
+          "fields": [
+            { "name": "offerId", "label": "Offer ID", "value": "{{context.offerId}}" }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/tickets/bookings",
+            "body": {
+              "offerId": "{{form.offerId}}",
+              "amount": 1
+            }
+          },
+          "expected": {
+            "status": 400,
+            "outcome": "expectedError"
+          }
+        }
+      ]
+    }
+  ]
+}
+

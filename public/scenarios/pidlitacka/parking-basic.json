@@ -1,0 +1,723 @@
+{
+  "version": 1,
+  "name": "PidLitacka - Parkování",
+  "scenarios": [
+    {
+      "id": "parking-create-and-extend",
+      "title": "Parkování - založení a prodloužení",
+      "description": "Založí nové parkování, ručně zpracuje výsledek platební brány, zobrazí aktivní relace a historii a stejným způsobem provede prodloužení.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["parking", "vehicles", "zones"],
+      "instructions": [
+        "Nejprve se přihlaste v panelu Přístup.",
+        "Volitelně si na začátku vyberte uložené vozidlo. Pokud nic nevyberete, můžete SPZ v dalším kroku zadat ručně.",
+        "Volitelně si pak vyberte oblíbenou zónu. Pokud nic nevyberete, můžete kód zóny v dalším kroku zadat ručně.",
+        "Po kroku Založit parkování otevřete vrácenou URL platební brány, dokončete platbu a zkopírujte celý návratový payload do kroku Zpracovat výsledek platební brány.",
+        "Stejný postup zopakujte i po kroku Prodloužit parkování."
+      ],
+      "steps": [
+        {
+          "id": "parking-pick-saved-vehicle",
+          "title": "Vybrat uložené vozidlo",
+          "description": "Volitelný krok: načte uložená vozidla a umožní jedno z nich vybrat pro následující parkování.",
+          "instructions": [
+            "Pokud chcete použít uložené vozidlo, vyberte ho v mobilu.",
+            "Pokud chcete zadat SPZ ručně, tento krok jen spusťte a pak pokračujte dál bez výběru."
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/parking/my-vehicles"
+          },
+          "selection": {
+            "sourcePath": "$",
+            "buttonLabel": "Použít pro parkování",
+            "selectedButtonLabel": "Vybráno pro parkování",
+            "store": {
+              "selectedVehicleId": "$.id",
+              "selectedVehicleLicensePlate": "$.licensePlate",
+              "selectedVehicleName": "$.name"
+            }
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "parking-pick-favorite-zone",
+          "title": "Vybrat oblíbenou zónu",
+          "description": "Volitelný krok: načte oblíbené zóny a umožní jednu z nich vybrat pro následující parkování.",
+          "instructions": [
+            "Pokud chcete použít oblíbenou zónu, vyberte ji v mobilu.",
+            "Pokud chcete zadat kód zóny ručně, tento krok jen spusťte a pak pokračujte dál bez výběru."
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/favorite-zones"
+          },
+          "selection": {
+            "sourcePath": "$",
+            "buttonLabel": "Použít pro parkování",
+            "selectedButtonLabel": "Vybráno pro parkování",
+            "store": {
+              "selectedFavoriteZoneId": "$.id",
+              "selectedFavoriteZoneCode": "$.zoneId"
+            }
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "parking-create-ticket",
+          "title": "Založit parkování",
+          "description": "Založí novou parkovací relaci a vrátí odkaz na platební bránu.",
+          "fields": [
+            {
+              "name": "licensePlate",
+              "label": "SPZ",
+              "value": "{{context.selectedVehicleLicensePlate}}",
+              "placeholder": "např. 1AB2345"
+            },
+            {
+              "name": "emailAddress",
+              "label": "E-mail",
+              "value": "{{session.email}}",
+              "placeholder": "např. test@example.com",
+              "trackDirty": false
+            },
+            {
+              "name": "phoneNumber",
+              "label": "Telefon",
+              "value": "777555666",
+              "placeholder": "např. +420777123456",
+              "trackDirty": false
+            },
+            {
+              "name": "parkingSectionCode",
+              "label": "Kód parkovací zóny",
+              "value": "{{context.selectedFavoriteZoneCode}}",
+              "placeholder": "např. P7-0127"
+            },
+            {
+              "name": "requestedMinutes",
+              "label": "Počet minut",
+              "type": "number",
+              "value": "45",
+              "min": 1
+            },
+            {
+              "name": "returnUrlFromPaymentGateway",
+              "label": "Return URL",
+              "value": "http://127.0.0.1:5500/html/GwResponsePage.html"
+            }
+          ],
+          "remember": {
+            "licensePlate": "{{form.licensePlate}}",
+            "emailAddress": "{{form.emailAddress}}",
+            "phoneNumber": "{{form.phoneNumber}}",
+            "parkingSectionCode": "{{form.parkingSectionCode}}",
+            "requestedMinutes": "{{form.requestedMinutes}}",
+            "returnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}",
+            "selectedVehicleLicensePlate": "{{form.licensePlate}}"
+          },
+          "request": {
+            "method": "POST",
+            "path": "/v1/parking/tickets/street-parking",
+            "body": {
+              "licensePlate": "{{form.licensePlate}}",
+              "emailAddress": "{{form.emailAddress}}",
+              "phoneNumber": "{{form.phoneNumber}}",
+              "parkingSectionCode": "{{form.parkingSectionCode}}",
+              "requestedMinutes": "{{form.requestedMinutes}}",
+              "paymentDetails": {
+                "paymentMethod": "Card",
+                "createCardToken": true,
+                "cardToken": null,
+                "returnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}",
+                "automaticPaymentResultProcessing": false,
+                "isSdkUsed": false,
+                "paymentData": null
+              },
+              "language": "cs"
+            }
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "parking-process-payment",
+          "title": "Zpracovat výsledek platební brány",
+          "description": "Po zaplacení v platební bráně předá backendu celý návratový payload.",
+          "instructions": [
+            "Dokončete platbu v platební bráně.",
+            "Zkopírujte celý návratový payload do pole níže."
+          ],
+          "fields": [
+            {
+              "name": "gatewayResultPayload",
+              "label": "Payload z platební brány",
+              "type": "textarea",
+              "value": "",
+              "rows": 6,
+              "placeholder": "payId=...&dttm=...&resultCode=0..."
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/parking/payment/gateway-result?saveCard=true&setDefault=true",
+            "body": "{{form.gatewayResultPayload}}"
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "parking-active-sessions-after-create",
+          "title": "Aktivní relace",
+          "description": "Načte aktivní parkovací relace a umožní ověřit, že nová relace běží.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/parking/sessions/active"
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "parking-history-after-create",
+          "title": "Historie relací",
+          "description": "Načte historii parkovacích relací.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/parking/sessions/history"
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "parking-extend-ticket",
+          "title": "Prodloužit parkování",
+          "description": "Založí navazující parkování se stejnými údaji a opět vrátí odkaz na platební bránu.",
+          "fields": [
+            {
+              "name": "licensePlate",
+              "label": "SPZ",
+              "value": "{{context.licensePlate}}",
+              "trackDirty": false
+            },
+            {
+              "name": "emailAddress",
+              "label": "E-mail",
+              "value": "{{context.emailAddress}}",
+              "trackDirty": false
+            },
+            {
+              "name": "phoneNumber",
+              "label": "Telefon",
+              "value": "{{context.phoneNumber}}",
+              "trackDirty": false
+            },
+            {
+              "name": "parkingSectionCode",
+              "label": "Kód parkovací zóny",
+              "value": "{{context.parkingSectionCode}}",
+              "trackDirty": false
+            },
+            {
+              "name": "requestedMinutes",
+              "label": "Počet minut",
+              "type": "number",
+              "value": "{{context.requestedMinutes}}",
+              "min": 1,
+              "trackDirty": false
+            },
+            {
+              "name": "returnUrlFromPaymentGateway",
+              "label": "Return URL",
+              "value": "{{context.returnUrlFromPaymentGateway}}",
+              "trackDirty": false
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/parking/tickets/street-parking",
+            "body": {
+              "licensePlate": "{{form.licensePlate}}",
+              "emailAddress": "{{form.emailAddress}}",
+              "phoneNumber": "{{form.phoneNumber}}",
+              "parkingSectionCode": "{{form.parkingSectionCode}}",
+              "requestedMinutes": "{{form.requestedMinutes}}",
+              "paymentDetails": {
+                "paymentMethod": "Card",
+                "createCardToken": true,
+                "cardToken": null,
+                "returnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}",
+                "automaticPaymentResultProcessing": false,
+                "isSdkUsed": false,
+                "paymentData": null
+              },
+              "language": "cs"
+            }
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "parking-process-extension-payment",
+          "title": "Zpracovat výsledek prodloužení",
+          "description": "Po zaplacení prodloužení předá backendu další návratový payload z platební brány.",
+          "instructions": [
+            "Dokončete druhou platbu v platební bráně.",
+            "Zkopírujte celý návratový payload do pole níže."
+          ],
+          "fields": [
+            {
+              "name": "gatewayResultPayload",
+              "label": "Payload z platební brány",
+              "type": "textarea",
+              "value": "",
+              "rows": 6,
+              "placeholder": "payId=...&dttm=...&resultCode=0..."
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/parking/payment/gateway-result?saveCard=true&setDefault=true",
+            "body": "{{form.gatewayResultPayload}}"
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "parking-active-sessions-after-extension",
+          "title": "Aktivní relace po prodloužení",
+          "description": "Načte aktivní relace po prodloužení parkování.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/parking/sessions/active"
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "parking-history-after-extension",
+          "title": "Historie po prodloužení",
+          "description": "Načte historii relací po prodloužení parkování.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/parking/sessions/history"
+          },
+          "expected": {
+            "status": 200
+          }
+        }
+      ]
+    },
+    {
+      "id": "parking-overview",
+      "title": "Parkování - přehled relací",
+      "description": "Rychlý scénář pro zobrazení aktivních relací a historie. Hodí se i pro smoke běh po přihlášení.",
+      "requiresAuth": true,
+      "tags": ["parking"],
+      "steps": [
+        {
+          "id": "parking-active-sessions-overview",
+          "title": "Aktivní relace",
+          "description": "Načte aktivní parkovací relace aktuálního uživatele.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/parking/sessions/active"
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "parking-history-overview",
+          "title": "Historie relací",
+          "description": "Načte historii parkovacích relací aktuálního uživatele.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/parking/sessions/history"
+          },
+          "expected": {
+            "status": 200
+          }
+        }
+      ]
+    },
+    {
+      "id": "parking-suggest-location",
+      "title": "Parkování - návrh lokality",
+      "description": "Vyhledá parkovací lokality podle textu a polohy. Hodí se pro ruční ověření návrhů zón před založením parkování.",
+      "requiresAuth": true,
+      "tags": ["locations"],
+      "steps": [
+        {
+          "id": "parking-suggest-location-step",
+          "title": "Vyhledat lokalitu",
+          "description": "Vrátí parkovací návrhy pro zadaný dotaz, souřadnice a filtr.",
+          "fields": [
+            {
+              "name": "query",
+              "label": "Dotaz",
+              "value": "Komunard"
+            },
+            {
+              "name": "latitude",
+              "label": "Latitude",
+              "value": "50.1081117"
+            },
+            {
+              "name": "longitude",
+              "label": "Longitude",
+              "value": "14.4409683"
+            },
+            {
+              "name": "filter",
+              "label": "Filtr",
+              "value": "blue"
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/parking/suggest?query={{form.query}}&latitude={{form.latitude}}&longitude={{form.longitude}}&filter={{form.filter}}"
+          },
+          "expected": {
+            "status": 200
+          }
+        }
+      ]
+    },
+    {
+      "id": "parking-save-vehicle",
+      "title": "Parkování - uložení vozidla",
+      "description": "Uloží nové vozidlo k uživateli. Scénář je ruční a mimo smoke, protože stejnou SPZ nelze ukládat opakovaně.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["vehicles"],
+      "instructions": [
+        "Použijte dosud neuloženou SPZ pro daného uživatele.",
+        "Po uložení vozidla lze následně ručně ověřit jeho propsání v aktivních relacích a historii."
+      ],
+      "steps": [
+        {
+          "id": "parking-save-vehicle-step",
+          "title": "Uložit vozidlo",
+          "description": "Přidá vozidlo do seznamu uložených aut aktuálního uživatele.",
+          "fields": [
+            {
+              "name": "licensePlate",
+              "label": "SPZ",
+              "value": "",
+              "placeholder": "např. 1AB2345"
+            },
+            {
+              "name": "name",
+              "label": "Název vozidla",
+              "value": "Family Car"
+            },
+            {
+              "name": "color",
+              "label": "Barva",
+              "value": "#23c67d"
+            },
+            {
+              "name": "isDefault",
+              "label": "Výchozí vozidlo",
+              "type": "select",
+              "value": "true",
+              "valueType": "boolean",
+              "options": [
+                {
+                  "value": "true",
+                  "text": "Ano"
+                },
+                {
+                  "value": "false",
+                  "text": "Ne"
+                }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/parking/my-vehicles",
+            "body": {
+              "licensePlate": "{{form.licensePlate}}",
+              "name": "{{form.name}}",
+              "color": "{{form.color}}",
+              "isDefault": "{{form.isDefault}}"
+            }
+          },
+          "expected": {
+            "status": 201
+          }
+        }
+      ]
+    },
+    {
+      "id": "parking-list-vehicles",
+      "title": "Parkování - uložená vozidla",
+      "description": "Načte seznam uložených vozidel aktuálního uživatele.",
+      "requiresAuth": true,
+      "tags": ["vehicles"],
+      "steps": [
+        {
+          "id": "parking-list-vehicles-step",
+          "title": "Načíst uložená vozidla",
+          "description": "Vrátí vozidla uložená k aktuálnímu uživateli.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/parking/my-vehicles"
+          },
+          "expected": {
+            "status": 200
+          }
+        }
+      ]
+    },
+    {
+      "id": "parking-delete-vehicle",
+      "title": "Parkování - smazání vozidla",
+      "description": "Načte uložená vozidla, vyberete jedno z nich přímo v mobilu a pak ho smažete bez ručního opisování interního ID.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["vehicles"],
+      "instructions": [
+        "Nejprve načtěte seznam vozidel.",
+        "V mobilu klikněte u vybraného vozidla na tlačítko Vybrat ke smazání.",
+        "Potom přejděte na další krok a spusťte smazání."
+      ],
+      "steps": [
+        {
+          "id": "parking-select-vehicle-to-delete",
+          "title": "Vybrat vozidlo ke smazání",
+          "description": "Načte uložená vozidla a v mobilu vyberte to, které chcete smazat.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/parking/my-vehicles"
+          },
+          "selection": {
+            "sourcePath": "$",
+            "buttonLabel": "Vybrat ke smazání",
+            "selectedButtonLabel": "Vybráno ke smazání",
+            "store": {
+              "selectedVehicleId": "$.id",
+              "selectedVehicleLicensePlate": "$.licensePlate",
+              "selectedVehicleName": "$.name"
+            }
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "parking-delete-selected-vehicle",
+          "title": "Smazat vybrané vozidlo",
+          "description": "Smaže dříve vybrané vozidlo aktuálního uživatele.",
+          "requiresContext": ["selectedVehicleId"],
+          "request": {
+            "method": "DELETE",
+            "path": "/v1/parking/my-vehicles/{{context.selectedVehicleId}}"
+          },
+          "expected": {
+            "status": 200
+          }
+        }
+      ]
+    },
+    {
+      "id": "parking-list-favorite-zones",
+      "title": "Parkování - oblíbené zóny",
+      "description": "Načte seznam oblíbených parkovacích zón aktuálního uživatele.",
+      "requiresAuth": true,
+      "tags": ["zones"],
+      "steps": [
+        {
+          "id": "parking-list-favorite-zones-step",
+          "title": "Načíst oblíbené zóny",
+          "description": "Vrátí oblíbené parkovací zóny aktuálního uživatele.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/favorite-zones"
+          },
+          "expected": {
+            "status": 200
+          }
+        }
+      ]
+    },
+    {
+      "id": "parking-save-favorite-zone",
+      "title": "Parkování - uložení oblíbené zóny",
+      "description": "Uloží oblíbenou parkovací zónu. Operace je idempotentní, takže při opakovaném spuštění může vrátit již existující záznam.",
+      "requiresAuth": true,
+      "tags": ["zones"],
+      "steps": [
+        {
+          "id": "parking-save-favorite-zone-step",
+          "title": "Uložit oblíbenou zónu",
+          "description": "Přidá zónu do seznamu oblíbených zón aktuálního uživatele.",
+          "fields": [
+            {
+              "name": "zoneId",
+              "label": "Kód zóny",
+              "value": "P7-0127",
+              "placeholder": "např. P7-0127"
+            }
+          ],
+          "extract": {
+            "selectedFavoriteZoneId": "$.id",
+            "selectedFavoriteZoneCode": "$.zoneId"
+          },
+          "request": {
+            "method": "POST",
+            "path": "/v1/accounts/me/favorite-zones",
+            "body": {
+              "zoneId": "{{form.zoneId}}"
+            }
+          },
+          "expected": {
+            "statusIn": [200, 201],
+            "assertions": [
+              {
+                "path": "$.id",
+                "notEmpty": true
+              },
+              {
+                "path": "$.zoneId",
+                "equals": "{{form.zoneId}}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "parking-delete-favorite-zone",
+      "title": "Parkování - smazání oblíbené zóny",
+      "description": "Načte oblíbené zóny, vyberete jednu z nich přímo v mobilu a pak ji smažete bez ručního opisování interního ID.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["zones"],
+      "instructions": [
+        "Nejprve načtěte seznam oblíbených zón.",
+        "V mobilu klikněte u vybrané zóny na tlačítko Vybrat ke smazání.",
+        "Potom přejděte na další krok a spusťte smazání."
+      ],
+      "steps": [
+        {
+          "id": "parking-select-favorite-zone-to-delete",
+          "title": "Vybrat oblíbenou zónu ke smazání",
+          "description": "Načte oblíbené zóny a v mobilu vyberte tu, kterou chcete smazat.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/favorite-zones"
+          },
+          "selection": {
+            "sourcePath": "$",
+            "buttonLabel": "Vybrat ke smazání",
+            "selectedButtonLabel": "Vybráno ke smazání",
+            "store": {
+              "selectedFavoriteZoneId": "$.id",
+              "selectedFavoriteZoneCode": "$.zoneId"
+            }
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "parking-delete-selected-favorite-zone",
+          "title": "Smazat vybranou oblíbenou zónu",
+          "description": "Smaže dříve vybranou oblíbenou zónu aktuálního uživatele.",
+          "requiresContext": ["selectedFavoriteZoneId"],
+          "request": {
+            "method": "DELETE",
+            "path": "/v1/accounts/me/favorite-zones/{{context.selectedFavoriteZoneId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Deleted"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "parking-calculate-price-multi",
+      "title": "Parkování - výpočet ceny multi",
+      "description": "Spočítá cenu uličního parkování pro více kroků nad zadanou zónou a parkovacím automatem.",
+      "requiresAuth": true,
+      "tags": ["parking", "zones"],
+      "steps": [
+        {
+          "id": "parking-calculate-price-multi-step",
+          "title": "Vypočítat cenu parkování",
+          "description": "Vrátí kalkulaci ceny pro street parking multi.",
+          "fields": [
+            {
+              "name": "licensePlate",
+              "label": "SPZ",
+              "value": "ABC0709"
+            },
+            {
+              "name": "parkingSectionCode",
+              "label": "Kód zóny",
+              "value": "P2-0314"
+            },
+            {
+              "name": "parkingMachineCode",
+              "label": "Kód parkovacího automatu",
+              "value": "2000064"
+            },
+            {
+              "name": "stepLengthMinutes",
+              "label": "Krok v minutách",
+              "type": "number",
+              "value": "240",
+              "min": 1
+            },
+            {
+              "name": "maximumSteps",
+              "label": "Maximální počet kroků",
+              "type": "number",
+              "value": "1234",
+              "min": 1,
+              "max": 1440
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/parking/calculate-price/street-parking/multi",
+            "body": {
+              "licensePlate": "{{form.licensePlate}}",
+              "parkingSectionCode": "{{form.parkingSectionCode}}",
+              "parkingMachineCode": "{{form.parkingMachineCode}}",
+              "stepLengthMinutes": "{{form.stepLengthMinutes}}",
+              "maximumSteps": "{{form.maximumSteps}}"
+            }
+          },
+          "expected": {
+            "status": 200
+          }
+        }
+      ]
+    }
+  ]
+}

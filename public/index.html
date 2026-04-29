@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Klikátko</title>
+  <link rel="stylesheet" href="/styles.css?v=20260428-clickable-chips">
+</head>
+<body>
+  <main class="shell">
+    <aside class="scenario-panel">
+      <div class="brand">
+        <div class="brand-mark">API</div>
+        <div>
+          <h1 id="brandTitle">Sc&eacute;n&aacute;&#345;e</h1>
+          <p id="brandSubtitle">Vyberte projekt</p>
+        </div>
+      </div>
+      <div class="left-tabs" role="tablist" aria-label="Scenario navigation">
+        <button id="scenariosTab" class="active" type="button" role="tab" aria-selected="true" aria-controls="scenariosPane">Sc&eacute;n&aacute;&#345;e</button>
+        <button id="smokeTab" type="button" role="tab" aria-selected="false" aria-controls="smokePane">Smoke</button>
+        <button id="formsTab" type="button" role="tab" aria-selected="false" aria-controls="formsPane">Formul&aacute;&#345;e</button>
+      </div>
+      <label class="base-url">
+        Projekt
+        <select id="projectSelect"></select>
+      </label>
+      <label class="base-url">
+        Test pack
+        <select id="scenarioPack"></select>
+      </label>
+      <label class="base-url">
+        Prost&#345;ed&iacute;
+        <select id="environmentSelect"></select>
+      </label>
+      <div class="target-info">
+        <div class="target-info-head">
+          <strong>Aktu&aacute;ln&iacute; c&iacute;l</strong>
+          <span id="targetEnvironmentBadge" class="target-environment">UNKNOWN</span>
+        </div>
+        <code id="targetUrl">/api</code>
+        <small id="targetHint" class="target-hint"></small>
+      </div>
+      <details id="authPanel" class="auth-panel">
+        <summary class="auth-panel-head">
+          <strong id="authPanelTitle">P&#345;&iacute;stup</strong>
+          <span id="authSummaryStatus" class="auth-summary-status">Nep&#345;ihl&aacute;&scaron;en</span>
+        </summary>
+        <div class="auth-panel-body">
+          <div id="authForm" class="auth-form"></div>
+          <small id="authJwtStatus" class="auth-status"></small>
+          <small id="authJwtDetails" class="auth-details"></small>
+          <div class="auth-actions">
+            <button id="authLoginAction" type="button">P&#345;ihl&aacute;sit</button>
+            <button id="authRefreshAction" type="button">Obnovit</button>
+            <button id="authLogoutAction" type="button">Odhl&aacute;sit</button>
+            <button id="authResetAction" type="button">Vymazat</button>
+          </div>
+        </div>
+      </details>
+      <details class="advanced-settings">
+        <summary>Pokro&#269;il&eacute; nastaven&iacute;</summary>
+        <label class="base-url advanced-base-url">
+          Proxy cesta z browseru
+          <input id="baseUrl" value="/api" spellcheck="false">
+          <small>Toto nastaven&iacute; je ur&#269;en&eacute; jen pro zvl&aacute;&scaron;tn&iacute; p&#345;&iacute;pady. V b&#283;&#382;n&eacute;m provozu ponechte <code>/api</code>.</small>
+        </label>
+      </details>
+      <section id="scenariosPane" class="left-pane active" role="tabpanel" aria-labelledby="scenariosTab">
+        <div class="catalog-tools">
+          <label class="catalog-search">
+            Naj&iacute;t sc&eacute;n&aacute;&#345;
+            <input id="scenarioSearch" type="search" placeholder="N&aacute;zev, krok, endpoint..." spellcheck="false">
+          </label>
+          <div id="scenarioCategoryFilters" class="category-filters"></div>
+        </div>
+        <div id="scenarioList" class="scenario-list"></div>
+      </section>
+      <section id="smokePane" class="left-pane" role="tabpanel" aria-labelledby="smokeTab">
+        <div class="catalog-tools">
+          <div class="batch-runner">
+            <div class="batch-runner-head">
+              <strong>Rann&iacute; smoke run</strong>
+              <span id="scenarioSelectionCount">Vybr&aacute;no 0/0</span>
+            </div>
+            <div id="batchRunProgress" class="batch-run-progress hidden"></div>
+            <div class="batch-runner-actions">
+              <button id="selectAllScenarios" type="button">V&scaron;e</button>
+              <button id="clearScenarioSelection" type="button">Nic</button>
+              <button id="runSelectedScenarios" type="button">Spustit vybran&eacute;</button>
+              <button id="stopBatchRun" type="button" disabled>Zastavit</button>
+            </div>
+            <div id="batchRunSummary" class="auto-run-summary hidden"></div>
+          </div>
+        </div>
+        <div id="smokeList" class="scenario-list"></div>
+      </section>
+      <section id="formsPane" class="left-pane" role="tabpanel" aria-labelledby="formsTab">
+        <div class="catalog-tools">
+          <label class="catalog-search">
+            Naj&iacute;t formul&aacute;&#345;
+            <input id="formSearch" type="search" placeholder="N&aacute;zev, endpoint, metoda..." spellcheck="false">
+          </label>
+          <div id="formCategoryFilters" class="category-filters"></div>
+        </div>
+        <div id="formList" class="scenario-list"></div>
+      </section>
+    </aside>
+
+    <div class="resize-handle resize-left" data-resize="left" title="Zm&#283;nit &scaron;&iacute;&#345;ku panel&#367;"></div>
+
+    <section class="phone-stage">
+      <div class="phone-workbench">
+        <div class="phone">
+          <div class="phone-bar">
+            <span>9:41</span>
+            <span>PID L&iacute;ta&#269;ka</span>
+            <span>5G</span>
+          </div>
+          <div class="phone-content">
+            <div class="app-header">
+              <span class="app-avatar">L</span>
+              <div>
+                <strong>PID L&iacute;ta&#269;ka</strong>
+                <small>Testovac&iacute; n&aacute;hled</small>
+              </div>
+            </div>
+            <div class="screen-head">
+              <h2 id="screenTitle">J&iacute;zdenky</h2>
+              <p id="screenDescription">P&#345;ehled dostupn&yacute;ch slu&#382;eb pro cestuj&iacute;c&iacute;.</p>
+            </div>
+            <form id="stepForm" class="step-form"></form>
+            <div id="resultCard" class="result-card hidden"></div>
+            <div class="app-nav">
+              <span id="appNavPrimary" class="active">J&iacute;zdenky</span>
+              <span id="appNavSecondary">Platby</span>
+              <span id="appNavTertiary">Profil</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="resize-handle resize-right" data-resize="right" title="Zm&#283;nit &scaron;&iacute;&#345;ku panel&#367;"></div>
+
+    <aside class="log-panel">
+      <div class="right-tabs" role="tablist" aria-label="Tester panel">
+        <button id="testerTab" class="active" type="button" role="tab" aria-selected="true" aria-controls="testerPane">Tester</button>
+        <button id="logTab" type="button" role="tab" aria-selected="false" aria-controls="logPane">Log</button>
+      </div>
+
+      <section id="testerPane" class="right-pane active" role="tabpanel" aria-labelledby="testerTab">
+        <div class="scenario-controls">
+          <div class="tester-info">
+            <span>Tester info</span>
+            <em id="stepCounter"></em>
+            <strong id="testerTitle">Vyberte sc&eacute;n&aacute;&#345;</strong>
+            <p id="testerDescription">Technick&yacute; popis kroku a o&#269;ek&aacute;v&aacute;n&iacute; se zobraz&iacute; zde.</p>
+            <code id="testerExpected"></code>
+          </div>
+          <div id="modeBanner" class="mode-banner hidden"></div>
+          <div class="actions">
+            <button id="runStep" type="button" disabled>Spustit krok</button>
+            <button id="nextStep" type="button" disabled>Dal&scaron;&iacute;</button>
+            <button id="resetScenario" type="button" disabled>Reset</button>
+          </div>
+          <div class="auto-runner">
+            <label>
+              Spustit sc&eacute;n&aacute;&#345; do kroku
+              <select id="autoRunTarget" disabled></select>
+            </label>
+            <button id="autoRun" type="button" disabled>Spustit do kroku</button>
+            <div id="autoRunSummary" class="auto-run-summary hidden"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="logPane" class="right-pane" role="tabpanel" aria-labelledby="logTab">
+        <div class="log-head">
+          <h2>Log</h2>
+          <button id="clearLog" type="button">Vy&#269;istit</button>
+        </div>
+        <div id="contextView" class="context-view"></div>
+        <div id="logEntries" class="log-entries"></div>
+      </section>
+    </aside>
+  </main>
+
+  <script src="/app.js?v=20260428-project-fix" type="module"></script>
+</body>
+</html>

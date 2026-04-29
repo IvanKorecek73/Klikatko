@@ -1,0 +1,162 @@
+const http = require("http");
+const https = require("https");
+const fs = require("fs");
+const path = require("path");
+
+const port = Number(process.env.PORT || 5095);
+let targetBaseUrl = process.env.TICKET_SERVICE_BASE_URL || "http://localhost:5087";
+const proxyTimeoutMs = Number(process.env.HARNESS_PROXY_TIMEOUT_MS || 30000);
+const publicDir = path.join(__dirname, "public");
+
+const mimeTypes = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "application/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml"
+};
+
+const server = http.createServer((request, response) => {
+  if (request.url.startsWith("/__harness/meta")) {
+    serveMeta(response);
+    return;
+  }
+
+  if (request.url.startsWith("/__harness/config/proxy-target")) {
+    configureProxyTarget(request, response);
+    return;
+  }
+
+  if (request.url.startsWith("/api/")) {
+    proxyApi(request, response);
+    return;
+  }
+
+  serveStatic(request, response);
+});
+
+server.listen(port, () => {
+  console.log(`Klikátko: http://localhost:${port}`);
+  console.log(`Proxy target: ${targetBaseUrl}`);
+});
+
+server.timeout = proxyTimeoutMs + 2000;
+
+function serveMeta(response) {
+  response.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Access-Control-Allow-Origin": "*"
+  });
+  response.end(JSON.stringify({
+    port,
+    proxyBasePath: "/api",
+    proxyTarget: targetBaseUrl
+  }));
+}
+
+function configureProxyTarget(request, response) {
+  if (request.method !== "POST") {
+    response.writeHead(405, { "Content-Type": "application/json; charset=utf-8" });
+    response.end(JSON.stringify({ error: "MethodNotAllowed" }));
+    return;
+  }
+
+  const chunks = [];
+  request.on("data", chunk => chunks.push(chunk));
+  request.on("end", () => {
+    try {
+      const raw = Buffer.concat(chunks).toString("utf8");
+      const payload = raw ? JSON.parse(raw) : {};
+      const nextTargetBaseUrl = String(payload.targetBaseUrl || "").trim();
+      const parsed = new URL(nextTargetBaseUrl);
+
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        throw new Error("Only http/https targets are supported.");
+      }
+
+      targetBaseUrl = parsed.toString().replace(/\/$/, "");
+      response.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",
+        "Access-Control-Allow-Origin": "*"
+      });
+      response.end(JSON.stringify({
+        status: "OK",
+        proxyTarget: targetBaseUrl
+      }));
+    } catch (error) {
+      response.writeHead(400, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store"
+      });
+      response.end(JSON.stringify({
+        error: "InvalidProxyTarget",
+        message: error instanceof Error ? error.message : String(error)
+      }));
+    }
+  });
+}
+
+function serveStatic(request, response) {
+  const url = new URL(request.url, `http://localhost:${port}`);
+  const relativePath = url.pathname === "/" ? "/index.html" : url.pathname;
+  const filePath = path.normalize(path.join(publicDir, relativePath));
+
+  if (!filePath.startsWith(publicDir)) {
+    response.writeHead(403);
+    response.end("Forbidden");
+    return;
+  }
+
+  fs.readFile(filePath, (error, content) => {
+    if (error) {
+      response.writeHead(404);
+      response.end("Not found");
+      return;
+    }
+
+    response.writeHead(200, {
+      "Content-Type": mimeTypes[path.extname(filePath)] || "application/octet-stream",
+      "Cache-Control": "no-store"
+    });
+    response.end(content);
+  });
+}
+
+function proxyApi(request, response) {
+  const targetUrl = new URL(request.url.replace(/^\/api/, ""), targetBaseUrl);
+  const requestImpl = targetUrl.protocol === "https:" ? https : http;
+  const proxyRequest = requestImpl.request(
+    targetUrl,
+    {
+      method: request.method,
+      headers: {
+        ...request.headers,
+        host: targetUrl.host
+      }
+    },
+    proxyResponse => {
+      response.writeHead(proxyResponse.statusCode || 502, {
+        ...proxyResponse.headers,
+        "Access-Control-Allow-Origin": "*"
+      });
+      proxyResponse.pipe(response);
+    });
+
+  proxyRequest.setTimeout(proxyTimeoutMs, () => {
+    proxyRequest.destroy(new Error(`Backend response timed out after ${proxyTimeoutMs} ms.`));
+  });
+
+  proxyRequest.on("error", error => {
+    response.writeHead(502, { "Content-Type": "application/json; charset=utf-8" });
+    response.end(JSON.stringify({
+      error: "ProxyError",
+      message: "Backend is not reachable. Start the WebApi or change the API proxy target.",
+      detail: error.message,
+      target: targetUrl.toString()
+    }));
+  });
+
+  request.pipe(proxyRequest);
+}

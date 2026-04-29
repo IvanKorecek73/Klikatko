@@ -1,0 +1,9 @@
+{
+  "name": "ticket-service-demo-harness",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mobile-like scenario runner for Ticket Service business flows.",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
