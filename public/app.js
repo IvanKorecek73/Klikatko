@@ -3825,25 +3825,28 @@ function isProblemDetailsResponse(body) {
 }
 
 function renderProblemDetailsCardHtml(body) {
+  const hiddenErrorFields = new Set(["step", "coreMosResult"]);
   const validationMessages = Object.entries(body.errors || {})
+    .filter(([field]) => !hiddenErrorFields.has(field))
     .flatMap(([field, values]) => Array.isArray(values)
       ? values.map(value => ({ field, value }))
-      : [{ field, value: values }]);
+      : [{ field, value: values }])
+    .filter(item => !isEmpty(item.value));
   const businessMessages = ["createLoginResult", "notificationAccountRegistrationResult", "createNewPasswordResult"]
     .map(key => body[key])
     .filter(result => result?.type === "Error" && result.text)
     .map(result => result.text);
+  const chips = [
+    body.status ? `HTTP ${body.status}` : null,
+    businessMessages.length > 0 ? "business pravidlo" : null
+  ].filter(Boolean);
 
   return `
     <div class="app-card-list">
       <article class="app-card">
         <strong>${escapeHtml(body.title || "Očekávané upozornění")}</strong>
         <p>${escapeHtml(body.detail || "Backend vrátil očekávanou chybovou odpověď.")}</p>
-        <div class="app-card-meta">
-          ${renderAppChip(body.status ? `HTTP ${body.status}` : "chyba")}
-          ${renderAppChip(validationMessages.length > 0 ? "validace" : null)}
-          ${renderAppChip(businessMessages.length > 0 ? "business pravidlo" : null)}
-        </div>
+        ${chips.length > 0 ? `<div class="app-card-meta">${chips.map(renderAppChip).join("")}</div>` : ""}
         ${validationMessages.length > 0 || businessMessages.length > 0 ? `
           <div class="app-card-details">
             ${validationMessages.map(item => `
