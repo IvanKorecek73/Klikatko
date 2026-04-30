@@ -1081,7 +1081,7 @@ async function performAuthRequest(kind, config) {
     }
 
     if (kind === "login") {
-      saveNewAuthProfileAfterSuccessfulLogin();
+      updateAuthProfileAfterSuccessfulLogin();
     }
 
     addLog("ok", `Auth ${kind} ok`, {
@@ -1106,13 +1106,20 @@ async function performAuthRequest(kind, config) {
   }
 }
 
-function saveNewAuthProfileAfterSuccessfulLogin() {
+function updateAuthProfileAfterSuccessfulLogin() {
   const selectedProfile = getSelectedAuthProfile();
 
-  if (!selectedProfile?.isNewProfile) {
+  if (selectedProfile?.isNewProfile) {
+    saveNewAuthProfileAfterSuccessfulLogin();
     return;
   }
 
+  if (selectedProfile?.custom) {
+    updateCustomAuthProfilePasswordAfterSuccessfulLogin(selectedProfile);
+  }
+}
+
+function saveNewAuthProfileAfterSuccessfulLogin() {
   const email = String(state.authFormValues?.email || "").trim();
   const password = String(state.authFormValues?.password || "");
 
@@ -1148,6 +1155,34 @@ function saveNewAuthProfileAfterSuccessfulLogin() {
   saveAuthCustomProfiles();
   saveAuthProfileNotes();
   saveAuthFormValues();
+}
+
+function updateCustomAuthProfilePasswordAfterSuccessfulLogin(selectedProfile) {
+  const password = String(state.authFormValues?.password || "");
+
+  if (!password) {
+    return;
+  }
+
+  let changed = false;
+  state.authCustomProfiles = (state.authCustomProfiles || []).map(profile => {
+    if (profile.id !== selectedProfile.id || profile.values?.password === password) {
+      return profile;
+    }
+
+    changed = true;
+    return {
+      ...profile,
+      values: {
+        ...(profile.values || {}),
+        password
+      }
+    };
+  });
+
+  if (changed) {
+    saveAuthCustomProfiles();
+  }
 }
 
 function buildAuthRequest(config) {
