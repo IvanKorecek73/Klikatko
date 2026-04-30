@@ -3424,6 +3424,10 @@ function buildAppCardsHtml(body, step = currentStep()) {
     return "";
   }
 
+  if (isProblemDetailsResponse(body)) {
+    return renderProblemDetailsCardHtml(body);
+  }
+
   if (isParkingSessionsResponse(body)) {
     return renderParkingSessionsCardsHtml(body.sessions, body.activeParkingLookbackWindowInMinutes);
   }
@@ -3807,6 +3811,52 @@ function buildAppCardsHtml(body, step = currentStep()) {
   }
 
   return "";
+}
+
+function isProblemDetailsResponse(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return false;
+  }
+
+  const hasBusinessError = ["createLoginResult", "notificationAccountRegistrationResult", "createNewPasswordResult"]
+    .some(key => body[key]?.type === "Error");
+
+  return Number(body.status) >= 400 || Boolean(body.errors) || hasBusinessError;
+}
+
+function renderProblemDetailsCardHtml(body) {
+  const validationMessages = Object.entries(body.errors || {})
+    .flatMap(([field, values]) => Array.isArray(values)
+      ? values.map(value => ({ field, value }))
+      : [{ field, value: values }]);
+  const businessMessages = ["createLoginResult", "notificationAccountRegistrationResult", "createNewPasswordResult"]
+    .map(key => body[key])
+    .filter(result => result?.type === "Error" && result.text)
+    .map(result => result.text);
+
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>${escapeHtml(body.title || "Očekávané upozornění")}</strong>
+        <p>${escapeHtml(body.detail || "Backend vrátil očekávanou chybovou odpověď.")}</p>
+        <div class="app-card-meta">
+          ${renderAppChip(body.status ? `HTTP ${body.status}` : "chyba")}
+          ${renderAppChip(validationMessages.length > 0 ? "validace" : null)}
+          ${renderAppChip(businessMessages.length > 0 ? "business pravidlo" : null)}
+        </div>
+        ${validationMessages.length > 0 || businessMessages.length > 0 ? `
+          <div class="app-card-details">
+            ${validationMessages.map(item => `
+              <div class="app-detail-row"><span>${escapeHtml(item.field)}</span><span>${escapeHtml(item.value)}</span></div>
+            `).join("")}
+            ${businessMessages.map((message, index) => `
+              <div class="app-detail-row"><span>Pravidlo ${index + 1}</span><span>${escapeHtml(message)}</span></div>
+            `).join("")}
+          </div>
+        ` : ""}
+      </article>
+    </div>
+  `;
 }
 
 function buildCardListHtml(items, mapItem, options = {}) {
