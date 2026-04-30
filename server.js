@@ -127,15 +127,21 @@ function serveStatic(request, response) {
 function proxyApi(request, response) {
   const targetUrl = new URL(request.url.replace(/^\/api/, ""), targetBaseUrl);
   const requestImpl = targetUrl.protocol === "https:" ? https : http;
+  const requestOptions = {
+    method: request.method,
+    headers: {
+      ...request.headers,
+      host: targetUrl.host
+    }
+  };
+
+  if (targetUrl.protocol === "https:" && isLocalHostname(targetUrl.hostname)) {
+    requestOptions.rejectUnauthorized = false;
+  }
+
   const proxyRequest = requestImpl.request(
     targetUrl,
-    {
-      method: request.method,
-      headers: {
-        ...request.headers,
-        host: targetUrl.host
-      }
-    },
+    requestOptions,
     proxyResponse => {
       response.writeHead(proxyResponse.statusCode || 502, {
         ...proxyResponse.headers,
@@ -159,4 +165,11 @@ function proxyApi(request, response) {
   });
 
   request.pipe(proxyRequest);
+}
+
+function isLocalHostname(hostname) {
+  const normalized = String(hostname || "").toLowerCase();
+  return normalized === "localhost"
+    || normalized === "127.0.0.1"
+    || normalized === "::1";
 }
