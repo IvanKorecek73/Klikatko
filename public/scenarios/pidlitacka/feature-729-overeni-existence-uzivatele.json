@@ -382,11 +382,8 @@
       "description": "Ověří obnovení hesla pro existující aktivní účet přes e-mailový token.",
       "smoke": false,
       "manualInputRequired": true,
-      "requiresAuth": true,
-      "requiresAnonymousAuth": true,
       "tags": ["account", "password"],
       "instructions": [
-        "V panelu Přihlášení vyberte Anonymní uživatel a vytvořte anonymní session.",
         "Použijte e-mail existujícího aktivního uživatele.",
         "Po odeslání recovery e-mailu otevřete schránku, zkopírujte token z odkazu a vložte ho do kroku Resetovat heslo."
       ],
@@ -486,11 +483,8 @@
       "description": "Prověří, co backend dovolí u účtu založeného přes initialize, ale zatím nedokončeného přes complete.",
       "smoke": false,
       "manualInputRequired": true,
-      "requiresAuth": true,
-      "requiresAnonymousAuth": true,
       "tags": ["account", "password"],
       "instructions": [
-        "V panelu Přihlášení použijte anonymní session.",
         "Použijte nový e-mail, který ještě není aktivovaný.",
         "Scénář záměrně nedokončuje AccountCreation complete před obnovou hesla."
       ],
@@ -631,8 +625,6 @@
       "description": "Ověří, že reset hesla s neplatným tokenem skončí očekávanou chybou.",
       "smoke": false,
       "manualInputRequired": true,
-      "requiresAuth": true,
-      "requiresAnonymousAuth": true,
       "tags": ["account", "password", "negative"],
       "steps": [
         {
@@ -674,8 +666,6 @@
       "description": "Ověří validační pravidla pro nové heslo.",
       "smoke": false,
       "manualInputRequired": true,
-      "requiresAuth": true,
-      "requiresAnonymousAuth": true,
       "tags": ["account", "password", "negative"],
       "steps": [
         {
@@ -717,8 +707,6 @@
       "description": "Prověří chování backendu pro e-mail, který v systému neexistuje.",
       "smoke": false,
       "manualInputRequired": true,
-      "requiresAuth": true,
-      "requiresAnonymousAuth": true,
       "tags": ["account", "password"],
       "instructions": [
         "Použijte e-mail, o kterém víte, že není v systému registrovaný.",
