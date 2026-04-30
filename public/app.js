@@ -163,7 +163,7 @@ async function init() {
 function populateProjectOptions() {
   elements.projectSelect.innerHTML = "";
 
-  for (const project of state.projectIndex.projects || []) {
+  for (const project of sortByName(state.projectIndex.projects || [])) {
     const option = document.createElement("option");
     option.value = project.id;
     option.textContent = project.name;
@@ -174,12 +174,19 @@ function populateProjectOptions() {
 function populateScenarioPackOptions() {
   elements.scenarioPack.innerHTML = "";
 
-  for (const pack of state.packIndex?.packs || []) {
+  for (const pack of sortByName(state.packIndex?.packs || [])) {
     const option = document.createElement("option");
     option.value = pack.id;
     option.textContent = pack.name;
     elements.scenarioPack.appendChild(option);
   }
+}
+
+function sortByName(items) {
+  return [...(items || [])].sort((left, right) =>
+    String(left?.name || "").localeCompare(String(right?.name || ""), "cs", {
+      sensitivity: "base"
+    }));
 }
 
 function populateEnvironmentOptions(project) {
