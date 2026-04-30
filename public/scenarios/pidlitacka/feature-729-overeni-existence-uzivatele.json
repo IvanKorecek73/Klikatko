@@ -1245,7 +1245,8 @@
             }
           },
           "expected": {
-            "status": 200
+            "status": 400,
+            "outcome": "expectedError"
           }
         }
       ]
