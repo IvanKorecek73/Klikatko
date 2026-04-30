@@ -138,14 +138,45 @@
       "description": "Ověří, co backend udělá, když uživatel po prvním initialize nepoužije aktivační odkaz a zkusí založení účtu spustit znovu se stejným heslem.",
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["account"],
+      "tags": ["account", "negative"],
       "instructions": [
         "Použijte dosud nepoužitý e-mail.",
         "První aktivační e-mail záměrně nepoužívejte.",
         "Ve druhém kroku použijte stejné heslo jako v prvním kroku.",
-        "Výsledek ukáže, jestli API dovolí opakované založení účtu pro nedokončenou registraci."
+        "Scénář je záměrně negativní: druhý initialize má vrátit business chybu v těle odpovědi."
       ],
       "steps": [
+        {
+          "id": "account-repeat-same-password-check-new-user",
+          "title": "Ověřit, že účet ještě neexistuje",
+          "description": "Před prvním initialize ověří, že zadaný e-mail ještě není v systému použitý.",
+          "fields": [
+            {
+              "name": "userName",
+              "label": "E-mail",
+              "value": "",
+              "placeholder": "např. repeat.same@example.com",
+              "help": "Musí jít o e-mail, který ještě nebyl v MOSu použit."
+            }
+          ],
+          "remember": {
+            "userName": "{{form.userName}}"
+          },
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/register/check",
+            "body": {
+              "userName": "{{form.userName}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.exists", "equals": false },
+              { "path": "$.isActive", "equals": false }
+            ]
+          }
+        },
         {
           "id": "account-repeat-same-password-first-initialize",
           "title": "První initialize",
@@ -154,9 +185,8 @@
             {
               "name": "userName",
               "label": "E-mail",
-              "value": "",
-              "placeholder": "např. repeat.same@example.com",
-              "help": "Musí jít o e-mail, který ještě nebyl v MOSu použit."
+              "value": "{{context.userName}}",
+              "trackDirty": false
             },
             {
               "name": "password",
@@ -240,7 +270,12 @@
             }
           },
           "expected": {
-            "statusIn": [200, 400, 409]
+            "status": 200,
+            "outcome": "expectedError",
+            "assertions": [
+              { "path": "$.createLoginResult.type", "equals": "Error" },
+              { "path": "$.notificationAccountRegistrationResult.type", "equals": "Error" }
+            ]
           }
         }
       ]
@@ -251,14 +286,45 @@
       "description": "Ověří, jestli opakované založení nedokončeného účtu vyžaduje původní heslo, nebo dovolí zadat jiné.",
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["account"],
+      "tags": ["account", "negative"],
       "instructions": [
         "Použijte dosud nepoužitý e-mail.",
         "První aktivační e-mail záměrně nepoužívejte.",
         "Ve druhém kroku změňte heslo na jinou hodnotu.",
-        "Výsledek ukáže, jestli API při opakovaném initialize přijímá jiné heslo."
+        "Scénář je záměrně negativní: druhý initialize má vrátit business chybu v těle odpovědi."
       ],
       "steps": [
+        {
+          "id": "account-repeat-different-password-check-new-user",
+          "title": "Ověřit, že účet ještě neexistuje",
+          "description": "Před prvním initialize ověří, že zadaný e-mail ještě není v systému použitý.",
+          "fields": [
+            {
+              "name": "userName",
+              "label": "E-mail",
+              "value": "",
+              "placeholder": "např. repeat.different@example.com",
+              "help": "Musí jít o e-mail, který ještě nebyl v MOSu použit."
+            }
+          ],
+          "remember": {
+            "userName": "{{form.userName}}"
+          },
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/register/check",
+            "body": {
+              "userName": "{{form.userName}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.exists", "equals": false },
+              { "path": "$.isActive", "equals": false }
+            ]
+          }
+        },
         {
           "id": "account-repeat-different-password-first-initialize",
           "title": "První initialize",
@@ -267,9 +333,8 @@
             {
               "name": "userName",
               "label": "E-mail",
-              "value": "",
-              "placeholder": "např. repeat.different@example.com",
-              "help": "Musí jít o e-mail, který ještě nebyl v MOSu použit."
+              "value": "{{context.userName}}",
+              "trackDirty": false
             },
             {
               "name": "password",
@@ -351,7 +416,12 @@
             }
           },
           "expected": {
-            "statusIn": [200, 400, 409]
+            "status": 200,
+            "outcome": "expectedError",
+            "assertions": [
+              { "path": "$.createLoginResult.type", "equals": "Error" },
+              { "path": "$.notificationAccountRegistrationResult.type", "equals": "Error" }
+            ]
           }
         }
       ]
@@ -471,6 +541,205 @@
               { "path": "$.activateLoginCalled", "equals": true },
               { "path": "$.finalStatus", "equals": "Activated" },
               { "path": "$.userName", "notEmpty": true }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "password-recovery-inactive-user-after-activation",
+      "title": "Neaktivní uživatel - aktivace a obnova hesla",
+      "description": "Ověří postup pro neaktivního uživatele, který zapomněl heslo: kontrola účtu, resend activation, dokončení aktivace a následná obnova hesla.",
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["account", "password"],
+      "instructions": [
+        "Použijte e-mail existujícího neaktivního uživatele.",
+        "Po resend activation otevřete aktivační e-mail a zkopírujte token pro dokončení aktivace.",
+        "Po požadavku na obnovu hesla otevřete recovery e-mail a zkopírujte token pro reset hesla."
+      ],
+      "steps": [
+        {
+          "id": "inactive-password-check-user",
+          "title": "Ověřit neaktivního uživatele",
+          "description": "Kontrola musí potvrdit, že účet existuje, ale ještě není aktivní.",
+          "fields": [
+            {
+              "name": "userName",
+              "label": "E-mail",
+              "value": "",
+              "placeholder": "např. test+inactive@example.com",
+              "help": "Musí jít o existující neaktivní účet."
+            }
+          ],
+          "remember": {
+            "userName": "{{form.userName}}"
+          },
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/register/check",
+            "body": {
+              "userName": "{{form.userName}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.exists", "equals": true },
+              { "path": "$.isActive", "equals": false }
+            ]
+          }
+        },
+        {
+          "id": "inactive-password-resend-activation",
+          "title": "Resend activation",
+          "description": "Pošle nový aktivační e-mail pro existující neaktivní účet.",
+          "fields": [
+            {
+              "name": "userName",
+              "label": "E-mail",
+              "value": "{{context.userName}}",
+              "trackDirty": false
+            },
+            {
+              "name": "language",
+              "label": "Jazyk",
+              "type": "select",
+              "value": "cs",
+              "options": [
+                { "value": "cs", "text": "Čeština" },
+                { "value": "en", "text": "English" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/register/resend-activation",
+            "body": {
+              "userName": "{{form.userName}}",
+              "language": "{{form.language}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.sent", "equals": true }
+            ]
+          }
+        },
+        {
+          "id": "inactive-password-complete-activation",
+          "title": "Dokončit aktivaci",
+          "description": "Dokončí aktivaci tokenem z aktivačního e-mailu.",
+          "instructions": [
+            "Otevřete aktivační e-mail.",
+            "Zkopírujte hodnotu query parametru token z URL a vložte ji do pole Token."
+          ],
+          "fields": [
+            {
+              "name": "token",
+              "label": "Aktivační token",
+              "value": "",
+              "placeholder": "Vložte token z query parametru token"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/register/complete",
+            "body": {
+              "token": "{{form.token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.activateLoginCalled", "equals": true },
+              { "path": "$.finalStatus", "equals": "Activated" },
+              { "path": "$.userName", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "inactive-password-recovery-request",
+          "title": "Požádat o obnovu hesla",
+          "description": "Po aktivaci účtu pošle e-mail s odkazem pro obnovu hesla.",
+          "fields": [
+            {
+              "name": "email",
+              "label": "E-mail",
+              "value": "{{context.userName}}",
+              "trackDirty": false
+            },
+            {
+              "name": "language",
+              "label": "Jazyk",
+              "type": "select",
+              "value": "cs",
+              "options": [
+                { "value": "cs", "text": "Čeština" },
+                { "value": "en", "text": "English" }
+              ]
+            },
+            {
+              "name": "daysValid",
+              "label": "Platnost odkazu ve dnech",
+              "type": "number",
+              "value": 1,
+              "min": 1,
+              "step": 1
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/password/recovery",
+            "body": {
+              "email": "{{form.email}}",
+              "language": "{{form.language}}",
+              "daysValid": "{{form.daysValid}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.expiresAtUtc", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "inactive-password-reset",
+          "title": "Resetovat heslo",
+          "description": "Nastaví nové heslo pomocí tokenu z recovery e-mailu.",
+          "instructions": [
+            "Otevřete recovery e-mail.",
+            "Zkopírujte hodnotu query parametru token z URL a vložte ji do pole Token."
+          ],
+          "fields": [
+            {
+              "name": "token",
+              "label": "Recovery token",
+              "value": "",
+              "placeholder": "Vložte token z query parametru token"
+            },
+            {
+              "name": "newPassword",
+              "label": "Nové heslo",
+              "type": "password",
+              "value": "",
+              "placeholder": "Zadejte nové heslo"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/password/reset",
+            "body": {
+              "token": "{{form.token}}",
+              "newPassword": "{{form.newPassword}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.passwordChanged", "equals": true }
             ]
           }
         }
