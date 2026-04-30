@@ -1252,8 +1252,8 @@
             "status": 400,
             "outcome": "expectedError",
             "assertions": [
-              { "path": "$.title", "equals": "Validation Error" },
-              { "path": "$.errors.Email", "lengthAtLeast": 1 }
+              { "path": "$.title", "equals": "Password recovery failed" },
+              { "path": "$.detail", "equals": "The e-mail address does not exist." }
             ]
           }
         }
