@@ -4742,6 +4742,30 @@ function getCategoryLabel(category) {
       return "Za\u0159\u00edzen\u00ed";
     case "account":
       return "U\u017eivatelsk\u00fd \u00fa\u010det";
+    case "account-creation":
+      return "Zalo\u017een\u00ed \u00fa\u010dtu";
+    case "new-account":
+      return "Nov\u00fd \u00fa\u010det";
+    case "repeated-account-creation":
+      return "Opakovan\u00e9 zalo\u017een\u00ed";
+    case "activation":
+      return "Aktivace";
+    case "reactivation":
+      return "Reaktivace";
+    case "active-account":
+      return "Aktivn\u00ed \u00fa\u010det";
+    case "inactive-account":
+      return "Neaktivn\u00ed \u00fa\u010det";
+    case "user-check":
+      return "Ov\u011b\u0159en\u00ed u\u017eivatele";
+    case "password-recovery":
+      return "Obnova hesla";
+    case "password-validation":
+      return "Validace hesla";
+    case "unknown-email":
+      return "Nezn\u00e1m\u00fd e-mail";
+    case "token":
+      return "Token";
     case "password":
       return "Heslo";
     case "parking":

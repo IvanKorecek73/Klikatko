@@ -8,7 +8,7 @@
       "description": "Ověří založení nového účtu od kontroly e-mailu přes initialize až po complete s tokenem z doručeného e-mailu.",
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["account"],
+      "tags": ["account", "account-creation", "new-account", "activation", "token"],
       "instructions": [
         "Použijte dosud nepoužitý e-mail.",
         "Po kroku Initialize otevřete testovací schránku, zkopírujte hodnotu query parametru token z aktivačního odkazu a vložte ji do kroku Complete."
@@ -138,7 +138,7 @@
       "description": "Ověří, co backend udělá, když uživatel po prvním initialize nepoužije aktivační odkaz a zkusí založení účtu spustit znovu se stejným heslem.",
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["account", "negative"],
+      "tags": ["account", "account-creation", "repeated-account-creation", "new-account", "negative"],
       "instructions": [
         "Použijte dosud nepoužitý e-mail.",
         "První aktivační e-mail záměrně nepoužívejte.",
@@ -286,7 +286,7 @@
       "description": "Ověří, jestli opakované založení nedokončeného účtu vyžaduje původní heslo, nebo dovolí zadat jiné.",
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["account", "negative"],
+      "tags": ["account", "account-creation", "repeated-account-creation", "new-account", "negative"],
       "instructions": [
         "Použijte dosud nepoužitý e-mail.",
         "První aktivační e-mail záměrně nepoužívejte.",
@@ -432,7 +432,7 @@
       "description": "Ověří resend activation pro existující neaktivní login a následně complete s novým tokenem z e-mailu.",
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["account"],
+      "tags": ["account", "reactivation", "activation", "inactive-account", "token"],
       "instructions": [
         "Použijte e-mail existujícího, ale dosud neaktivního uživatele.",
         "Po kroku Resend activation otevřete nový aktivační e-mail, zkopírujte token a vložte ho do kroku Complete."
@@ -548,11 +548,11 @@
     },
     {
       "id": "password-recovery-inactive-user-after-activation",
-      "title": "Neaktivní uživatel - aktivace a obnova hesla",
+      "title": "Reaktivace a obnova hesla - neaktivní uživatel",
       "description": "Ověří postup pro neaktivního uživatele, který zapomněl heslo: kontrola účtu, resend activation, dokončení aktivace a následná obnova hesla.",
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["account", "password"],
+      "tags": ["account", "reactivation", "activation", "password-recovery", "inactive-account", "token"],
       "instructions": [
         "Použijte e-mail existujícího neaktivního uživatele.",
         "Po resend activation otevřete aktivační e-mail a zkopírujte token pro dokončení aktivace.",
@@ -751,7 +751,7 @@
       "description": "Ověří, že pro již aktivní účet nemá smysl pokračovat do initialize ani resend activation.",
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["account"],
+      "tags": ["account", "user-check", "active-account"],
       "instructions": [
         "Použijte e-mail existujícího aktivního uživatele.",
         "Pokud kontrola vrátí exists=true a isActive=true, scénář je splněn a nemá následovat další krok."
@@ -796,7 +796,7 @@
       "description": "Ověří, že pokus o resend activation pro již aktivní účet skončí očekávaným neúspěchem.",
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["account", "negative"],
+      "tags": ["account", "reactivation", "active-account", "negative"],
       "instructions": [
         "Použijte e-mail existujícího aktivního uživatele.",
         "Scénář má správně skončit business chybou, protože účet už je aktivní."
@@ -875,7 +875,7 @@
       "description": "Ověří obnovení hesla pro existující aktivní účet přes e-mailový token.",
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["account", "password"],
+      "tags": ["account", "password-recovery", "active-account", "token"],
       "instructions": [
         "Použijte e-mail existujícího aktivního uživatele.",
         "Po odeslání recovery e-mailu otevřete schránku, zkopírujte token z odkazu a vložte ho do kroku Resetovat heslo."
@@ -976,7 +976,7 @@
       "description": "Prověří, co backend dovolí u účtu založeného přes initialize, ale zatím nedokončeného přes complete.",
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["account", "password"],
+      "tags": ["account", "password-recovery", "inactive-account", "account-creation", "token"],
       "instructions": [
         "Použijte nový e-mail, který ještě není aktivovaný.",
         "Scénář záměrně nedokončuje AccountCreation complete před obnovou hesla."
@@ -1118,7 +1118,7 @@
       "description": "Ověří, že reset hesla s neplatným tokenem skončí očekávanou chybou.",
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["account", "password", "negative"],
+      "tags": ["account", "password-recovery", "token", "negative"],
       "steps": [
         {
           "id": "password-recovery-reset-invalid-token",
@@ -1159,7 +1159,7 @@
       "description": "Ověří validační pravidla pro nové heslo.",
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["account", "password", "negative"],
+      "tags": ["account", "password-recovery", "password-validation", "negative"],
       "steps": [
         {
           "id": "password-recovery-reset-weak-password",
@@ -1200,7 +1200,7 @@
       "description": "Prověří chování backendu pro e-mail, který v systému neexistuje.",
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["account", "password"],
+      "tags": ["account", "password-recovery", "unknown-email", "negative"],
       "instructions": [
         "Použijte e-mail, o kterém víte, že není v systému registrovaný.",
         "Scénář pomáhá potvrdit, jestli API vrací neutrální úspěch nebo business chybu."
