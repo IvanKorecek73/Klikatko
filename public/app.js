@@ -27,9 +27,12 @@
   authSession: null,
   authFormValues: {},
   authProfileNotes: {},
+  authCustomProfiles: [],
   displayedResult: null,
   activeSelection: null
 };
+
+const NEW_AUTH_PROFILE_ID = "__new_auth_profile__";
 
 const elements = {
   scenarioList: document.querySelector("#scenarioList"),
@@ -140,6 +143,7 @@ async function init() {
     renderTargetInfo();
   });
   elements.authForm.addEventListener("input", handleAuthFormInput);
+  elements.authForm.addEventListener("click", handleAuthFormClick);
   elements.authLoginAction.addEventListener("click", executeAuthLogin);
   elements.authRefreshAction.addEventListener("click", executeAuthRefresh);
   elements.authLogoutAction.addEventListener("click", executeAuthLogout);
@@ -363,6 +367,10 @@ function getAuthProfileNotesStorageKey(projectId) {
   return `demoHarness.authProfileNotes.${projectId}`;
 }
 
+function getAuthCustomProfilesStorageKey(projectId) {
+  return `demoHarness.authCustomProfiles.${projectId}`;
+}
+
 function getSavedEnvironmentId(project) {
   if (!project?.id) {
     return "";
@@ -375,10 +383,51 @@ function getProjectAuthConfig(project = state.currentProject) {
   return project?.auth || { type: "jwt" };
 }
 
+function createNewAuthProfile() {
+  return {
+    id: NEW_AUTH_PROFILE_ID,
+    label: "+ Nový uživatel",
+    isNewProfile: true,
+    values: {}
+  };
+}
+
+function createNewAuthProfileDraftValues() {
+  const deviceNumber = Math.floor(1000 + Math.random() * 9000);
+  const android = Math.random() > 0.5;
+
+  return {
+    email: "",
+    password: "",
+    deviceId: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${deviceNumber}`,
+    deviceName: android ? `Test Android ${deviceNumber}` : `Test iPhone ${deviceNumber}`,
+    platform: android ? "Android" : "iOS",
+    osVersion: android ? "14" : "17.4",
+    appVersion: "2.0.0",
+    model: android ? "Pixel 8" : "iPhone 15 Pro",
+    __newProfileNote: ""
+  };
+}
+
 function getAuthProfiles(authConfig = getProjectAuthConfig()) {
-  return authConfig?.type === "login"
-    ? (authConfig.login?.profiles || [])
-    : [];
+  if (authConfig?.type !== "login") {
+    return [];
+  }
+
+  const staticProfiles = authConfig.login?.profiles || [];
+  const anonymousProfiles = staticProfiles.filter(profile => profile.authRequest === "anonymous");
+  const regularProfiles = staticProfiles.filter(profile => profile.authRequest !== "anonymous");
+  const customProfiles = (state.authCustomProfiles || []).map(profile => ({
+    ...profile,
+    custom: true
+  }));
+
+  return [
+    ...regularProfiles,
+    ...customProfiles,
+    ...anonymousProfiles,
+    createNewAuthProfile()
+  ];
 }
 
 function getSelectedAuthProfileId(authConfig = getProjectAuthConfig()) {
@@ -401,6 +450,10 @@ function getSelectedAuthProfile(authConfig = getProjectAuthConfig()) {
 function getAuthProfileNote(profile) {
   if (!profile?.id) {
     return "";
+  }
+
+  if (profile.isNewProfile) {
+    return state.authFormValues?.__newProfileNote || "";
   }
 
   return state.authProfileNotes?.[profile.id] ?? profile.note ?? "";
@@ -456,6 +509,19 @@ function loadSavedAuthProfileNotes(project) {
   }
 }
 
+function loadSavedAuthCustomProfiles(project) {
+  if (!project?.id) {
+    return [];
+  }
+
+  try {
+    const savedProfiles = JSON.parse(localStorage.getItem(getAuthCustomProfilesStorageKey(project.id)) || "[]");
+    return Array.isArray(savedProfiles) ? savedProfiles : [];
+  } catch {
+    return [];
+  }
+}
+
 function saveAuthFormValues() {
   if (!state.currentProject?.id) {
     return;
@@ -475,6 +541,7 @@ function saveAuthFormValues() {
     }
 
     delete persistedValues.__profileNote;
+    delete persistedValues.__newProfileNote;
   }
 
   localStorage.setItem(
@@ -484,6 +551,16 @@ function saveAuthFormValues() {
   if (authConfig.type === "jwt") {
     localStorage.setItem(getAuthTokenStorageKey(state.currentProject.id), state.authFormValues.jwtToken || "");
   }
+}
+
+function saveAuthCustomProfiles() {
+  if (!state.currentProject?.id) {
+    return;
+  }
+
+  localStorage.setItem(
+    getAuthCustomProfilesStorageKey(state.currentProject.id),
+    JSON.stringify(state.authCustomProfiles || []));
 }
 
 function saveAuthProfileNotes() {
@@ -526,6 +603,7 @@ function loadProjectAuth(project) {
   const authConfig = getProjectAuthConfig(project);
   state.authFormValues = loadSavedAuthFormValues(project);
   state.authProfileNotes = loadSavedAuthProfileNotes(project);
+  state.authCustomProfiles = loadSavedAuthCustomProfiles(project);
   state.authSession = loadSavedAuthSession(project, state.currentEnvironmentId);
 
   if (authConfig.type === "jwt" && !state.authFormValues.jwtToken) {
@@ -542,8 +620,9 @@ function loadProjectAuth(project) {
 function applyAuthFieldDefaults(authConfig) {
   if (authConfig.type === "login") {
     const profiles = getAuthProfiles(authConfig);
+    const selectedProfileExists = profiles.some(profile => profile.id === state.authFormValues.__selectedProfileId);
 
-    if (!state.authFormValues.__selectedProfileId && profiles.length > 0) {
+    if ((!state.authFormValues.__selectedProfileId || !selectedProfileExists) && profiles.length > 0) {
       state.authFormValues.__selectedProfileId = profiles[0].id;
     }
 
@@ -578,6 +657,16 @@ function applyAuthProfileSelection(profileId, options = {}) {
   }
 
   state.authFormValues.__selectedProfileId = profile.id;
+
+  if (profile.isNewProfile) {
+    const draftValues = createNewAuthProfileDraftValues();
+    for (const field of authConfig.login?.fields || []) {
+      delete state.authFormValues[field.name];
+    }
+
+    Object.assign(state.authFormValues, draftValues);
+    return;
+  }
 
   for (const [name, value] of Object.entries(profile.values || {})) {
     if (options.overwrite || (state.authFormValues?.[name] ?? "") === "") {
@@ -740,7 +829,9 @@ function createAuthProfileSelector(authConfig) {
   for (const profile of getAuthProfiles(authConfig)) {
     const option = document.createElement("option");
     option.value = profile.id;
-    option.textContent = profile.label || profile.id;
+    option.textContent = profile.custom
+      ? `${profile.label || profile.id} (uložený)`
+      : profile.label || profile.id;
     select.appendChild(option);
   }
 
@@ -758,6 +849,13 @@ function createAuthProfileSelector(authConfig) {
     return wrapper;
   }
 
+  if (selectedProfile?.isNewProfile) {
+    const hint = document.createElement("div");
+    hint.className = "auth-profile-hint new-profile";
+    hint.textContent = "Nový účet se uloží do rychlého výběru až po úspěšném přihlášení.";
+    wrapper.appendChild(hint);
+  }
+
   const noteWrapper = document.createElement("label");
   noteWrapper.className = "base-url auth-profile-note";
   noteWrapper.textContent = "Poznámka k účtu";
@@ -769,6 +867,16 @@ function createAuthProfileSelector(authConfig) {
   noteInput.value = getAuthProfileNote(selectedProfile);
   noteWrapper.appendChild(noteInput);
   wrapper.appendChild(noteWrapper);
+
+  if (selectedProfile?.custom) {
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "auth-remove-profile";
+    removeButton.dataset.authProfileRemove = "true";
+    removeButton.textContent = "Odebrat uživatele ze seznamu";
+    removeButton.title = "Odebere jen lokální rychlý výběr v Klikátku. Účet v cílové aplikaci nemaže.";
+    wrapper.appendChild(removeButton);
+  }
 
   return wrapper;
 }
@@ -822,7 +930,14 @@ function handleAuthFormInput(event) {
   }
 
   if (target.name === "__profileNote") {
-    const selectedProfileId = getSelectedAuthProfileId();
+    const selectedProfile = getSelectedAuthProfile();
+
+    if (selectedProfile?.isNewProfile) {
+      state.authFormValues.__newProfileNote = target.value;
+      return;
+    }
+
+    const selectedProfileId = selectedProfile?.id;
 
     if (selectedProfileId) {
       state.authProfileNotes[selectedProfileId] = target.value;
@@ -833,8 +948,48 @@ function handleAuthFormInput(event) {
   }
 
   state.authFormValues[target.name] = target.value;
+  if (getSelectedAuthProfile()?.isNewProfile) {
+    renderAuthPanelStatus();
+    renderModeBanner();
+    return;
+  }
+
   saveAuthFormValues();
   renderAuthPanelStatus();
+  renderModeBanner();
+}
+
+function handleAuthFormClick(event) {
+  const removeButton = event.target?.closest?.("[data-auth-profile-remove]");
+  if (!removeButton) {
+    return;
+  }
+
+  removeSelectedAuthProfile();
+}
+
+function removeSelectedAuthProfile() {
+  const selectedProfile = getSelectedAuthProfile();
+
+  if (!selectedProfile?.custom) {
+    return;
+  }
+
+  state.authCustomProfiles = (state.authCustomProfiles || [])
+    .filter(profile => profile.id !== selectedProfile.id);
+  delete state.authProfileNotes[selectedProfile.id];
+  saveAuthCustomProfiles();
+  saveAuthProfileNotes();
+
+  const firstProfile = getAuthProfiles().find(profile => !profile.custom && !profile.isNewProfile);
+  if (firstProfile) {
+    applyAuthProfileSelection(firstProfile.id, { overwrite: true });
+  } else {
+    state.authFormValues.__selectedProfileId = "";
+    saveAuthFormValues();
+  }
+
+  renderAuthPanel();
   renderModeBanner();
 }
 
@@ -887,6 +1042,7 @@ function resetAuthState() {
 
   state.authFormValues = {};
   state.authProfileNotes = loadSavedAuthProfileNotes(state.currentProject);
+  state.authCustomProfiles = loadSavedAuthCustomProfiles(state.currentProject);
   state.authSession = null;
   localStorage.removeItem(getAuthFormStorageKey(state.currentProject.id));
   localStorage.removeItem(getAuthTokenStorageKey(state.currentProject.id));
@@ -924,6 +1080,10 @@ async function performAuthRequest(kind, config) {
       saveAuthSession();
     }
 
+    if (kind === "login") {
+      saveNewAuthProfileAfterSuccessfulLogin();
+    }
+
     addLog("ok", `Auth ${kind} ok`, {
       request: request.debug,
       response: {
@@ -944,6 +1104,50 @@ async function performAuthRequest(kind, config) {
     elements.authPanel.open = true;
     throw error;
   }
+}
+
+function saveNewAuthProfileAfterSuccessfulLogin() {
+  const selectedProfile = getSelectedAuthProfile();
+
+  if (!selectedProfile?.isNewProfile) {
+    return;
+  }
+
+  const email = String(state.authFormValues?.email || "").trim();
+  const password = String(state.authFormValues?.password || "");
+
+  if (!email || !password) {
+    return;
+  }
+
+  const note = String(state.authFormValues?.__newProfileNote || "").trim();
+  const id = `custom-${email.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${Date.now()}`;
+  const profile = {
+    id,
+    label: email,
+    note,
+    values: {
+      email,
+      password,
+      deviceId: state.authFormValues?.deviceId || "",
+      deviceName: state.authFormValues?.deviceName || "",
+      platform: state.authFormValues?.platform || "",
+      osVersion: state.authFormValues?.osVersion || "",
+      appVersion: state.authFormValues?.appVersion || "",
+      model: state.authFormValues?.model || ""
+    }
+  };
+
+  state.authCustomProfiles = [
+    ...(state.authCustomProfiles || []).filter(item => item.label?.toLowerCase() !== email.toLowerCase()),
+    profile
+  ];
+  state.authProfileNotes[profile.id] = note;
+  state.authFormValues.__selectedProfileId = profile.id;
+  delete state.authFormValues.__newProfileNote;
+  saveAuthCustomProfiles();
+  saveAuthProfileNotes();
+  saveAuthFormValues();
 }
 
 function buildAuthRequest(config) {
