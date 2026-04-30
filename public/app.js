@@ -2005,7 +2005,7 @@ function getMobileNavigation(step) {
     };
   }
 
-  if (text.includes("account") || text.includes("auth/register")) {
+  if (isAccountStepText(text)) {
     if (text.includes("complete") || text.includes("activation")) {
       return {
         items: ["Registrace", "Aktivace", "Profil"],
@@ -2065,6 +2065,17 @@ function getMobileNavigation(step) {
     items: ["Jízdenky", "Platby", "Profil"],
     activeIndex: 0
   };
+}
+
+function isAccountStepText(text) {
+  return includesAny(text, [
+    "account",
+    "auth/register",
+    "auth/password",
+    "password-recovery",
+    "obnova hesla",
+    "resetovat heslo"
+  ]);
 }
 
 function renderField(field, value) {
@@ -2315,7 +2326,7 @@ function renderNoInputStepCard(step) {
 function getMobileTitle(step) {
   const text = [step.id, step.title, step.request?.path].filter(Boolean).join(" ").toLowerCase();
 
-  if (text.includes("account") || text.includes("auth/register")) {
+  if (isAccountStepText(text)) {
     return "Profil";
   }
 
@@ -2357,7 +2368,7 @@ function getMobileTitle(step) {
 function getMobileDescription(step) {
   const text = [step.id, step.title, step.request?.path].filter(Boolean).join(" ").toLowerCase();
 
-  if (text.includes("account") || text.includes("auth/register")) {
+  if (isAccountStepText(text)) {
     return "Založení a správa účtu.";
   }
 
