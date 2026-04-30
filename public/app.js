@@ -3101,6 +3101,7 @@ function evaluateStep(step, status, body) {
 
   if (expected.outcome === "expectedError") {
     messages.push("Očekávaná chyba byla vrácena.");
+    messages.push(...describeExpectedErrorBody(body));
     return {
       level: "ok",
       appMessage: "Aplikace správně upozornila na problém.",
@@ -3114,6 +3115,40 @@ function evaluateStep(step, status, body) {
     appMessage: makeAppMessage(body, status, "ok"),
     messages
   };
+}
+
+function describeExpectedErrorBody(body) {
+  if (!body || typeof body !== "object") {
+    return [];
+  }
+
+  const messages = [];
+
+  if (body.title) {
+    messages.push(`Název chyby: ${body.title}`);
+  }
+
+  if (body.detail) {
+    messages.push(`Detail chyby: ${body.detail}`);
+  }
+
+  const validationMessages = Object.entries(body.errors || {})
+    .flatMap(([field, values]) => Array.isArray(values)
+      ? values.map(value => `${field}: ${value}`)
+      : [`${field}: ${values}`]);
+
+  if (validationMessages.length > 0) {
+    messages.push(`Validace: ${validationMessages.join(" | ")}`);
+  }
+
+  for (const key of ["createLoginResult", "notificationAccountRegistrationResult", "createNewPasswordResult"]) {
+    const result = body[key];
+    if (result?.type === "Error" && result.text) {
+      messages.push(`${key}: ${result.text}`);
+    }
+  }
+
+  return messages;
 }
 
 function makeAppMessage(body, status, level) {

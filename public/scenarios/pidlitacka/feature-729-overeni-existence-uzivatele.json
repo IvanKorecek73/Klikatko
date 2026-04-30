@@ -864,7 +864,11 @@
           },
           "expected": {
             "status": 400,
-            "outcome": "expectedError"
+            "outcome": "expectedError",
+            "assertions": [
+              { "path": "$.title", "equals": "Account creation failed" },
+              { "path": "$.detail", "equals": "The user name is already active." }
+            ]
           }
         }
       ]
@@ -1246,7 +1250,11 @@
           },
           "expected": {
             "status": 400,
-            "outcome": "expectedError"
+            "outcome": "expectedError",
+            "assertions": [
+              { "path": "$.title", "equals": "Validation Error" },
+              { "path": "$.errors.Email", "lengthAtLeast": 1 }
+            ]
           }
         }
       ]
