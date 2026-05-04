@@ -138,24 +138,25 @@
       "description": "Ověří, co backend udělá, když uživatel po prvním initialize nepoužije aktivační odkaz a zkusí založení účtu spustit znovu se stejným heslem.",
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["account", "account-creation", "repeated-account-creation", "existing-account", "negative"],
+      "tags": ["account", "account-creation", "repeated-account-creation", "new-account", "negative"],
       "instructions": [
-        "Použijte e-mail účtu, který už v systému existuje. Může být aktivní i neaktivní.",
+        "Použijte dosud nepoužitý e-mail.",
+        "První aktivační e-mail záměrně nepoužívejte.",
         "Ve druhém kroku použijte stejné heslo jako v prvním kroku.",
         "Scénář je záměrně negativní: druhý initialize má vrátit business chybu v těle odpovědi."
       ],
       "steps": [
         {
-          "id": "account-repeat-same-password-check-existing-user",
-          "title": "Ověřit, že účet už existuje",
-          "description": "Před opakovaným initialize ověří, že zadaný e-mail už je v systému použitý.",
+          "id": "account-repeat-same-password-check-new-user",
+          "title": "Ověřit, že účet ještě neexistuje",
+          "description": "Před prvním initialize ověří, že zadaný e-mail ještě není v systému použitý.",
           "fields": [
             {
               "name": "userName",
               "label": "E-mail",
               "value": "",
               "placeholder": "např. repeat.same@example.com",
-              "help": "Musí jít o existující účet. Může být aktivní i neaktivní."
+              "help": "Musí jít o e-mail, který ještě nebyl v MOSu použit."
             }
           ],
           "remember": {
@@ -171,7 +172,8 @@
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.exists", "equals": true }
+              { "path": "$.exists", "equals": false },
+              { "path": "$.isActive", "equals": false }
             ]
           }
         },
@@ -284,24 +286,25 @@
       "description": "Ověří, jestli opakované založení nedokončeného účtu vyžaduje původní heslo, nebo dovolí zadat jiné.",
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["account", "account-creation", "repeated-account-creation", "existing-account", "negative"],
+      "tags": ["account", "account-creation", "repeated-account-creation", "new-account", "negative"],
       "instructions": [
-        "Použijte e-mail účtu, který už v systému existuje. Může být aktivní i neaktivní.",
+        "Použijte dosud nepoužitý e-mail.",
+        "První aktivační e-mail záměrně nepoužívejte.",
         "Ve druhém kroku změňte heslo na jinou hodnotu.",
         "Scénář je záměrně negativní: druhý initialize má vrátit business chybu v těle odpovědi."
       ],
       "steps": [
         {
-          "id": "account-repeat-different-password-check-existing-user",
-          "title": "Ověřit, že účet už existuje",
-          "description": "Před opakovaným initialize ověří, že zadaný e-mail už je v systému použitý.",
+          "id": "account-repeat-different-password-check-new-user",
+          "title": "Ověřit, že účet ještě neexistuje",
+          "description": "Před prvním initialize ověří, že zadaný e-mail ještě není v systému použitý.",
           "fields": [
             {
               "name": "userName",
               "label": "E-mail",
               "value": "",
               "placeholder": "např. repeat.different@example.com",
-              "help": "Musí jít o existující účet. Může být aktivní i neaktivní."
+              "help": "Musí jít o e-mail, který ještě nebyl v MOSu použit."
             }
           ],
           "remember": {
@@ -317,7 +320,8 @@
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.exists", "equals": true }
+              { "path": "$.exists", "equals": false },
+              { "path": "$.isActive", "equals": false }
             ]
           }
         },
