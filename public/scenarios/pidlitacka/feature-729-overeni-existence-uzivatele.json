@@ -270,11 +270,11 @@
             }
           },
           "expected": {
-            "status": 200,
+            "status": 400,
             "outcome": "expectedError",
             "assertions": [
-              { "path": "$.createLoginResult.type", "equals": "Error" },
-              { "path": "$.notificationAccountRegistrationResult.type", "equals": "Error" }
+              { "path": "$.title", "equals": "Account creation failed" },
+              { "path": "$.detail", "equals": "The CreateLogin step did not return a login identifier that can be used for activation notification." }
             ]
           }
         }
@@ -416,11 +416,11 @@
             }
           },
           "expected": {
-            "status": 200,
+            "status": 400,
             "outcome": "expectedError",
             "assertions": [
-              { "path": "$.createLoginResult.type", "equals": "Error" },
-              { "path": "$.notificationAccountRegistrationResult.type", "equals": "Error" }
+              { "path": "$.title", "equals": "Account creation failed" },
+              { "path": "$.detail", "equals": "The CreateLogin step did not return a login identifier that can be used for activation notification." }
             ]
           }
         }
