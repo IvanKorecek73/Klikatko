@@ -4852,6 +4852,8 @@ function getCategoryLabel(category) {
       return "Zalo\u017een\u00ed \u00fa\u010dtu";
     case "new-account":
       return "Nov\u00fd \u00fa\u010det";
+    case "existing-account":
+      return "Existuj\u00edc\u00ed \u00fa\u010det";
     case "repeated-account-creation":
       return "Opakovan\u00e9 zalo\u017een\u00ed";
     case "activation":
