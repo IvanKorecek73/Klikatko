@@ -30,7 +30,8 @@
   authProfileNotes: {},
   authCustomProfiles: [],
   displayedResult: null,
-  activeSelection: null
+  activeSelection: null,
+  resultCountdownTimer: null
 };
 
 const NEW_AUTH_PROFILE_ID = "__new_auth_profile__";
@@ -3785,8 +3786,10 @@ function saveFullLog() {
 
 function showResult(level, message, body = null, step = currentStep()) {
   state.displayedResult = { level, message, body, step };
+  clearResultCountdown();
   elements.resultCard.innerHTML = buildResultHtml(level, message, body, step);
   elements.resultCard.className = `result-card ${level}`;
+  startResultCountdownIfNeeded(message);
   bindResultCardActions();
 }
 
@@ -3800,7 +3803,7 @@ function buildResultHtml(level, message, body = null, step = currentStep()) {
 
   return `
     <strong class="result-title">${escapeHtml(title)}</strong>
-    <div class="result-message">${escapeHtml(message)}</div>
+    <div class="result-message"${shouldShowResultCountdown(level, message, body, step) ? ' data-result-countdown="30"' : ""}>${escapeHtml(message)}</div>
     ${rows.length > 0 ? `<div class="result-grid">${rows.map(row => `
       <div class="result-row">
         <span>${escapeHtml(row.label)}</span>
@@ -3808,6 +3811,52 @@ function buildResultHtml(level, message, body = null, step = currentStep()) {
       </div>`).join("")}</div>` : ""}
     ${buildAppCardsHtml(body, step)}
   `;
+}
+
+function shouldShowResultCountdown(level, message, body, step) {
+  return level === "warn"
+    && step?.id === "parking-process-saved-card-payment"
+    && body?.paymentInProgress === true
+    && body?.paymentSuccessful === false
+    && /30 sekund|30 vteřin|30 s/i.test(message);
+}
+
+function clearResultCountdown() {
+  if (state.resultCountdownTimer) {
+    window.clearInterval(state.resultCountdownTimer);
+    state.resultCountdownTimer = null;
+  }
+}
+
+function startResultCountdownIfNeeded(message) {
+  const countdown = elements.resultCard.querySelector("[data-result-countdown]");
+
+  if (!countdown) {
+    return;
+  }
+
+  const initialSeconds = Number(countdown.dataset.resultCountdown) || 30;
+  let remainingSeconds = initialSeconds;
+  const baseMessage = message.replace(/\s*\([^)]*\)\s*$/, "");
+  const update = () => {
+    countdown.textContent = remainingSeconds > 0
+      ? `${baseMessage} (${remainingSeconds} s)`
+      : "Platbu můžete zkusit ověřit znovu spuštěním tohoto kroku.";
+  };
+
+  update();
+  state.resultCountdownTimer = window.setInterval(() => {
+    remainingSeconds -= 1;
+
+    if (remainingSeconds <= 0) {
+      remainingSeconds = 0;
+      update();
+      clearResultCountdown();
+      return;
+    }
+
+    update();
+  }, 1000);
 }
 
 function buildAppCardsHtml(body, step = currentStep()) {
