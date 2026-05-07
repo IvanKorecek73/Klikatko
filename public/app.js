@@ -3433,7 +3433,7 @@ function buildAppCardsHtml(body, step = currentStep()) {
   if (isPaymentCardsStep(step) && Number(body.status) === 404) {
     return renderEmptyAppCardHtml(
       "Žádné uložené karty",
-      "Uživatel zatím nemá uloženou platební kartu. To je pro první průchod scénářem v pořádku."
+      "Uživatel nemá žádné uložené platební karty. To je pro první průchod scénářem v pořádku."
     );
   }
 
@@ -3512,7 +3512,7 @@ function buildAppCardsHtml(body, step = currentStep()) {
     if (isPaymentCardsStep(step) && body.length === 0) {
       return renderEmptyAppCardHtml(
         "Žádné uložené karty",
-        "Uživatel zatím nemá uloženou platební kartu. To je pro první průchod scénářem v pořádku."
+        "Uživatel nemá žádné uložené platební karty. To je pro první průchod scénářem v pořádku."
       );
     }
 
