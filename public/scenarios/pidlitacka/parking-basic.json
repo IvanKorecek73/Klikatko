@@ -1040,26 +1040,52 @@
     {
       "id": "parking-card-detail",
       "title": "Platební karty - detail uložené karty",
-      "description": "Načte detail jedné uložené platební karty podle jejího ID.",
+      "description": "Načte uložené karty, umožní vybrat jednu z nich a poté zobrazí její detail.",
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
       "tags": ["parking", "payment", "cards", "forms"],
       "instructions": [
-        "Nejprve si načtěte seznam uložených karet a zkopírujte ID karty, kterou chcete ověřit.",
-        "Tento scénář je hlavně samostatný formulář pro rychlé dohledání konkrétní karty."
+        "V prvním kroku vyberte uloženou kartu v mobilu.",
+        "Druhý krok načte detail vybrané karty. Pokud uživatel žádné karty nemá, scénář dál nepouštějte."
       ],
       "steps": [
         {
+          "id": "parking-card-detail-select",
+          "title": "Vybrat uloženou kartu",
+          "description": "Načte uložené platební karty aktuálního uživatele a umožní vybrat kartu pro zobrazení detailu.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/parking/cards"
+          },
+          "selection": {
+            "sourcePath": "$",
+            "buttonLabel": "Použít kartu",
+            "selectedButtonLabel": "Karta vybrána",
+            "store": {
+              "selectedPaymentCardId": "$.id",
+              "selectedPaymentCardName": "$.cardholderName",
+              "selectedPaymentCardMaskedNumber": "$.maskedPan",
+              "selectedPaymentCardExpirationMonth": "$.expirationMonth",
+              "selectedPaymentCardExpirationYear": "$.expirationYear"
+            }
+          },
+          "expected": {
+            "statusIn": [200, 404]
+          }
+        },
+        {
           "id": "parking-card-detail-step",
           "title": "Načíst detail uložené karty",
-          "description": "Vrátí detail uložené platební karty aktuálního uživatele.",
+          "description": "Vrátí detail platební karty vybrané v předchozím kroku.",
+          "requiresContext": ["selectedPaymentCardId"],
           "fields": [
             {
               "name": "id",
               "label": "ID uložené karty",
               "type": "text",
-              "placeholder": "např. 00000000-0000-0000-0000-000000000000"
+              "value": "{{context.selectedPaymentCardId}}",
+              "placeholder": "Vyberte kartu v předchozím kroku"
             }
           ],
           "request": {
@@ -1101,26 +1127,52 @@
     {
       "id": "parking-card-delete",
       "title": "Platební karty - odstranit uloženou kartu",
-      "description": "Odstraní uloženou platební kartu ze seznamu aktuálního uživatele.",
+      "description": "Načte uložené karty, umožní vybrat jednu z nich a poté ji odstraní ze seznamu aktuálního uživatele.",
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
       "tags": ["parking", "payment", "cards", "forms"],
       "instructions": [
-        "Nejprve si načtěte seznam uložených karet a zkopírujte ID karty, kterou chcete odstranit.",
+        "V prvním kroku vyberte uloženou kartu v mobilu.",
         "Tímto se odstraňuje jen uložená položka v aplikaci, ne samotná bankovní karta."
       ],
       "steps": [
         {
+          "id": "parking-card-delete-select",
+          "title": "Vybrat uloženou kartu",
+          "description": "Načte uložené platební karty aktuálního uživatele a umožní vybrat kartu pro odstranění.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/parking/cards"
+          },
+          "selection": {
+            "sourcePath": "$",
+            "buttonLabel": "Odstranit tuto kartu",
+            "selectedButtonLabel": "Karta vybrána",
+            "store": {
+              "selectedPaymentCardId": "$.id",
+              "selectedPaymentCardName": "$.cardholderName",
+              "selectedPaymentCardMaskedNumber": "$.maskedPan",
+              "selectedPaymentCardExpirationMonth": "$.expirationMonth",
+              "selectedPaymentCardExpirationYear": "$.expirationYear"
+            }
+          },
+          "expected": {
+            "statusIn": [200, 404]
+          }
+        },
+        {
           "id": "parking-card-delete-step",
           "title": "Odstranit uloženou kartu",
-          "description": "Smaže uloženou kartu aktuálního uživatele podle ID.",
+          "description": "Smaže uloženou kartu vybranou v předchozím kroku.",
+          "requiresContext": ["selectedPaymentCardId"],
           "fields": [
             {
               "name": "id",
               "label": "ID uložené karty",
               "type": "text",
-              "placeholder": "např. 00000000-0000-0000-0000-000000000000"
+              "value": "{{context.selectedPaymentCardId}}",
+              "placeholder": "Vyberte kartu v předchozím kroku"
             }
           ],
           "request": {
