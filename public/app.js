@@ -13,6 +13,7 @@
   dirty: false,
   freeForm: false,
   lastStepResult: null,
+  stepResults: {},
   log: [],
   forms: [],
   scenarioSearch: "",
@@ -80,6 +81,7 @@ const elements = {
   appNavTertiary: document.querySelector("#appNavTertiary"),
   stepForm: document.querySelector("#stepForm"),
   runStep: document.querySelector("#runStep"),
+  previousStep: document.querySelector("#previousStep"),
   nextStep: document.querySelector("#nextStep"),
   resetScenario: document.querySelector("#resetScenario"),
   resultCard: document.querySelector("#resultCard"),
@@ -112,6 +114,7 @@ async function init() {
   await loadProject(getDefaultProjectId());
 
   elements.runStep.addEventListener("click", runCurrentStep);
+  elements.previousStep.addEventListener("click", previousStep);
   elements.nextStep.addEventListener("click", nextStep);
   elements.resetScenario.addEventListener("click", resetCurrentScenario);
   elements.autoRun.addEventListener("click", runScenarioToSelectedStep);
@@ -287,6 +290,7 @@ async function loadScenarioPack(packId) {
   state.dirty = false;
   state.freeForm = false;
   state.lastStepResult = null;
+  state.stepResults = {};
   state.displayedResult = null;
   state.activeSelection = null;
   state.scenarioSearch = "";
@@ -1835,6 +1839,7 @@ function selectScenario(scenarioId, options = {}) {
   state.dirty = false;
   state.freeForm = false;
   state.lastStepResult = null;
+  state.stepResults = {};
   state.displayedResult = null;
   state.activeSelection = null;
   if (!preserveLog) {
@@ -1877,6 +1882,7 @@ function selectFreeForm(formId) {
   state.dirty = true;
   state.freeForm = true;
   state.lastStepResult = null;
+  state.stepResults = {};
   state.displayedResult = null;
   state.activeSelection = null;
   state.log = [];
@@ -1912,12 +1918,15 @@ function renderStep() {
   const scenarioRequiresManualInput = requiresManualInput(state.scenario);
   const stepRequiresAuth = requiresAuthorizationForStep(step);
   const missingContextKeys = getMissingContextKeys(step);
+  const currentStepResult = getCurrentStepResult();
   elements.resetScenario.disabled = !state.scenario;
   elements.runStep.disabled = !step || state.batchRunning || missingContextKeys.length > 0 || (stepRequiresAuth && (!hasRequiredAuthorizationFor(step) || !hasRequiredAuthorizationFor(state.scenario)));
+  elements.previousStep.disabled = !state.scenario || state.batchRunning || findPreviousRunnableStepIndex(state.stepIndex) === null;
   elements.autoRun.disabled = !state.scenario || state.freeForm || state.batchRunning || scenarioRequiresManualInput || !hasRequiredAuthorizationFor(state.scenario);
   elements.autoRunTarget.disabled = !state.scenario || state.freeForm || state.batchRunning || scenarioRequiresManualInput || !hasRequiredAuthorizationFor(state.scenario);
-  elements.runStep.textContent = "Spustit krok";
-  elements.nextStep.disabled = !step || !state.lastStepResult || state.batchRunning;
+  elements.runStep.textContent = currentStepResult ? "Zopakovat krok" : "Spustit krok";
+  elements.nextStep.disabled = !canAdvanceFromCurrentStep() || state.batchRunning;
+  elements.nextStep.classList.toggle("ready", !elements.nextStep.disabled);
 
   if (!step) {
     elements.stepCounter.textContent = "";
@@ -1932,6 +1941,7 @@ function renderStep() {
     elements.stepForm.innerHTML = "";
     state.displayedResult = null;
     state.activeSelection = null;
+    elements.nextStep.classList.remove("ready");
     renderAppNav(step);
     showResult("ok", "Sc\u00e9n\u00e1\u0159 je dokon\u010den.");
     renderContext();
@@ -1949,7 +1959,7 @@ function renderStep() {
   elements.testerExpected.textContent = formatExpected(step);
   elements.stepForm.innerHTML = "";
   elements.resultCard.className = "result-card hidden";
-  state.lastStepResult = null;
+  state.lastStepResult = currentStepResult;
   state.displayedResult = null;
   state.activeSelection = null;
   const visibleFields = getVisibleFields(step);
@@ -2648,6 +2658,7 @@ function shouldTrackDirty(field) {
 }
 async function runCurrentStep() {
   const step = currentStep();
+  const runningStepIndex = state.stepIndex;
 
   if (!step) {
     return;
@@ -2682,9 +2693,12 @@ async function runCurrentStep() {
     return;
   }
 
+  clearStepResultsFrom(runningStepIndex);
   elements.runStep.disabled = true;
   elements.runStep.textContent = "Pracuji...";
+  elements.previousStep.disabled = true;
   elements.nextStep.disabled = true;
+  elements.nextStep.classList.remove("ready");
   showResult("warn", "Pracuji na požadavku...");
   let request = null;
 
@@ -2700,6 +2714,7 @@ async function runCurrentStep() {
     applyRemember(step);
     prepareSelection(step, body, response.status);
     state.lastStepResult = result;
+    state.stepResults[runningStepIndex] = result;
 
     addLog(result.level, `${step.title} -> HTTP ${response.status}`, {
       request: {
@@ -2722,10 +2737,12 @@ async function runCurrentStep() {
 
     showResult(result.level, result.appMessage || result.messages.join(" "), body, step);
     renderContext();
-    elements.nextStep.disabled = false;
+    elements.nextStep.disabled = !canAdvanceFromCurrentStep();
+    elements.nextStep.classList.toggle("ready", !elements.nextStep.disabled);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     state.lastStepResult = { level: "error", messages: [message] };
+    state.stepResults[runningStepIndex] = state.lastStepResult;
     addLog("error", `${step.title} failed`, {
       error: message,
       request: request ? {
@@ -2744,6 +2761,7 @@ async function runCurrentStep() {
     } else {
       elements.runStep.disabled = false;
       elements.runStep.textContent = "Zopakovat krok";
+      elements.previousStep.disabled = !state.scenario || findPreviousRunnableStepIndex(state.stepIndex) === null;
     }
   }
 }
@@ -2790,7 +2808,9 @@ async function runScenarioToSelectedStep() {
 
 function setAutoRunControls(isRunning) {
   elements.runStep.disabled = isRunning || !currentStep();
-  elements.nextStep.disabled = isRunning || !currentStep() || !state.lastStepResult;
+  elements.previousStep.disabled = isRunning || !state.scenario || findPreviousRunnableStepIndex(state.stepIndex) === null;
+  elements.nextStep.disabled = isRunning || !canAdvanceFromCurrentStep();
+  elements.nextStep.classList.toggle("ready", !elements.nextStep.disabled);
   elements.resetScenario.disabled = isRunning || !state.scenario;
   elements.autoRun.disabled = isRunning || !state.scenario || requiresManualInput(state.scenario);
   elements.autoRunTarget.disabled = isRunning || !state.scenario || requiresManualInput(state.scenario);
@@ -3461,7 +3481,7 @@ function applyExtracts(step, body, status) {
 }
 
 function nextStep() {
-  if (!state.scenario) {
+  if (!state.scenario || !canAdvanceFromCurrentStep()) {
     return;
   }
 
@@ -3469,8 +3489,50 @@ function nextStep() {
   renderStep();
 }
 
+function previousStep() {
+  if (!state.scenario) {
+    return;
+  }
+
+  const previousIndex = findPreviousRunnableStepIndex(state.stepIndex);
+
+  if (previousIndex === null) {
+    return;
+  }
+
+  state.stepIndex = previousIndex;
+  renderStep();
+}
+
 function currentStep() {
   return state.scenario?.steps[state.stepIndex] || null;
+}
+
+function getCurrentStepResult() {
+  return state.stepResults[String(state.stepIndex)] || null;
+}
+
+function canAdvanceFromCurrentStep() {
+  if (!state.scenario || !currentStep() || !getCurrentStepResult()) {
+    return false;
+  }
+
+  const nextIndex = findNextRunnableStepIndex(state.stepIndex + 1);
+  const next = state.scenario.steps[nextIndex];
+
+  if (!next) {
+    return true;
+  }
+
+  return getMissingContextKeys(next).length === 0;
+}
+
+function clearStepResultsFrom(startIndex) {
+  for (const key of Object.keys(state.stepResults)) {
+    if (Number(key) >= startIndex) {
+      delete state.stepResults[key];
+    }
+  }
 }
 
 function findNextRunnableStepIndex(startIndex) {
@@ -3483,6 +3545,19 @@ function findNextRunnableStepIndex(startIndex) {
   }
 
   return steps.length;
+}
+
+function findPreviousRunnableStepIndex(startIndex) {
+  const steps = state.scenario?.steps || [];
+  const start = Math.min(startIndex - 1, steps.length - 1);
+
+  for (let index = start; index >= 0; index -= 1) {
+    if (!shouldSkipStep(steps[index])) {
+      return index;
+    }
+  }
+
+  return null;
 }
 
 function shouldSkipStep(step) {
@@ -4324,6 +4399,8 @@ function applySelection(index) {
 
   renderContext();
   renderModeBanner();
+  elements.nextStep.disabled = !canAdvanceFromCurrentStep();
+  elements.nextStep.classList.toggle("ready", !elements.nextStep.disabled);
 
   if (state.displayedResult) {
     showResult(

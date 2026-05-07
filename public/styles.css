@@ -1094,12 +1094,12 @@ p {
 
 .actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
 .actions button:first-child {
-  grid-column: span 2;
+  grid-column: span 3;
 }
 
 .auto-runner {
@@ -1176,6 +1176,7 @@ button:disabled {
 
 #selectAllScenarios,
 #clearScenarioSelection,
+#previousStep,
 #nextStep,
 #resetScenario,
 #clearLog,
@@ -1185,6 +1186,12 @@ button:disabled {
   background: #fff;
   border-color: var(--line);
   color: var(--ink);
+}
+
+#nextStep.ready {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
 }
 
 .result-card {
