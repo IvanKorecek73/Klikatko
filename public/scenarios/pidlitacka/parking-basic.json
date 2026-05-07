@@ -1099,6 +1099,47 @@
       ]
     },
     {
+      "id": "parking-card-delete",
+      "title": "Platební karty - odstranit uloženou kartu",
+      "description": "Odstraní uloženou platební kartu ze seznamu aktuálního uživatele.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["parking", "payment", "cards", "forms"],
+      "instructions": [
+        "Nejprve si načtěte seznam uložených karet a zkopírujte ID karty, kterou chcete odstranit.",
+        "Tímto se odstraňuje jen uložená položka v aplikaci, ne samotná bankovní karta."
+      ],
+      "steps": [
+        {
+          "id": "parking-card-delete-step",
+          "title": "Odstranit uloženou kartu",
+          "description": "Smaže uloženou kartu aktuálního uživatele podle ID.",
+          "fields": [
+            {
+              "name": "id",
+              "label": "ID uložené karty",
+              "type": "text",
+              "placeholder": "např. 00000000-0000-0000-0000-000000000000"
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "path": "/v1/parking/cards/{{form.id}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Deleted"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "parking-calculate-price-multi",
       "title": "Parkování - výpočet ceny multi",
       "description": "Spočítá cenu uličního parkování pro více kroků nad zadanou zónou a parkovacím automatem.",

@@ -3424,6 +3424,10 @@ function makeAppMessage(body, status, level) {
     return `Oblíbená zóna ${body.zoneId} je připravena.`;
   }
 
+  if (isDeletePaymentCardResponse(body)) {
+    return "Uložená platební karta byla odstraněna ze seznamu.";
+  }
+
   if (isDeleteFavoriteZoneResponse(body)) {
     const zoneCode = state.context.selectedFavoriteZoneCode || "Vybraná zóna";
     return `${zoneCode} byla odstraněna z oblíbených zón.`;
@@ -3930,6 +3934,18 @@ function buildAppCardsHtml(body, step = currentStep()) {
     }));
   }
 
+  if (isDeletePaymentCardResponse(body)) {
+    return buildCardListHtml([body], card => ({
+      title: "Karta odstraněna",
+      text: "Uložená platební karta byla odebrána ze seznamu aktuálního uživatele.",
+      chips: [
+        card.status || "Deleted",
+        card.undoPossible ? `Obnova ${card.undoExpiresInMinutes} min` : null,
+        card.deletedAt ? formatDate(card.deletedAt) : null
+      ]
+    }));
+  }
+
   if (isDeleteFavoriteZoneResponse(body)) {
     const zoneCode = state.context.selectedFavoriteZoneCode || "Vybraná zóna";
     return buildCardListHtml([body], zone => ({
@@ -4415,7 +4431,7 @@ function summarizeBody(body) {
     return [];
   }
 
-  if (isFavoriteZoneResponse(body) || isDeleteFavoriteZoneResponse(body)) {
+  if (isFavoriteZoneResponse(body) || isDeleteFavoriteZoneResponse(body) || isDeletePaymentCardResponse(body)) {
     return [];
   }
 
@@ -4643,6 +4659,18 @@ function isDeleteFavoriteZoneResponse(value) {
     && "undoExpiresInMinutes" in value
     && "status" in value
     && "id" in value;
+}
+
+function isDeletePaymentCardResponse(value, step = currentStep()) {
+  const requestPath = step?.request?.path || "";
+  return value
+    && typeof value === "object"
+    && "deletedAt" in value
+    && "undoPossible" in value
+    && "undoExpiresInMinutes" in value
+    && "status" in value
+    && "id" in value
+    && (step?.id === "parking-card-delete-step" || requestPath.includes("/parking/cards/"));
 }
 
 function renderParkingSessionsCardsHtml(sessions, lookbackWindowInMinutes) {
