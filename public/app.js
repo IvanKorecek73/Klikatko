@@ -3394,8 +3394,8 @@ function makeAppMessage(body, status, level) {
   if (isParkingSessionsResponse(body)) {
     const count = body.sessions.length;
     return count === 1
-      ? "Nasli jsme 1 parkovaci relaci."
-      : `Nasli jsme ${count} parkovaci relace.`;
+      ? "Našli jsme 1 parkovací relaci."
+      : `Našli jsme ${count} parkovací relace.`;
   }
 
   if (isParkingSuggestResultsResponse(body)) {
@@ -3429,7 +3429,7 @@ function makeAppMessage(body, status, level) {
   }
 
   if (body.ticketSuccessfullyCreated && body.ticket) {
-    return "Parkovani je pripraveno k zaplaceni.";
+    return "Parkování je připraveno k zaplacení.";
   }
 
   if (isSavedCardPaymentResponse(body)) {
@@ -3458,7 +3458,7 @@ function makeAppMessage(body, status, level) {
   }
 
   if (body.messageType && body.status === "DISPATCHED") {
-    return "Krok na pozadi byl zpracovan.";
+    return "Krok na pozadí byl zpracován.";
   }
 
   if (body.downloadUrl && body.contentType === "application/pdf") {
@@ -3648,7 +3648,7 @@ function renderModeBanner() {
     return;
   }
 
-  elements.modeBanner.textContent = "Scenario mode: vstupy odpovídají připravenému scénáři a výsledky se vyhodnocují proti očekávání.";
+  elements.modeBanner.textContent = "Režim scénáře: vstupy odpovídají připravenému scénáři a výsledky se vyhodnocují proti očekávání.";
   elements.modeBanner.className = "mode-banner";
 }
 
@@ -3683,9 +3683,9 @@ function renderLog() {
       const copied = await copyTextToClipboard(detailsText);
 
       if (!copied) {
-        addLog("warn", "Kopirovani logu selhalo", {
+        addLog("warn", "Kopírování logu selhalo", {
           title: entry.title,
-          reason: "Clipboard API neni dostupne."
+          reason: "Clipboard API není dostupné."
         });
         return;
       }
@@ -3989,7 +3989,7 @@ function buildAppCardsHtml(body, step = currentStep()) {
   if (body.products && body.database) {
     return buildCardListHtml([body], info => ({
       title: "Persistence",
-      text: `Backend bezi nad ${info.products.repositoryProvider}. Produktu v katalogu: ${info.products.count}.`,
+      text: `Backend běží nad ${info.products.repositoryProvider}. Produktů v katalogu: ${info.products.count}.`,
       chips: [
         info.database.providerName || "bez DbContextu",
         info.database.isRelational ? "relační DB" : "lokální test DB",
@@ -4039,10 +4039,10 @@ function buildAppCardsHtml(body, step = currentStep()) {
     return `
       <div class="app-card-list">
         <article class="app-card">
-          <strong>Parkovani pripraveno</strong>
-          <p>${escapeHtml((ticket.licensePlate || body.licensePlate || "Vozidlo"))} muzete dokoncit pres platebni branu.</p>
+          <strong>Parkování připraveno</strong>
+          <p>${escapeHtml((ticket.licensePlate || body.licensePlate || "Vozidlo"))} můžete dokončit přes platební bránu.</p>
           <div class="app-card-meta">
-            ${renderAppChip(ticket.parkingSectionCode ? `Zona ${ticket.parkingSectionCode}` : "Parkovani")}
+            ${renderAppChip(ticket.parkingSectionCode ? `Zóna ${ticket.parkingSectionCode}` : "Parkování")}
             ${renderAppChip(ticket.acceptedMinutes ? `${ticket.acceptedMinutes} min` : "")}
             ${renderAppChip(ticket.totalPrice !== undefined ? `${ticket.totalPrice} CZK` : "")}
             ${renderAppChip(ticket.paymentStatus || "")}
@@ -4056,7 +4056,7 @@ function buildAppCardsHtml(body, step = currentStep()) {
           </div>
           ${body.paymentGatewayRedirectUrl ? `
             <div class="app-card-actions">
-              <a class="app-card-link" href="${escapeHtml(body.paymentGatewayRedirectUrl)}" target="_blank" rel="noopener">Otevrit platebni branu</a>
+              <a class="app-card-link" href="${escapeHtml(body.paymentGatewayRedirectUrl)}" target="_blank" rel="noopener">Otevřít platební bránu</a>
             </div>` : ""}
         </article>
       </div>
@@ -4758,8 +4758,8 @@ function renderParkingSessionsCardsHtml(sessions, lookbackWindowInMinutes) {
 
     return `
       <article class="app-card">
-        <strong>${escapeHtml(vehicle.name || vehicle.licensePlate || session.licensePlate || "Parkovaci relace")}</strong>
-        <p>${escapeHtml(location.name || location.address || "Parkovaci misto")} · ${escapeHtml(location.sectionCode || session.parkingSectionCode || "Bez zony")}</p>
+        <strong>${escapeHtml(vehicle.name || vehicle.licensePlate || session.licensePlate || "Parkovací relace")}</strong>
+        <p>${escapeHtml(location.name || location.address || "Parkovací místo")} · ${escapeHtml(location.sectionCode || session.parkingSectionCode || "Bez zóny")}</p>
         <div class="app-card-meta">
           ${renderAppChip(session.totalPrice !== undefined ? `${session.totalPrice} CZK` : "")}
           ${renderAppChip(session.acceptedMinutes !== undefined ? `${session.acceptedMinutes} min` : "")}
@@ -5027,7 +5027,7 @@ function createSmokeCard(scenario) {
           ${requiresManualInput(scenario) ? `<span class="app-chip">Ru\u010dn\u00ed vstup</span>` : ""}
         </div>
       </div>
-      <button class="smoke-open" type="button" ${state.batchRunning ? "disabled" : ""}>Otevrit</button>
+      <button class="smoke-open" type="button" ${state.batchRunning ? "disabled" : ""}>Otevřít</button>
     </div>
     ${details.length > 0 || !smokeEligible ? `
       <div class="smoke-card-details">
