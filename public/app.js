@@ -3408,6 +3408,14 @@ function makeAppMessage(body, status, level) {
     return "Parkovani je pripraveno k zaplaceni.";
   }
 
+  if (isSavedCardPaymentResponse(body)) {
+    return body.paymentSuccessful === false
+      ? "Platba uloženou kartou zatím nebyla dokončena."
+      : body.paymentSuccessful === true
+        ? "Platba uloženou kartou byla zpracována."
+        : "Výsledek platby uloženou kartou je k dispozici.";
+  }
+
   if (isFavoriteZoneResponse(body)) {
     return `Oblíbená zóna ${body.zoneId} je připravena.`;
   }
@@ -3642,6 +3650,10 @@ function buildAppCardsHtml(body, step = currentStep()) {
       "Žádné uložené vozidlo",
       "Uživatel zatím nemá uložené vozidlo. Pokračujte dál a SPZ zadejte ručně."
     );
+  }
+
+  if (isSavedCardPaymentResponse(body)) {
+    return renderSavedCardPaymentCardHtml(body);
   }
 
   if (isProblemDetailsResponse(body)) {
@@ -4106,6 +4118,40 @@ function renderProblemDetailsCardHtml(body) {
   `;
 }
 
+function renderSavedCardPaymentCardHtml(body) {
+  const ticket = body.parkingTicket;
+  const inProgress = body.paymentInProgress === true;
+  const statusText = inProgress
+    ? "Platba čeká na dokončení"
+    : body.paymentSuccessful === true
+      ? "Platba proběhla"
+      : "Výsledek platby uloženou kartou";
+
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>${escapeHtml(statusText)}</strong>
+        <p>${escapeHtml(`${ticket.licensePlate || "Vozidlo"} má připravené navazující parkování.`)}</p>
+        <div class="app-card-meta">
+          ${renderAppChip(ticket.parkingSectionCode ? `Zóna ${ticket.parkingSectionCode}` : "Parkování")}
+          ${renderAppChip(ticket.acceptedMinutes ? `${ticket.acceptedMinutes} min` : "")}
+          ${renderAppChip(ticket.totalPrice !== undefined ? `${ticket.totalPrice} CZK` : "")}
+          ${renderAppChip(ticket.paymentStatus || "")}
+        </div>
+        <div class="app-card-details">
+          <div class="app-detail-row"><span>SPZ</span><span>${escapeHtml(ticket.licensePlate || "-")}</span></div>
+          <div class="app-detail-row"><span>Od</span><span>${escapeHtml(formatDate(ticket.parkingFrom))}</span></div>
+          <div class="app-detail-row"><span>Do</span><span>${escapeHtml(formatDate(ticket.parkingTo))}</span></div>
+          <div class="app-detail-row"><span>Délka</span><span>${escapeHtml(ticket.acceptedMinutes ? `${ticket.acceptedMinutes} min` : "-")}</span></div>
+          <div class="app-detail-row"><span>Cena</span><span>${escapeHtml(ticket.totalPrice !== undefined ? `${ticket.totalPrice} CZK` : "-")}</span></div>
+          <div class="app-detail-row"><span>Doklad</span><span>${escapeHtml(ticket.formattedReceiptNumber || "-")}</span></div>
+          <div class="app-detail-row"><span>Stav platby</span><span>${escapeHtml(ticket.paymentStatus || "-")}</span></div>
+        </div>
+      </article>
+    </div>
+  `;
+}
+
 function renderEmptyAppCardHtml(title, text) {
   return `
     <div class="app-card-list">
@@ -4315,6 +4361,10 @@ function summarizeBody(body) {
     return [];
   }
 
+  if (isSavedCardPaymentResponse(body)) {
+    return [];
+  }
+
   if (isFavoriteZoneResponse(body) || isDeleteFavoriteZoneResponse(body)) {
     return [];
   }
@@ -4484,6 +4534,14 @@ function getPaymentCardExpiration(card) {
 function isPaymentCardsStep(step) {
   const path = step?.request?.path || "";
   return path.includes("/payment-cards") || path.includes("/parking/cards");
+}
+
+function isSavedCardPaymentResponse(value) {
+  return value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && value.parkingTicket
+    && typeof value.parkingTicket === "object";
 }
 
 function isSavedVehiclesStep(step) {
