@@ -938,6 +938,29 @@ p {
   box-shadow: 0 1px 2px rgba(24, 32, 42, 0.06);
 }
 
+.mobile-action-header {
+  align-items: start;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding-bottom: 4px;
+}
+
+.mobile-action-header strong {
+  color: var(--ink);
+  display: block;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.mobile-action-header p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  margin: 3px 0 0;
+}
+
 .field {
   display: grid;
   gap: 7px;

@@ -1948,6 +1948,8 @@ function renderStep() {
   state.activeSelection = null;
   const visibleFields = getVisibleFields(step);
 
+  elements.stepForm.appendChild(renderMobileActionHeader(step));
+
   for (const field of step.fields || []) {
     const defaultValue = resolveFieldDefaultValue(field);
     state.values[field.name] = defaultValue;
@@ -2089,6 +2091,143 @@ function isParkingStepText(text) {
   return text.includes("parking") || text.includes("parkov");
 }
 
+function getMobileActionTitle(step) {
+  const text = getStepSearchText(step);
+  const path = step.request?.path || "";
+  const method = step.request?.method || "GET";
+
+  if (path.includes("/v1/parking/cards")) {
+    return path.includes("last-used")
+      ? "Poslední použitá karta"
+      : method === "DELETE"
+        ? "Odstranění uložené karty"
+        : "Uložené platební karty";
+  }
+
+  if (path.includes("/v1/parking/my-vehicles")) {
+    return method === "DELETE" ? "Odstranění vozidla" : method === "POST" ? "Uložení vozidla" : "Uložená vozidla";
+  }
+
+  if (path.includes("/v1/accounts/me/favorite-zones")) {
+    return method === "DELETE" ? "Odstranění oblíbené zóny" : method === "POST" ? "Uložení oblíbené zóny" : "Oblíbené zóny";
+  }
+
+  if (path.includes("/v1/parking/sessions/active")) {
+    return "Aktivní parkování";
+  }
+
+  if (path.includes("/v1/parking/sessions/history")) {
+    return "Historie parkování";
+  }
+
+  if (path.includes("/v1/parking/suggest")) {
+    return "Návrh lokalit";
+  }
+
+  if (path.includes("/v1/parking/calculate-price/street-parking/multi")) {
+    return "Výpočet ceny parkování";
+  }
+
+  if (path.includes("/v1/parking/payment/gateway-result")) {
+    return "Výsledek platební brány";
+  }
+
+  if (path.includes("/v1/parking/payment/card-token/process")) {
+    return "Platba uloženou kartou";
+  }
+
+  if (path.includes("/v1/parking/tickets/street-parking")) {
+    if (text.includes("prodlou") || text.includes("extension") || text.includes("saved-card")) {
+      return "Prodloužení parkování";
+    }
+
+    return "Založení parkování";
+  }
+
+  if (path.includes("/v1/auth/login")) {
+    return "Přihlášení";
+  }
+
+  if (path.includes("/v1/auth/anonymous")) {
+    return "Anonymní přihlášení";
+  }
+
+  if (path.includes("/v1/auth/register/check")) {
+    return "Ověření e-mailu";
+  }
+
+  if (path.includes("/v1/auth/register/initialize")) {
+    return "Založení účtu";
+  }
+
+  if (path.includes("/v1/auth/register/resend-activation")) {
+    return "Nový aktivační e-mail";
+  }
+
+  if (path.includes("/v1/auth/register/complete")) {
+    return "Dokončení aktivace";
+  }
+
+  if (path.includes("/v1/auth/password/recovery")) {
+    return "Obnova hesla";
+  }
+
+  if (path.includes("/v1/auth/password/complete")) {
+    return "Nastavení nového hesla";
+  }
+
+  if (text.includes("active")) {
+    return "Aktivní položky";
+  }
+
+  return step.title || "Připravená akce";
+}
+
+function getMobileActionSubtitle(step) {
+  const path = step.request?.path || "";
+
+  if (path.includes("/v1/parking/cards")) {
+    return "Seznam karet uložených k aktuálnímu uživateli.";
+  }
+
+  if (path.includes("/v1/parking/my-vehicles")) {
+    return "Vozidla uložená k aktuálnímu uživateli.";
+  }
+
+  if (path.includes("/v1/accounts/me/favorite-zones")) {
+    return "Parkovací zóny uložené mezi oblíbenými.";
+  }
+
+  if (path.includes("/v1/parking/sessions/active")) {
+    return "Právě běžící nebo nedávno založené parkovací relace.";
+  }
+
+  if (path.includes("/v1/parking/sessions/history")) {
+    return "Dřívější parkovací relace aktuálního uživatele.";
+  }
+
+  if (path.includes("/v1/parking/payment/")) {
+    return "Zpracování platebního kroku pro parkování.";
+  }
+
+  if (path.includes("/v1/parking/tickets/street-parking")) {
+    return "Uliční parkování v zadané zóně.";
+  }
+
+  if (path.includes("/v1/auth/")) {
+    return "Účet uživatele v PidLitacka.";
+  }
+
+  return "";
+}
+
+function getStepSearchText(step) {
+  return [step?.id, step?.title, step?.description, step?.request?.path]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
 function renderField(field, value) {
   const wrapper = document.createElement("div");
   wrapper.className = "field";
@@ -2163,6 +2302,25 @@ function renderField(field, value) {
     help.textContent = field.help;
     wrapper.appendChild(help);
   }
+
+  return wrapper;
+}
+
+function renderMobileActionHeader(step) {
+  const wrapper = document.createElement("section");
+  wrapper.className = "mobile-action-header";
+
+  const title = getMobileActionTitle(step);
+  const subtitle = getMobileActionSubtitle(step);
+  const method = step.request?.method || "GET";
+
+  wrapper.innerHTML = `
+    <div>
+      <strong>${escapeHtml(title)}</strong>
+      ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}
+    </div>
+    <span class="request-preview-method">${escapeHtml(method)}</span>
+  `;
 
   return wrapper;
 }
