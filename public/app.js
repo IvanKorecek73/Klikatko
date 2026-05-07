@@ -3174,6 +3174,12 @@ function makeAppMessage(body, status, level) {
       return `K j\u00edzdence je dostupn\u00fdch ${body.length} doklad\u016f.`;
     }
 
+    if (isPaymentCardArray(body)) {
+      return body.length === 1
+        ? "Našli jsme 1 uloženou kartu."
+        : `Našli jsme ${body.length} uložených karet.`;
+    }
+
     if (isVehicleArray(body)) {
       return `Na\u0161li jsme ${body.length} ulo\u017een\u00fdch vozidel.`;
     }
@@ -3424,6 +3430,20 @@ function buildAppCardsHtml(body, step = currentStep()) {
     return "";
   }
 
+  if (isPaymentCardsStep(step) && Number(body.status) === 404) {
+    return renderEmptyAppCardHtml(
+      "Žádné uložené karty",
+      "Uživatel zatím nemá uloženou platební kartu. To je pro první průchod scénářem v pořádku."
+    );
+  }
+
+  if (isSavedVehiclesStep(step) && Number(body.status) === 404) {
+    return renderEmptyAppCardHtml(
+      "Žádné uložené vozidlo",
+      "Uživatel zatím nemá uložené vozidlo. Pokračujte dál a SPZ zadejte ručně."
+    );
+  }
+
   if (isProblemDetailsResponse(body)) {
     return renderProblemDetailsCardHtml(body);
   }
@@ -3489,6 +3509,32 @@ function buildAppCardsHtml(body, step = currentStep()) {
   }
 
   if (Array.isArray(body)) {
+    if (isPaymentCardsStep(step) && body.length === 0) {
+      return renderEmptyAppCardHtml(
+        "Žádné uložené karty",
+        "Uživatel zatím nemá uloženou platební kartu. To je pro první průchod scénářem v pořádku."
+      );
+    }
+
+    if (isSavedVehiclesStep(step) && body.length === 0) {
+      return renderEmptyAppCardHtml(
+        "Žádné uložené vozidlo",
+        "Uživatel zatím nemá uložené vozidlo. Pokračujte dál a SPZ zadejte ručně."
+      );
+    }
+
+    if (isPaymentCardArray(body)) {
+      return buildCardListHtml(body, card => ({
+        title: card.name || "Platební karta",
+        text: card.maskedNumber
+          ? `Karta ${card.maskedNumber}`
+          : "Uložená karta",
+        chips: [card.expiration, card.registrationUrl ? "čekající registrace" : "aktivní"]
+      }), {
+        selection: getSelectionDescriptor(step, body)
+      });
+    }
+
     if (isVehicleArray(body)) {
       return buildCardListHtml(body, vehicle => ({
         title: vehicle.licensePlate || "Vozidlo",
@@ -3769,16 +3815,6 @@ function buildAppCardsHtml(body, step = currentStep()) {
     }));
   }
 
-  if (Array.isArray(body) && body.length > 0 && body.every(item => item && typeof item === "object" && "cardId" in item)) {
-    return buildCardListHtml(body, card => ({
-      title: card.name || "Platebn\u00ed karta",
-      text: card.maskedNumber
-        ? `Karta ${card.maskedNumber}`
-        : "Ulo\u017een\u00e1 karta",
-      chips: [card.expiration, card.registrationUrl ? "\u010dek\u00e1jici registrace" : "aktivn\u00ed"]
-    }));
-  }
-
   if (body.deviceId) {
     return buildCardListHtml([body], device => ({
       title: "Za\u0159\u00edzen\u00ed",
@@ -3857,6 +3893,17 @@ function renderProblemDetailsCardHtml(body) {
             `).join("")}
           </div>
         ` : ""}
+      </article>
+    </div>
+  `;
+}
+
+function renderEmptyAppCardHtml(title, text) {
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>${escapeHtml(title)}</strong>
+        <p>${escapeHtml(text)}</p>
       </article>
     </div>
   `;
@@ -4194,6 +4241,20 @@ function isVehicleArray(value) {
       && "licensePlate" in item
       && "name" in item
       && "color" in item);
+}
+
+function isPaymentCardArray(value) {
+  return Array.isArray(value)
+    && value.length > 0
+    && value.every(item => item && typeof item === "object" && "cardId" in item);
+}
+
+function isPaymentCardsStep(step) {
+  return Boolean(step?.request?.path?.includes("/payment-cards"));
+}
+
+function isSavedVehiclesStep(step) {
+  return Boolean(step?.request?.path?.includes("/my-vehicles"));
 }
 
 function isDocumentArray(value) {

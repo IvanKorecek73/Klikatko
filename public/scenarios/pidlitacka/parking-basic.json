@@ -360,7 +360,33 @@
             }
           },
           "expected": {
-            "status": 200
+            "statusIn": [200, 404]
+          }
+        },
+        {
+          "id": "parking-saved-card-pick-vehicle",
+          "title": "Vybrat uložené vozidlo",
+          "description": "Volitelně načte uložená vozidla a umožní vybrat SPZ pro parkování. Pokud uživatel žádné vozidlo nemá, krok je stále validní a SPZ se zadá ručně.",
+          "instructions": [
+            "Pokud chcete použít uložené vozidlo, vyberte ho v mobilu.",
+            "Pokud seznam vozidel není dostupný nebo je prázdný, pokračujte dál a SPZ doplňte ručně."
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/parking/my-vehicles"
+          },
+          "selection": {
+            "sourcePath": "$",
+            "buttonLabel": "Použít pro parkování",
+            "selectedButtonLabel": "Vybráno pro parkování",
+            "store": {
+              "selectedVehicleId": "$.id",
+              "selectedVehicleLicensePlate": "$.licensePlate",
+              "selectedVehicleName": "$.name"
+            }
+          },
+          "expected": {
+            "statusIn": [200, 404]
           }
         },
         {
@@ -369,45 +395,47 @@
           "description": "Založí parkování tak, aby platební flow mohlo vytvořit token uložené karty.",
           "fields": [
             {
-              "path": "licensePlate",
+              "name": "licensePlate",
               "label": "SPZ",
               "type": "text",
-              "default": "CARD001",
-              "placeholder": "Např. CARD001"
+              "value": "{{context.selectedVehicleLicensePlate}}",
+              "placeholder": "např. 1AB2345"
             },
             {
-              "path": "emailAddress",
+              "name": "emailAddress",
               "label": "E-mail",
               "type": "email",
-              "default": "{{session.email}}",
-              "placeholder": "E-mail přihlášeného uživatele"
+              "value": "{{session.email}}",
+              "placeholder": "např. test@example.com",
+              "trackDirty": false
             },
             {
-              "path": "phoneNumber",
+              "name": "phoneNumber",
               "label": "Telefon",
               "type": "text",
-              "default": "777555666"
+              "value": "777888999",
+              "trackDirty": false
             },
             {
-              "path": "parkingSectionCode",
+              "name": "parkingSectionCode",
               "label": "Zóna",
               "type": "text",
-              "default": "P7-0127"
+              "value": "P7-0127"
             },
             {
-              "path": "requestedMinutes",
+              "name": "requestedMinutes",
               "label": "Délka parkování",
               "type": "number",
-              "default": 45,
+              "value": "30",
               "min": 15,
               "step": 15,
               "suffix": "min"
             },
             {
-              "path": "returnUrlFromPaymentGateway",
+              "name": "returnUrlFromPaymentGateway",
               "label": "Návratová URL",
               "type": "url",
-              "default": "http://127.0.0.1:5500/html/GwResponsePage.html"
+              "value": "http://127.0.0.1:5500/html/GwResponsePage.html"
             }
           ],
           "request": {
@@ -441,7 +469,7 @@
           "description": "Po zaplacení na platební bráně vložte celý návratový payload. Volání má uložit kartu pro další použití.",
           "fields": [
             {
-              "path": "gatewayResultPayload",
+              "name": "gatewayResultPayload",
               "label": "Návratový payload z platební brány",
               "type": "textarea",
               "rows": 5,
@@ -481,7 +509,7 @@
             }
           },
           "expected": {
-            "status": 200
+            "statusIn": [200, 404]
           }
         },
         {
@@ -490,52 +518,54 @@
           "description": "Zkusí založit další parkování s vybraným tokenem uložené karty. Tady očekáváme hlavní diagnostiku případného problému.",
           "fields": [
             {
-              "path": "licensePlate",
+              "name": "licensePlate",
               "label": "SPZ",
               "type": "text",
-              "default": "CARD002",
-              "placeholder": "Např. CARD002"
+              "value": "{{context.selectedVehicleLicensePlate}}",
+              "placeholder": "např. 1AB2345"
             },
             {
-              "path": "emailAddress",
+              "name": "emailAddress",
               "label": "E-mail",
               "type": "email",
-              "default": "{{session.email}}",
-              "placeholder": "E-mail přihlášeného uživatele"
+              "value": "{{session.email}}",
+              "placeholder": "např. test@example.com",
+              "trackDirty": false
             },
             {
-              "path": "phoneNumber",
+              "name": "phoneNumber",
               "label": "Telefon",
               "type": "text",
-              "default": "777555666"
+              "value": "777888999",
+              "trackDirty": false
             },
             {
-              "path": "parkingSectionCode",
+              "name": "parkingSectionCode",
               "label": "Zóna",
               "type": "text",
-              "default": "P7-0127"
+              "value": "P7-0127"
             },
             {
-              "path": "requestedMinutes",
+              "name": "requestedMinutes",
               "label": "Délka parkování",
               "type": "number",
-              "default": 45,
+              "value": "30",
               "min": 15,
               "step": 15,
               "suffix": "min"
             },
             {
-              "path": "cardToken",
+              "name": "cardToken",
               "label": "Token uložené karty",
               "type": "text",
-              "default": "{{context.selectedPaymentCardToken}}",
+              "value": "{{context.selectedPaymentCardToken}}",
               "placeholder": "Vyberte kartu v předchozím kroku nebo vložte token ručně"
             },
             {
-              "path": "returnUrlFromPaymentGateway",
+              "name": "returnUrlFromPaymentGateway",
               "label": "Návratová URL",
               "type": "url",
-              "default": "http://127.0.0.1:5500/html/GwResponsePage.html"
+              "value": "http://127.0.0.1:5500/html/GwResponsePage.html"
             }
           ],
           "request": {
