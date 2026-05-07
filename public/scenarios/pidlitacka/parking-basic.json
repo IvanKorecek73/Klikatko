@@ -330,10 +330,10 @@
       "tags": ["parking", "payment", "cards", "diagnostics"],
       "instructions": [
         "Nejprve se přihlaste v panelu Přístup.",
-        "Na začátku se načtou uložené karty. Pokud už karta existuje, můžete ji vybrat a přeskočit mentálně jen přípravnou část scénáře.",
-        "Pokud uživatel žádnou kartu nemá, založte parkování s požadavkem na vytvoření tokenu karty, zaplaťte na platební bráně a zpracujte návratový payload se saveCard=true.",
-        "Potom znovu načtěte uložené karty, vyberte kartu a zkuste založit další parkování s vybraným tokenem karty.",
-        "V diagnostické fázi je u posledního kroku povolený i chybový HTTP status, aby bylo možné pohodlně číst title/detail z backendu a ladit skutečnou příčinu."
+        "Na začátku se načtou uložené karty. Prázdný seznam je pro první průchod v pořádku.",
+        "Založte parkování s požadavkem na uložení karty, zaplaťte na platební bráně a zpracujte návratový payload se saveCard=true.",
+        "Potom znovu načtěte uložené karty, vyberte nově uloženou kartu a založte navazující parkování placené uloženou kartou.",
+        "Poslední krok odešle platbu uloženou kartou přes card-token/process. V diagnostické fázi toleruje i chybový status, aby bylo vidět title/detail z backendu."
       ],
       "steps": [
         {
@@ -346,17 +346,18 @@
           ],
           "request": {
             "method": "GET",
-            "path": "/v1/accounts/me/payment-cards"
+            "path": "/v1/parking/cards"
           },
           "selection": {
             "sourcePath": "$",
             "buttonLabel": "Použít kartu",
             "selectedButtonLabel": "Karta vybrána",
             "store": {
-              "selectedPaymentCardToken": "$.cardToken",
-              "selectedPaymentCardId": "$.cardId",
-              "selectedPaymentCardName": "$.name",
-              "selectedPaymentCardMaskedNumber": "$.maskedNumber"
+              "selectedPaymentCardId": "$.id",
+              "selectedPaymentCardName": "$.cardholderName",
+              "selectedPaymentCardMaskedNumber": "$.maskedPan",
+              "selectedPaymentCardExpirationMonth": "$.expirationMonth",
+              "selectedPaymentCardExpirationYear": "$.expirationYear"
             }
           },
           "expected": {
@@ -449,8 +450,7 @@
               "requestedMinutes": "{{form.requestedMinutes}}",
               "paymentDetails": {
                 "paymentMethod": "Card",
-                "createCardToken": true,
-                "cardToken": null,
+                "savePaymentCard": true,
                 "returnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}",
                 "automaticPaymentResultProcessing": false,
                 "isSdkUsed": false,
@@ -461,6 +461,9 @@
           },
           "expected": {
             "status": 200
+          },
+          "extract": {
+            "savedCardRegistrationTicketId": "$.ticket.ticketId"
           }
         },
         {
@@ -491,21 +494,22 @@
           "description": "Znovu načte uložené karty a umožní vybrat kartu pro platbu dalšího parkování.",
           "instructions": [
             "Vyberte kartu, kterou chcete použít pro další platbu.",
-            "Pokud se token karty nepředvyplní, zkopírujte ho ručně do dalšího kroku podle dat vrácených backendem."
+            "Do dalšího kroku se předvyplní ID uložené karty. Samotný token karty se z API nevrací a v Klikátku se nezadává."
           ],
           "request": {
             "method": "GET",
-            "path": "/v1/accounts/me/payment-cards"
+            "path": "/v1/parking/cards"
           },
           "selection": {
             "sourcePath": "$",
             "buttonLabel": "Použít kartu",
             "selectedButtonLabel": "Karta vybrána",
             "store": {
-              "selectedPaymentCardToken": "$.cardToken",
-              "selectedPaymentCardId": "$.cardId",
-              "selectedPaymentCardName": "$.name",
-              "selectedPaymentCardMaskedNumber": "$.maskedNumber"
+              "selectedPaymentCardId": "$.id",
+              "selectedPaymentCardName": "$.cardholderName",
+              "selectedPaymentCardMaskedNumber": "$.maskedPan",
+              "selectedPaymentCardExpirationMonth": "$.expirationMonth",
+              "selectedPaymentCardExpirationYear": "$.expirationYear"
             }
           },
           "expected": {
@@ -513,9 +517,9 @@
           }
         },
         {
-          "id": "parking-pay-with-saved-card",
-          "title": "Zaplatit uloženou kartou",
-          "description": "Zkusí založit další parkování s vybraným tokenem uložené karty. Tady očekáváme hlavní diagnostiku případného problému.",
+          "id": "parking-create-extension-with-saved-card",
+          "title": "Prodloužit parkování uloženou kartou",
+          "description": "Založí navazující parkování se stejnými údaji a vybranou uloženou kartou.",
           "fields": [
             {
               "name": "licensePlate",
@@ -555,11 +559,11 @@
               "suffix": "min"
             },
             {
-              "name": "cardToken",
-              "label": "Token uložené karty",
+              "name": "savedPaymentCardId",
+              "label": "ID uložené karty",
               "type": "text",
-              "value": "{{context.selectedPaymentCardToken}}",
-              "placeholder": "Vyberte kartu v předchozím kroku nebo vložte token ručně"
+              "value": "{{context.selectedPaymentCardId}}",
+              "placeholder": "Vyberte kartu v předchozím kroku"
             },
             {
               "name": "returnUrlFromPaymentGateway",
@@ -578,15 +582,50 @@
               "parkingSectionCode": "{{form.parkingSectionCode}}",
               "requestedMinutes": "{{form.requestedMinutes}}",
               "paymentDetails": {
-                "paymentMethod": "Card",
-                "createCardToken": false,
-                "cardToken": "{{form.cardToken}}",
+                "paymentMethod": "SavedCard",
+                "savedPaymentCardId": "{{form.savedPaymentCardId}}",
                 "returnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}",
                 "automaticPaymentResultProcessing": false,
                 "isSdkUsed": false,
                 "paymentData": null
               },
               "language": "cs"
+            }
+          },
+          "expected": {
+            "status": 200
+          },
+          "extract": {
+            "savedCardPaymentTicketId": "$.ticket.ticketId"
+          }
+        },
+        {
+          "id": "parking-process-saved-card-payment",
+          "title": "Odeslat platbu uloženou kartou",
+          "description": "Odešle platbu navazujícího parkování přes uloženou kartu.",
+          "fields": [
+            {
+              "name": "ticketId",
+              "label": "Ticket ID",
+              "type": "text",
+              "value": "{{context.savedCardPaymentTicketId}}",
+              "placeholder": "Ticket ID z předchozího kroku"
+            },
+            {
+              "name": "savedPaymentCardId",
+              "label": "ID uložené karty",
+              "type": "text",
+              "value": "{{context.selectedPaymentCardId}}",
+              "placeholder": "Vybraná uložená karta"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/parking/payment/card-token/process",
+            "body": {
+              "ticketId": "{{form.ticketId}}",
+              "savedPaymentCardId": "{{form.savedPaymentCardId}}",
+              "additionalBrowserData": null
             }
           },
           "expected": {

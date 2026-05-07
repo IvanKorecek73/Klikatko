@@ -3174,6 +3174,10 @@ function makeAppMessage(body, status, level) {
   }
 
   if (Array.isArray(body)) {
+    if (isPaymentCardsStep(currentStep()) && body.length === 0) {
+      return "Uživatel nemá žádné uložené platební karty.";
+    }
+
     if (isDocumentArray(body)) {
       return `K j\u00edzdence je dostupn\u00fdch ${body.length} doklad\u016f.`;
     }
@@ -3529,11 +3533,15 @@ function buildAppCardsHtml(body, step = currentStep()) {
 
     if (isPaymentCardArray(body)) {
       return buildCardListHtml(body, card => ({
-        title: card.name || "Platební karta",
-        text: card.maskedNumber
-          ? `Karta ${card.maskedNumber}`
+        title: card.cardholderName || card.name || "Platební karta",
+        text: getPaymentCardMaskedNumber(card)
+          ? `Karta ${getPaymentCardMaskedNumber(card)}`
           : "Uložená karta",
-        chips: [card.expiration, card.registrationUrl ? "čekající registrace" : "aktivní"]
+        chips: [
+          getPaymentCardExpiration(card),
+          card.isDefault ? "výchozí" : null,
+          card.status || (card.registrationUrl ? "čekající registrace" : "aktivní")
+        ]
       }), {
         selection: getSelectionDescriptor(step, body)
       });
@@ -3809,13 +3817,17 @@ function buildAppCardsHtml(body, step = currentStep()) {
     }));
   }
 
-  if (body.cardId) {
+  if (isPaymentCardResponse(body)) {
     return buildCardListHtml([body], card => ({
-      title: card.name || "Platebn\u00ed karta",
-      text: card.maskedNumber
-        ? `Karta ${card.maskedNumber} je připravena k použití.`
+      title: card.cardholderName || card.name || "Platebn\u00ed karta",
+      text: getPaymentCardMaskedNumber(card)
+        ? `Karta ${getPaymentCardMaskedNumber(card)} je připravena k použití.`
         : "Karta byla zalo\u017eena a je p\u0159ipravena k dal\u0161\u00ed spr\u00e1v\u011b.",
-      chips: [card.expiration, shortId(card.cardId)]
+      chips: [
+        getPaymentCardExpiration(card),
+        card.isDefault ? "výchozí" : null,
+        shortId(card.cardId || card.id)
+      ]
     }));
   }
 
@@ -4250,11 +4262,36 @@ function isVehicleArray(value) {
 function isPaymentCardArray(value) {
   return Array.isArray(value)
     && value.length > 0
-    && value.every(item => item && typeof item === "object" && "cardId" in item);
+    && value.every(isPaymentCardResponse);
+}
+
+function isPaymentCardResponse(value) {
+  return Boolean(value && typeof value === "object" && ("cardId" in value || "maskedPan" in value || "maskedNumber" in value));
+}
+
+function getPaymentCardMaskedNumber(card) {
+  return card?.maskedPan || card?.maskedNumber || null;
+}
+
+function getPaymentCardExpiration(card) {
+  if (!card) {
+    return null;
+  }
+
+  if (card.expiration) {
+    return card.expiration;
+  }
+
+  if (card.expirationMonth && card.expirationYear) {
+    return `${String(card.expirationMonth).padStart(2, "0")}/${card.expirationYear}`;
+  }
+
+  return null;
 }
 
 function isPaymentCardsStep(step) {
-  return Boolean(step?.request?.path?.includes("/payment-cards"));
+  const path = step?.request?.path || "";
+  return path.includes("/payment-cards") || path.includes("/parking/cards");
 }
 
 function isSavedVehiclesStep(step) {
@@ -4754,7 +4791,7 @@ function deriveScenarioTags(item) {
     tags.push("payment");
   }
 
-  if (includesAny(text, ["payment-card", "payment cards", "karta", "card", "/payment-cards"])) {
+  if (includesAny(text, ["payment-card", "payment cards", "karta", "card", "/payment-cards", "/parking/cards"])) {
     tags.push("cards");
   }
 
@@ -4827,7 +4864,7 @@ function categorizeScenarioLike(item) {
     return "documents";
   }
 
-  if (includesAny(text, ["payment-card", "payment cards", "karta", "card", "/payment-cards"])) {
+  if (includesAny(text, ["payment-card", "payment cards", "karta", "card", "/payment-cards", "/parking/cards"])) {
     return "cards";
   }
 
