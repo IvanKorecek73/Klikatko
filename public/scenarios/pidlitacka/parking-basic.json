@@ -321,6 +321,263 @@
       ]
     },
     {
+      "id": "parking-saved-card-diagnostic",
+      "title": "Parkování - platba uloženou kartou",
+      "description": "Diagnostický scénář pro ověření, zda se po uložení karty dá stejnou kartou zaplatit další parkování. První průchod může začít prázdným seznamem karet, což je v pořádku.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["parking", "payment", "cards", "diagnostics"],
+      "instructions": [
+        "Nejprve se přihlaste v panelu Přístup.",
+        "Na začátku se načtou uložené karty. Pokud už karta existuje, můžete ji vybrat a přeskočit mentálně jen přípravnou část scénáře.",
+        "Pokud uživatel žádnou kartu nemá, založte parkování s požadavkem na vytvoření tokenu karty, zaplaťte na platební bráně a zpracujte návratový payload se saveCard=true.",
+        "Potom znovu načtěte uložené karty, vyberte kartu a zkuste založit další parkování s vybraným tokenem karty.",
+        "V diagnostické fázi je u posledního kroku povolený i chybový HTTP status, aby bylo možné pohodlně číst title/detail z backendu a ladit skutečnou příčinu."
+      ],
+      "steps": [
+        {
+          "id": "parking-saved-cards-before",
+          "title": "Načíst uložené karty",
+          "description": "Načte aktuální uložené platební karty. Při prvním průchodu může být seznam prázdný.",
+          "instructions": [
+            "Pokud kartu vidíte, můžete ji vybrat pro pozdější krok platby uloženou kartou.",
+            "Pokud je seznam prázdný, pokračujte přípravnými kroky pro vytvoření uložené karty."
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/payment-cards"
+          },
+          "selection": {
+            "sourcePath": "$",
+            "buttonLabel": "Použít kartu",
+            "selectedButtonLabel": "Karta vybrána",
+            "store": {
+              "selectedPaymentCardToken": "$.cardToken",
+              "selectedPaymentCardId": "$.cardId",
+              "selectedPaymentCardName": "$.name",
+              "selectedPaymentCardMaskedNumber": "$.maskedNumber"
+            }
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "parking-saved-card-create-tokenizing-ticket",
+          "title": "Založit parkování s uložením karty",
+          "description": "Založí parkování tak, aby platební flow mohlo vytvořit token uložené karty.",
+          "fields": [
+            {
+              "path": "licensePlate",
+              "label": "SPZ",
+              "type": "text",
+              "default": "CARD001",
+              "placeholder": "Např. CARD001"
+            },
+            {
+              "path": "emailAddress",
+              "label": "E-mail",
+              "type": "email",
+              "default": "{{session.email}}",
+              "placeholder": "E-mail přihlášeného uživatele"
+            },
+            {
+              "path": "phoneNumber",
+              "label": "Telefon",
+              "type": "text",
+              "default": "777555666"
+            },
+            {
+              "path": "parkingSectionCode",
+              "label": "Zóna",
+              "type": "text",
+              "default": "P7-0127"
+            },
+            {
+              "path": "requestedMinutes",
+              "label": "Délka parkování",
+              "type": "number",
+              "default": 45,
+              "min": 15,
+              "step": 15,
+              "suffix": "min"
+            },
+            {
+              "path": "returnUrlFromPaymentGateway",
+              "label": "Návratová URL",
+              "type": "url",
+              "default": "http://127.0.0.1:5500/html/GwResponsePage.html"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/parking/tickets/street-parking",
+            "body": {
+              "licensePlate": "{{form.licensePlate}}",
+              "emailAddress": "{{form.emailAddress}}",
+              "phoneNumber": "{{form.phoneNumber}}",
+              "parkingSectionCode": "{{form.parkingSectionCode}}",
+              "requestedMinutes": "{{form.requestedMinutes}}",
+              "paymentDetails": {
+                "paymentMethod": "Card",
+                "createCardToken": true,
+                "cardToken": null,
+                "returnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}",
+                "automaticPaymentResultProcessing": false,
+                "isSdkUsed": false,
+                "paymentData": null
+              },
+              "language": "cs"
+            }
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "parking-saved-card-process-registration-payment",
+          "title": "Zpracovat výsledek platební brány",
+          "description": "Po zaplacení na platební bráně vložte celý návratový payload. Volání má uložit kartu pro další použití.",
+          "fields": [
+            {
+              "path": "gatewayResultPayload",
+              "label": "Návratový payload z platební brány",
+              "type": "textarea",
+              "rows": 5,
+              "placeholder": "payId=...&dttm=...&resultCode=0&..."
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/parking/payment/gateway-result?saveCard=true&setDefault=true",
+            "body": "{{form.gatewayResultPayload}}"
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "parking-saved-cards-after",
+          "title": "Vybrat uloženou kartu",
+          "description": "Znovu načte uložené karty a umožní vybrat kartu pro platbu dalšího parkování.",
+          "instructions": [
+            "Vyberte kartu, kterou chcete použít pro další platbu.",
+            "Pokud se token karty nepředvyplní, zkopírujte ho ručně do dalšího kroku podle dat vrácených backendem."
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/payment-cards"
+          },
+          "selection": {
+            "sourcePath": "$",
+            "buttonLabel": "Použít kartu",
+            "selectedButtonLabel": "Karta vybrána",
+            "store": {
+              "selectedPaymentCardToken": "$.cardToken",
+              "selectedPaymentCardId": "$.cardId",
+              "selectedPaymentCardName": "$.name",
+              "selectedPaymentCardMaskedNumber": "$.maskedNumber"
+            }
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "parking-pay-with-saved-card",
+          "title": "Zaplatit uloženou kartou",
+          "description": "Zkusí založit další parkování s vybraným tokenem uložené karty. Tady očekáváme hlavní diagnostiku případného problému.",
+          "fields": [
+            {
+              "path": "licensePlate",
+              "label": "SPZ",
+              "type": "text",
+              "default": "CARD002",
+              "placeholder": "Např. CARD002"
+            },
+            {
+              "path": "emailAddress",
+              "label": "E-mail",
+              "type": "email",
+              "default": "{{session.email}}",
+              "placeholder": "E-mail přihlášeného uživatele"
+            },
+            {
+              "path": "phoneNumber",
+              "label": "Telefon",
+              "type": "text",
+              "default": "777555666"
+            },
+            {
+              "path": "parkingSectionCode",
+              "label": "Zóna",
+              "type": "text",
+              "default": "P7-0127"
+            },
+            {
+              "path": "requestedMinutes",
+              "label": "Délka parkování",
+              "type": "number",
+              "default": 45,
+              "min": 15,
+              "step": 15,
+              "suffix": "min"
+            },
+            {
+              "path": "cardToken",
+              "label": "Token uložené karty",
+              "type": "text",
+              "default": "{{context.selectedPaymentCardToken}}",
+              "placeholder": "Vyberte kartu v předchozím kroku nebo vložte token ručně"
+            },
+            {
+              "path": "returnUrlFromPaymentGateway",
+              "label": "Návratová URL",
+              "type": "url",
+              "default": "http://127.0.0.1:5500/html/GwResponsePage.html"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/parking/tickets/street-parking",
+            "body": {
+              "licensePlate": "{{form.licensePlate}}",
+              "emailAddress": "{{form.emailAddress}}",
+              "phoneNumber": "{{form.phoneNumber}}",
+              "parkingSectionCode": "{{form.parkingSectionCode}}",
+              "requestedMinutes": "{{form.requestedMinutes}}",
+              "paymentDetails": {
+                "paymentMethod": "Card",
+                "createCardToken": false,
+                "cardToken": "{{form.cardToken}}",
+                "returnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}",
+                "automaticPaymentResultProcessing": false,
+                "isSdkUsed": false,
+                "paymentData": null
+              },
+              "language": "cs"
+            }
+          },
+          "expected": {
+            "statusIn": [200, 400, 409, 500]
+          }
+        },
+        {
+          "id": "parking-saved-card-active-sessions",
+          "title": "Ověřit aktivní parkování",
+          "description": "Načte aktivní parkování, aby bylo vidět, zda platba uloženou kartou skutečně založila relaci.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/parking/sessions/active"
+          },
+          "expected": {
+            "status": 200
+          }
+        }
+      ]
+    },
+    {
       "id": "parking-overview",
       "title": "Parkování - přehled relací",
       "description": "Rychlý scénář pro zobrazení aktivních relací a historie. Hodí se i pro smoke běh po přihlášení.",
