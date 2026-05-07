@@ -179,7 +179,10 @@
       <section id="logPane" class="right-pane" role="tabpanel" aria-labelledby="logTab">
         <div class="log-head">
           <h2>Log</h2>
-          <button id="clearLog" type="button">Vy&#269;istit</button>
+          <div class="log-actions">
+            <button id="saveFullLog" type="button" disabled>Uložit celý log</button>
+            <button id="clearLog" type="button">Vy&#269;istit</button>
+          </div>
         </div>
         <div id="contextView" class="context-view"></div>
         <div id="logEntries" class="log-entries"></div>

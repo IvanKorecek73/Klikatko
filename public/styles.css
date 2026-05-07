@@ -1496,10 +1496,17 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   margin-bottom: 16px;
 }
 
-.log-head button {
+.log-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.log-actions button {
   padding: 7px 10px;
 }
 

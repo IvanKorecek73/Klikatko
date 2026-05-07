@@ -84,6 +84,7 @@ const elements = {
   resetScenario: document.querySelector("#resetScenario"),
   resultCard: document.querySelector("#resultCard"),
   clearLog: document.querySelector("#clearLog"),
+  saveFullLog: document.querySelector("#saveFullLog"),
   contextView: document.querySelector("#contextView"),
   logEntries: document.querySelector("#logEntries"),
   autoRunTarget: document.querySelector("#autoRunTarget"),
@@ -154,6 +155,7 @@ async function init() {
   });
   elements.testerTab.addEventListener("click", () => activateRightTab("tester"));
   elements.logTab.addEventListener("click", () => activateRightTab("log"));
+  elements.saveFullLog.addEventListener("click", saveFullLog);
   elements.clearLog.addEventListener("click", () => {
     state.log = [];
     renderLog();
@@ -3529,6 +3531,7 @@ function addLog(level, title, details) {
 
 function renderLog() {
   elements.logEntries.innerHTML = "";
+  elements.saveFullLog.disabled = state.log.length === 0;
 
   for (const entry of state.log) {
     const item = document.createElement("article");
@@ -3562,6 +3565,37 @@ function renderLog() {
     });
     elements.logEntries.appendChild(item);
   }
+}
+
+function saveFullLog() {
+  if (state.log.length === 0) {
+    return;
+  }
+
+  const entries = [...state.log].reverse();
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    project: state.project?.name || state.projectId,
+    environment: state.environment?.name || state.environmentId,
+    pack: state.selectedPack?.name || state.selectedPackId,
+    scenario: state.scenario
+      ? {
+          id: state.scenario.id,
+          title: state.scenario.title
+        }
+      : null,
+    entries
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  link.href = url;
+  link.download = `klikatko-log-${timestamp}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function showResult(level, message, body = null, step = currentStep()) {
