@@ -681,7 +681,32 @@
             }
           },
           "expected": {
-            "status": 200
+            "status": 200,
+            "warnings": [
+              {
+                "message": "Platba uloženou kartou je stále ve zpracování. Počkejte přibližně 30 sekund a spusťte tento krok znovu.",
+                "when": [
+                  {
+                    "path": "$.paymentSuccessful",
+                    "equals": false
+                  },
+                  {
+                    "path": "$.paymentInProgress",
+                    "equals": true
+                  }
+                ]
+              }
+            ],
+            "assertions": [
+              {
+                "path": "$.paymentSuccessful",
+                "equals": true
+              },
+              {
+                "path": "$.paymentInProgress",
+                "equals": false
+              }
+            ]
           }
         },
         {

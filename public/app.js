@@ -2610,6 +2610,10 @@ function formatExpected(step) {
     parts.push(`V\u00fdsledek: ${step.expected.outcome}`);
   }
 
+  for (const warning of step.expected.warnings || []) {
+    parts.push(warning.message || "Mezistav bude označen upozorněním.");
+  }
+
   for (const assertion of step.expected.assertions || []) {
     if (assertion.equals !== undefined) {
       const expectedValue = resolveExpectedValue(assertion.equals, step);
@@ -3205,6 +3209,7 @@ function evaluateStep(step, status, body) {
   const expected = step.expected || {};
   const messages = [];
   const failures = [];
+  const warnings = [];
 
   if (body?.error === "ProxyError") {
     return {
@@ -3237,6 +3242,21 @@ function evaluateStep(step, status, body) {
 
   if (Array.isArray(expected.statusIn) && !expected.statusIn.includes(status)) {
     failures.push(`Očekáván HTTP ${expected.statusIn.join(" nebo ")}, backend vrátil HTTP ${status}.`);
+  }
+
+  for (const warning of expected.warnings || []) {
+    if (evaluateExpectedWarning(warning, body, step)) {
+      warnings.push(warning.message || "Krok je ve validním mezistavu a je potřeba jej zopakovat.");
+    }
+  }
+
+  if (warnings.length > 0 && failures.length === 0) {
+    messages.push(...warnings);
+    return {
+      level: "warn",
+      appMessage: makeAppMessage(body, status, "warn"),
+      messages
+    };
   }
 
   for (const assertion of expected.assertions || []) {
@@ -3487,6 +3507,34 @@ function nextStep() {
 
   state.stepIndex += 1;
   renderStep();
+}
+
+function evaluateExpectedWarning(warning, body, step) {
+  const conditions = warning.when || warning.conditions || [];
+
+  if (conditions.length === 0) {
+    return false;
+  }
+
+  return conditions.every(condition => evaluateBodyCondition(condition, body, step));
+}
+
+function evaluateBodyCondition(condition, body, step) {
+  const actual = getPath(body, condition.path);
+
+  if (condition.equals !== undefined) {
+    return deepEqual(actual, resolveExpectedValue(condition.equals, step));
+  }
+
+  if (condition.notEquals !== undefined) {
+    return !deepEqual(actual, resolveExpectedValue(condition.notEquals, step));
+  }
+
+  if (condition.notEmpty) {
+    return !isEmpty(actual);
+  }
+
+  return false;
 }
 
 function previousStep() {
@@ -4272,7 +4320,9 @@ function renderSavedCardPaymentCardHtml(body) {
     <div class="app-card-list">
       <article class="app-card">
         <strong>${escapeHtml(statusText)}</strong>
-        <p>${escapeHtml(`${ticket.licensePlate || "Vozidlo"} má připravené navazující parkování.`)}</p>
+        <p>${escapeHtml(inProgress
+          ? "Platba je stále zpracovávána. Za chvíli spusťte tento krok znovu."
+          : `${ticket.licensePlate || "Vozidlo"} má připravené navazující parkování.`)}</p>
         <div class="app-card-meta">
           ${renderAppChip(ticket.parkingSectionCode ? `Zóna ${ticket.parkingSectionCode}` : "Parkování")}
           ${renderAppChip(ticket.acceptedMinutes ? `${ticket.acceptedMinutes} min` : "")}
