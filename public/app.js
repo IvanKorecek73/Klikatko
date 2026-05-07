@@ -1904,6 +1904,10 @@ function resetCurrentScenario() {
 }
 
 function renderStep() {
+  if (state.scenario) {
+    state.stepIndex = findNextRunnableStepIndex(state.stepIndex);
+  }
+
   const step = currentStep();
   const scenarioRequiresManualInput = requiresManualInput(state.scenario);
   const stepRequiresAuth = requiresAuthorizationForStep(step);
@@ -3465,6 +3469,52 @@ function currentStep() {
   return state.scenario?.steps[state.stepIndex] || null;
 }
 
+function findNextRunnableStepIndex(startIndex) {
+  const steps = state.scenario?.steps || [];
+
+  for (let index = startIndex; index < steps.length; index += 1) {
+    if (!shouldSkipStep(steps[index])) {
+      return index;
+    }
+  }
+
+  return steps.length;
+}
+
+function shouldSkipStep(step) {
+  if (!step?.skipWhen) {
+    return false;
+  }
+
+  const conditions = Array.isArray(step.skipWhen) ? step.skipWhen : [step.skipWhen];
+  return conditions.some(condition => evaluateStepCondition(condition));
+}
+
+function evaluateStepCondition(condition) {
+  if (!condition || typeof condition !== "object") {
+    return false;
+  }
+
+  if (condition.contextExists) {
+    return asArray(condition.contextExists).every(key => !isEmpty(state.context[key]));
+  }
+
+  if (condition.contextMissing) {
+    return asArray(condition.contextMissing).every(key => isEmpty(state.context[key]));
+  }
+
+  if (condition.contextEquals) {
+    const expected = condition.contextEquals.value;
+    return state.context[condition.contextEquals.key] === expected;
+  }
+
+  return false;
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? value : [value];
+}
+
 function getMissingContextKeys(step) {
   if (!step?.requiresContext) {
     return [];
@@ -4742,6 +4792,10 @@ function resolveObject(value, fieldValues, step) {
       if (resolved === "false") {
         return false;
       }
+    }
+
+    if (formField?.type === "checkbox") {
+      return resolved === "true";
     }
 
     return resolved;

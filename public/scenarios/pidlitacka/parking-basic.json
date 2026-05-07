@@ -394,6 +394,9 @@
           "id": "parking-saved-card-create-tokenizing-ticket",
           "title": "Založit parkování s uložením karty",
           "description": "Založí parkování tak, aby platební flow mohlo vytvořit token uložené karty.",
+          "skipWhen": {
+            "contextExists": "selectedPaymentCardId"
+          },
           "fields": [
             {
               "name": "licensePlate",
@@ -433,6 +436,23 @@
               "suffix": "min"
             },
             {
+              "name": "savePaymentCard",
+              "label": "Uložit kartu pro další použití",
+              "type": "select",
+              "value": "true",
+              "valueType": "boolean",
+              "options": [
+                {
+                  "value": "true",
+                  "text": "Ano, uložit kartu"
+                },
+                {
+                  "value": "false",
+                  "text": "Ne, jen zaplatit"
+                }
+              ]
+            },
+            {
               "name": "returnUrlFromPaymentGateway",
               "label": "Návratová URL",
               "type": "url",
@@ -450,7 +470,7 @@
               "requestedMinutes": "{{form.requestedMinutes}}",
               "paymentDetails": {
                 "paymentMethod": "Card",
-                "savePaymentCard": true,
+                "savePaymentCard": "{{form.savePaymentCard}}",
                 "returnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}",
                 "automaticPaymentResultProcessing": false,
                 "isSdkUsed": false,
@@ -462,6 +482,9 @@
           "expected": {
             "status": 200
           },
+          "remember": {
+            "savePaymentCard": "{{form.savePaymentCard}}"
+          },
           "extract": {
             "savedCardRegistrationTicketId": "$.ticket.ticketId"
           }
@@ -470,6 +493,9 @@
           "id": "parking-saved-card-process-registration-payment",
           "title": "Zpracovat výsledek platební brány",
           "description": "Po zaplacení na platební bráně vložte celý návratový payload. Volání má uložit kartu pro další použití.",
+          "skipWhen": {
+            "contextExists": "selectedPaymentCardId"
+          },
           "fields": [
             {
               "name": "gatewayResultPayload",
@@ -481,7 +507,7 @@
           ],
           "request": {
             "method": "POST",
-            "path": "/v1/parking/payment/gateway-result?saveCard=true&setDefault=true",
+            "path": "/v1/parking/payment/gateway-result?saveCard={{context.savePaymentCard}}&setDefault={{context.savePaymentCard}}",
             "body": "{{form.gatewayResultPayload}}"
           },
           "expected": {
@@ -492,6 +518,9 @@
           "id": "parking-saved-cards-after",
           "title": "Vybrat uloženou kartu",
           "description": "Znovu načte uložené karty a umožní vybrat kartu pro platbu dalšího parkování.",
+          "skipWhen": {
+            "contextExists": "selectedPaymentCardId"
+          },
           "instructions": [
             "Vyberte kartu, kterou chcete použít pro další platbu.",
             "Do dalšího kroku se předvyplní ID uložené karty. Samotný token karty se z API nevrací a v Klikátku se nezadává."
@@ -652,7 +681,7 @@
             }
           },
           "expected": {
-            "statusIn": [200, 400, 409, 500]
+            "status": 200
           }
         },
         {
