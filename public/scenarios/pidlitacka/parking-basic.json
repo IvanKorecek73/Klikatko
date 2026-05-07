@@ -587,6 +587,18 @@
                 "returnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}",
                 "automaticPaymentResultProcessing": false,
                 "isSdkUsed": false,
+                "additionalBrowserData": {
+                  "acceptHeader": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                  "javaEnabled": false,
+                  "language": "cs-CZ",
+                  "colorDepth": 24,
+                  "screenWidth": 390,
+                  "screenHeight": 844,
+                  "timezone": -60,
+                  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
+                  "challengeWindowSize": "05",
+                  "javascriptEnabled": true
+                },
                 "paymentData": null
               },
               "language": "cs"
@@ -625,7 +637,18 @@
             "body": {
               "ticketId": "{{form.ticketId}}",
               "savedPaymentCardId": "{{form.savedPaymentCardId}}",
-              "additionalBrowserData": null
+              "additionalBrowserData": {
+                "acceptHeader": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "javaEnabled": false,
+                "language": "cs-CZ",
+                "colorDepth": 24,
+                "screenWidth": 390,
+                "screenHeight": 844,
+                "timezone": -60,
+                "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
+                "challengeWindowSize": "05",
+                "javascriptEnabled": true
+              }
             }
           },
           "expected": {
