@@ -637,13 +637,29 @@
             "status": 200
           },
           "extract": {
-            "savedCardPaymentTicketId": "$.ticket.ticketId"
+            "savedCardPaymentTicketId": "$.ticket.ticketId",
+            "savedCardPaymentStatus": "$.ticket.paymentStatus"
           }
         },
         {
           "id": "parking-process-saved-card-payment",
           "title": "Odeslat platbu uloženou kartou",
           "description": "Odešle platbu navazujícího parkování přes uloženou kartu.",
+          "warningWhen": [
+            {
+              "conditions": [
+                {
+                  "contextEquals": {
+                    "key": "savedCardPaymentStatus",
+                    "value": "Paid"
+                  }
+                }
+              ],
+              "appMessage": "Platba už proběhla při založení parkování. Tento krok nespouštějte a pokračujte dalším krokem.",
+              "message": "Provedení tohoto kroku je nežádoucí, protože ticket už je zaplacený.",
+              "detail": "Pokračujte na ověření aktivního parkování."
+            }
+          ],
           "fields": [
             {
               "name": "ticketId",

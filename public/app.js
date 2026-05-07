@@ -2669,6 +2669,36 @@ async function runCurrentStep() {
     return;
   }
 
+  const stepWarning = findStepWarning(step);
+  if (stepWarning) {
+    clearStepResultsFrom(runningStepIndex);
+
+    const messages = [
+      stepWarning.message || "Provedení tohoto kroku je v aktuálním stavu nežádoucí.",
+      stepWarning.detail || ""
+    ].filter(Boolean);
+    const result = {
+      level: "warn",
+      appMessage: stepWarning.appMessage || messages[0],
+      messages
+    };
+
+    state.lastStepResult = result;
+    state.stepResults[runningStepIndex] = result;
+    addLog("warn", `${step.title} skipped by scenario guard`, {
+      reason: "ScenarioGuardWarning",
+      warning: stepWarning,
+      context: state.context
+    });
+    showResult("warn", result.appMessage || result.messages.join(" "), null, step);
+    renderContext();
+    elements.nextStep.disabled = !canAdvanceFromCurrentStep();
+    elements.nextStep.classList.toggle("ready", !elements.nextStep.disabled);
+    elements.runStep.textContent = "Zopakovat krok";
+    elements.previousStep.disabled = !state.scenario || findPreviousRunnableStepIndex(state.stepIndex) === null;
+    return;
+  }
+
   if (requiresAuthorizationForStep(step)) {
     const authCheck = await ensureAuthorizationReady();
     if (!authCheck.ok) {
@@ -3616,6 +3646,19 @@ function shouldSkipStep(step) {
 
   const conditions = Array.isArray(step.skipWhen) ? step.skipWhen : [step.skipWhen];
   return conditions.some(condition => evaluateStepCondition(condition));
+}
+
+function findStepWarning(step) {
+  for (const warning of step?.warningWhen || []) {
+    const conditions = warning.conditions || warning.when || [];
+    const normalizedConditions = Array.isArray(conditions) ? conditions : [conditions];
+
+    if (normalizedConditions.length > 0 && normalizedConditions.every(condition => evaluateStepCondition(condition))) {
+      return warning;
+    }
+  }
+
+  return null;
 }
 
 function evaluateStepCondition(condition) {
