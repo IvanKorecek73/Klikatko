@@ -2012,6 +2012,20 @@ function getMobileNavigation(step) {
     };
   }
 
+  if (isParkingStepText(text)) {
+    if (text.includes("payment") || text.includes("gateway")) {
+      return {
+        items: ["Parkování", "Platba", "Profil"],
+        activeIndex: 1
+      };
+    }
+
+    return {
+      items: ["Parkování", "Platba", "Profil"],
+      activeIndex: 0
+    };
+  }
+
   if (isAccountStepText(text)) {
     if (text.includes("complete") || text.includes("activation")) {
       return {
@@ -2022,20 +2036,6 @@ function getMobileNavigation(step) {
 
     return {
       items: ["Registrace", "Aktivace", "Profil"],
-      activeIndex: 0
-    };
-  }
-
-  if (text.includes("parking") || text.includes("parkov")) {
-    if (text.includes("payment") || text.includes("gateway")) {
-      return {
-        items: ["Parkování", "Platba", "Profil"],
-        activeIndex: 1
-      };
-    }
-
-    return {
-      items: ["Parkování", "Platba", "Profil"],
       activeIndex: 0
     };
   }
@@ -2083,6 +2083,10 @@ function isAccountStepText(text) {
     "obnova hesla",
     "resetovat heslo"
   ]);
+}
+
+function isParkingStepText(text) {
+  return text.includes("parking") || text.includes("parkov");
 }
 
 function renderField(field, value) {
@@ -2333,12 +2337,12 @@ function renderNoInputStepCard(step) {
 function getMobileTitle(step) {
   const text = [step.id, step.title, step.request?.path].filter(Boolean).join(" ").toLowerCase();
 
-  if (isAccountStepText(text)) {
-    return "Profil";
+  if (isParkingStepText(text)) {
+    return "Parkování";
   }
 
-  if (text.includes("parking") || text.includes("parkov")) {
-    return "Parkování";
+  if (isAccountStepText(text)) {
+    return "Profil";
   }
 
   if (text.includes("module")) {
@@ -2375,12 +2379,12 @@ function getMobileTitle(step) {
 function getMobileDescription(step) {
   const text = [step.id, step.title, step.request?.path].filter(Boolean).join(" ").toLowerCase();
 
-  if (isAccountStepText(text)) {
-    return "Založení a správa účtu.";
+  if (isParkingStepText(text)) {
+    return "Založení, prodloužení a přehled parkovacích relací.";
   }
 
-  if (text.includes("parking") || text.includes("parkov")) {
-    return "Založení, prodloužení a přehled parkovacích relací.";
+  if (isAccountStepText(text)) {
+    return "Založení a správa účtu.";
   }
 
   if (text.includes("module")) {
