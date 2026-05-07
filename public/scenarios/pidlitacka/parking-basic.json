@@ -1038,6 +1038,67 @@
       ]
     },
     {
+      "id": "parking-card-detail",
+      "title": "Platební karty - detail uložené karty",
+      "description": "Načte detail jedné uložené platební karty podle jejího ID.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["parking", "payment", "cards", "forms"],
+      "instructions": [
+        "Nejprve si načtěte seznam uložených karet a zkopírujte ID karty, kterou chcete ověřit.",
+        "Tento scénář je hlavně samostatný formulář pro rychlé dohledání konkrétní karty."
+      ],
+      "steps": [
+        {
+          "id": "parking-card-detail-step",
+          "title": "Načíst detail uložené karty",
+          "description": "Vrátí detail uložené platební karty aktuálního uživatele.",
+          "fields": [
+            {
+              "name": "id",
+              "label": "ID uložené karty",
+              "type": "text",
+              "placeholder": "např. 00000000-0000-0000-0000-000000000000"
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/parking/cards/{{form.id}}"
+          },
+          "expected": {
+            "status": 200
+          }
+        }
+      ]
+    },
+    {
+      "id": "parking-card-last-used",
+      "title": "Platební karty - poslední použitá karta",
+      "description": "Načte poslední použitou uloženou platební kartu aktuálního uživatele.",
+      "requiresAuth": true,
+      "smoke": false,
+      "tags": ["parking", "payment", "cards", "forms"],
+      "instructions": [
+        "Scénář je užitečný po platbě uloženou kartou nebo po uložení nové karty.",
+        "Pokud uživatel zatím nemá žádnou poslední použitou kartu, backend může vrátit 404."
+      ],
+      "steps": [
+        {
+          "id": "parking-card-last-used-step",
+          "title": "Načíst poslední použitou kartu",
+          "description": "Vrátí poslední použitou uloženou platební kartu aktuálního uživatele.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/parking/cards/last-used"
+          },
+          "expected": {
+            "statusIn": [200, 404]
+          }
+        }
+      ]
+    },
+    {
       "id": "parking-calculate-price-multi",
       "title": "Parkování - výpočet ceny multi",
       "description": "Spočítá cenu uličního parkování pro více kroků nad zadanou zónou a parkovacím automatem.",
