@@ -684,6 +684,7 @@
             "status": 200,
             "warnings": [
               {
+                "appMessage": "Platba ještě není dokončená. Počkejte asi 30 sekund a spusťte tento krok znovu.",
                 "message": "Platba uloženou kartou je stále ve zpracování. Počkejte přibližně 30 sekund a spusťte tento krok znovu.",
                 "when": [
                   {

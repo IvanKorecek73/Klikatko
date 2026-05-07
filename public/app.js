@@ -3246,15 +3246,15 @@ function evaluateStep(step, status, body) {
 
   for (const warning of expected.warnings || []) {
     if (evaluateExpectedWarning(warning, body, step)) {
-      warnings.push(warning.message || "Krok je ve validním mezistavu a je potřeba jej zopakovat.");
+      warnings.push(warning);
     }
   }
 
   if (warnings.length > 0 && failures.length === 0) {
-    messages.push(...warnings);
+    messages.push(...warnings.map(warning => warning.message || "Krok je ve validním mezistavu a je potřeba jej zopakovat."));
     return {
       level: "warn",
-      appMessage: makeAppMessage(body, status, "warn"),
+      appMessage: warnings[0].appMessage || warnings[0].message || makeAppMessage(body, status, "warn"),
       messages
     };
   }
