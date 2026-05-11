@@ -4429,10 +4429,24 @@ function renderSavedCardPaymentCardHtml(body) {
           <div class="app-detail-row"><span>Cena</span><span>${escapeHtml(ticket.totalPrice !== undefined ? `${ticket.totalPrice} CZK` : "-")}</span></div>
           <div class="app-detail-row"><span>Doklad</span><span>${escapeHtml(ticket.formattedReceiptNumber || "-")}</span></div>
           <div class="app-detail-row"><span>Stav platby</span><span>${escapeHtml(ticket.paymentStatus || "-")}</span></div>
+          <div class="app-detail-row"><span>PaymentInProgress</span><span>${escapeHtml(formatBooleanAnswer(body.paymentInProgress))}</span></div>
+          <div class="app-detail-row"><span>PaymentSuccessful</span><span>${escapeHtml(formatBooleanAnswer(body.paymentSuccessful))}</span></div>
         </div>
       </article>
     </div>
   `;
+}
+
+function formatBooleanAnswer(value) {
+  if (value === true) {
+    return "ano";
+  }
+
+  if (value === false) {
+    return "ne";
+  }
+
+  return "-";
 }
 
 function renderEmptyAppCardHtml(title, text) {
