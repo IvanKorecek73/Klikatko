@@ -4566,6 +4566,8 @@ function renderMosParkingOrderCardHtml(body) {
 
 function renderMosSavedCardPaymentCardHtml(body) {
   const ticket = body.ticket || {};
+  const browserChallenge = body.actions?.authenticate?.browserChallenge || null;
+
   return `
     <div class="app-card-list">
       <article class="app-card">
@@ -4585,7 +4587,12 @@ function renderMosSavedCardPaymentCardHtml(body) {
           <div class="app-detail-row"><span>Stav platby</span><span>${escapeHtml(formatMosPaymentStatus(ticket.paymentStatus))}</span></div>
           <div class="app-detail-row"><span>PaymentInProgress</span><span>${escapeHtml(formatBooleanAnswer(body.paymentInProgress))}</span></div>
           <div class="app-detail-row"><span>PaymentSuccessful</span><span>${escapeHtml(formatBooleanAnswer(body.paymentSuccessful))}</span></div>
+          ${browserChallenge?.url ? `<div class="app-detail-row"><span>Další ověření</span><span>${escapeHtml(browserChallenge.method || "3DS")}</span></div>` : ""}
         </div>
+        ${browserChallenge?.url ? `
+          <div class="app-card-actions">
+            <a class="app-card-link" href="${escapeHtml(browserChallenge.url)}" target="_blank" rel="noopener">Otevřít ověření platby</a>
+          </div>` : ""}
       </article>
     </div>
   `;
@@ -4860,6 +4867,10 @@ function summarizeBody(body) {
     return [];
   }
 
+  if (isMosParkingOrderResponse(body) || isMosSavedCardPaymentResponse(body) || isMosTicketInfoResponse(body)) {
+    return [];
+  }
+
   if (isFavoriteZoneResponse(body) || isDeleteFavoriteZoneResponse(body) || isDeletePaymentCardResponse(body)) {
     return [];
   }
@@ -4894,7 +4905,7 @@ function summarizeBody(body) {
 
   if (rows.length === 0) {
     for (const [key, value] of Object.entries(body).slice(0, 4)) {
-      addSummary(rows, key, formatSummaryValue(value));
+      addSummary(rows, key, value);
     }
   }
 
@@ -4906,7 +4917,61 @@ function addSummary(rows, label, value) {
     return;
   }
 
+  if (Array.isArray(value)) {
+    rows.push({ label, value: `${value.length}` });
+    return;
+  }
+
+  if (typeof value === "object") {
+    addNestedSummary(rows, label, value);
+    return;
+  }
+
   rows.push({ label, value: formatSummaryValue(value) });
+}
+
+function addNestedSummary(rows, label, value, depth = 0) {
+  if (!value || typeof value !== "object" || rows.length >= 12) {
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    rows.push({ label, value: `${value.length}` });
+    return;
+  }
+
+  for (const [key, childValue] of Object.entries(value)) {
+    if (rows.length >= 12) {
+      return;
+    }
+
+    if (childValue === undefined || childValue === null || childValue === "") {
+      continue;
+    }
+
+    const childLabel = `${label} / ${formatSummaryLabel(key)}`;
+
+    if (Array.isArray(childValue)) {
+      rows.push({ label: childLabel, value: `${childValue.length}` });
+      continue;
+    }
+
+    if (typeof childValue === "object") {
+      if (depth < 2) {
+        addNestedSummary(rows, childLabel, childValue, depth + 1);
+      }
+      continue;
+    }
+
+    rows.push({ label: childLabel, value: formatSummaryValue(childValue) });
+  }
+}
+
+function formatSummaryLabel(value) {
+  return String(value)
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim();
 }
 
 function formatSummaryValue(value) {
@@ -4915,7 +4980,11 @@ function formatSummaryValue(value) {
   }
 
   if (typeof value === "object") {
-    return JSON.stringify(value);
+    return "";
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "ano" : "ne";
   }
 
   return String(value);
