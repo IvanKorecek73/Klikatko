@@ -375,6 +375,96 @@
           }
         }
       ]
+    },
+    {
+      "id": "mos-parking-calculate-price-multi",
+      "title": "MOS - výpočet ceny parkování multi",
+      "description": "Spočítá více cenových variant uličního parkování přímo nad pre-parking MOS API.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": false,
+      "tags": ["parking", "price", "diagnostics", "mos"],
+      "app": {
+        "section": "parking",
+        "title": "Parkování",
+        "subtitle": "Přímé volání MOS API"
+      },
+      "instructions": [
+        "V panelu Přístup nejprve vložte MOS API klíč.",
+        "Scénář volá přímo pre-parking MOS endpoint pro výpočet cenových variant.",
+        "Stačí upravit SPZ, zónu, parkovací automat nebo délku kroku a spustit krok."
+      ],
+      "steps": [
+        {
+          "id": "mos-calculate-price-multi",
+          "title": "Vypočítat cenu parkování",
+          "description": "Vrátí několik cenových variant pro zadanou zónu nebo parkovací automat.",
+          "fields": [
+            {
+              "name": "licensePlate",
+              "label": "SPZ",
+              "type": "text",
+              "value": "ABC0709"
+            },
+            {
+              "name": "sectionCode",
+              "label": "Kód zóny",
+              "type": "text",
+              "value": "P2-0314"
+            },
+            {
+              "name": "parkMachineCode",
+              "label": "Kód parkovacího automatu",
+              "type": "text",
+              "value": "2000064"
+            },
+            {
+              "name": "minutesStep",
+              "label": "Krok v minutách",
+              "type": "number",
+              "value": "240",
+              "min": 1,
+              "max": 240,
+              "suffix": "min"
+            },
+            {
+              "name": "maxSteps",
+              "label": "Maximální počet kroků",
+              "type": "number",
+              "value": "6",
+              "min": 1,
+              "max": 1440
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/api/v1/Tickets/streetParking/CalculatePrice/multi",
+            "headers": {
+              "Accept-Language": "cs-CZ"
+            },
+            "body": {
+              "licensePlate": "{{form.licensePlate}}",
+              "sectionCode": "{{form.sectionCode}}",
+              "parkMachineCode": "{{form.parkMachineCode}}",
+              "minutesStep": "{{form.minutesStep}}",
+              "maxSteps": "{{form.maxSteps}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.success",
+                "equals": true
+              },
+              {
+                "path": "$.priceCalculations",
+                "lengthAtLeast": 1
+              }
+            ]
+          }
+        }
+      ]
     }
   ]
 }

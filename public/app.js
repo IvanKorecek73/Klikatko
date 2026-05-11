@@ -2179,6 +2179,7 @@ function isParkingStepText(text) {
 function getMobileActionTitle(step) {
   const text = getStepSearchText(step);
   const path = step.request?.path || "";
+  const pathLower = path.toLowerCase();
   const method = step.request?.method || "GET";
 
   if (path.includes("/v1/parking/cards")) {
@@ -2209,7 +2210,7 @@ function getMobileActionTitle(step) {
     return "Návrh lokalit";
   }
 
-  if (path.includes("/v1/parking/calculate-price/street-parking/multi")) {
+  if (path.includes("/v1/parking/calculate-price/street-parking/multi") || pathLower.includes("/api/v1/tickets/streetparking/calculateprice/multi")) {
     return "Výpočet ceny parkování";
   }
 
@@ -3537,7 +3538,7 @@ function makeAppMessage(body, status, level) {
   }
 
   if (isParkingPriceMultiResponse(body)) {
-    const count = Array.isArray(body.calculations) ? body.calculations.length : 0;
+    const count = getParkingPriceCalculations(body).length;
     return count === 1
       ? "Našli jsme 1 cenovou variantu parkování."
       : `Našli jsme ${count} cenových variant parkování.`;
@@ -4037,20 +4038,22 @@ function buildAppCardsHtml(body, step = currentStep()) {
   }
 
   if (isParkingPriceMultiResponse(body)) {
-    const calculations = Array.isArray(body.calculations) ? body.calculations : [];
+    const calculations = getParkingPriceCalculations(body);
+    const calculationSuccessful = getParkingPriceSuccessful(body);
+    const tariffId = body.tariffId || body.tariffID;
 
     return `
       <div class="app-card-list">
         <article class="app-card">
           <strong>Výpočet ceny parkování</strong>
-          <p>${body.calculationSuccessful ? "Kalkulace proběhla úspěšně." : "Kalkulace se nepodařila plně dokončit."}</p>
+          <p>${calculationSuccessful ? "Kalkulace proběhla úspěšně." : "Kalkulace se nepodařila plně dokončit."}</p>
           <div class="app-card-meta">
-            ${renderAppChip(body.calculationSuccessful ? "Úspěšné" : "Neúplné")}
+            ${renderAppChip(calculationSuccessful ? "Úspěšné" : "Neúplné")}
             ${renderAppChip(calculations.length === 1 ? "1 varianta" : `${calculations.length} variant`)}
           </div>
           <div class="app-card-details">
             <div class="app-detail-row"><span>Parkování od</span><span>${escapeHtml(formatDate(body.parkingFrom))}</span></div>
-            ${body.tariffId ? `<div class="app-detail-row"><span>Tarif</span><span>${escapeHtml(shortId(body.tariffId))}</span></div>` : ""}
+            ${tariffId ? `<div class="app-detail-row"><span>Tarif</span><span>${escapeHtml(shortId(tariffId))}</span></div>` : ""}
           </div>
         </article>
         ${calculations.map((item, index) => `
@@ -5165,9 +5168,49 @@ function isParkingSuggestResultsResponse(value) {
 function isParkingPriceMultiResponse(value) {
   return value
     && typeof value === "object"
-    && typeof value.calculationSuccessful === "boolean"
-    && Array.isArray(value.calculations)
-    && value.calculations.length > 0;
+    && ((typeof value.calculationSuccessful === "boolean" && Array.isArray(value.calculations))
+      || (typeof value.success === "boolean" && Array.isArray(value.priceCalculations)))
+    && getParkingPriceCalculations(value).length > 0;
+}
+
+function getParkingPriceSuccessful(value) {
+  if (typeof value?.calculationSuccessful === "boolean") {
+    return value.calculationSuccessful;
+  }
+
+  if (typeof value?.success === "boolean") {
+    return value.success;
+  }
+
+  return false;
+}
+
+function getParkingPriceCalculations(value) {
+  if (Array.isArray(value?.calculations)) {
+    return value.calculations.map(item => ({
+      totalPrice: item.totalPrice,
+      acceptedMinutes: item.acceptedMinutes,
+      acceptedMinutesDuringParkingHours: item.acceptedMinutesDuringParkingHours,
+      acceptedMinutesFormatted: item.acceptedMinutesFormatted,
+      parkingTo: item.parkingTo,
+      appliedDiscount: item.appliedDiscount,
+      originalPrice: item.originalPrice
+    }));
+  }
+
+  if (Array.isArray(value?.priceCalculations)) {
+    return value.priceCalculations.map(item => ({
+      totalPrice: item.priceTotal,
+      acceptedMinutes: item.minutesAccepted,
+      acceptedMinutesDuringParkingHours: item.minutesAcceptedDuringParkingHours,
+      acceptedMinutesFormatted: item.minutesAcceptedHumanized,
+      parkingTo: item.endOfParking,
+      appliedDiscount: item.discountAmount,
+      originalPrice: item.originalPriceTotal
+    }));
+  }
+
+  return [];
 }
 
 function isFavoriteZoneResponse(value) {
