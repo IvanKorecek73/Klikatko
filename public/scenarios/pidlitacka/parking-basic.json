@@ -734,6 +734,31 @@
             "method": "GET",
             "path": "/v1/parking/sessions/active"
           },
+          "selection": {
+            "sourcePath": "$.sessions",
+            "buttonLabel": "Stáhnout doklad",
+            "selectedButtonLabel": "Doklad vybrán",
+            "store": {
+              "selectedReceiptTicketId": "$.ticketId",
+              "selectedReceiptVehicleName": "$.vehicle.name",
+              "selectedReceiptVehicleLicensePlate": "$.vehicle.licensePlate",
+              "selectedReceiptParkingFrom": "$.parkingFrom",
+              "selectedReceiptParkingTo": "$.parkingTo"
+            }
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "parking-download-selected-receipt",
+          "title": "Stáhnout platební doklad",
+          "description": "Stáhne PDF doklad k aktivnímu parkování vybranému podle vozidla.",
+          "requiresContext": ["selectedReceiptTicketId"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/parking/receipts/{{context.selectedReceiptTicketId}}/pdf"
+          },
           "expected": {
             "status": 200
           }

@@ -3930,7 +3930,9 @@ function buildAppCardsHtml(body, step = currentStep()) {
   }
 
   if (isParkingSessionsResponse(body)) {
-    return renderParkingSessionsCardsHtml(body.sessions, body.activeParkingLookbackWindowInMinutes);
+    return renderParkingSessionsCardsHtml(body.sessions, body.activeParkingLookbackWindowInMinutes, {
+      selection: getSelectionDescriptor(step, body.sessions)
+    });
   }
 
   if (isParkingSuggestResultsResponse(body)) {
@@ -4906,14 +4908,17 @@ function isDeletePaymentCardResponse(value, step = currentStep()) {
     && (step?.id === "parking-card-delete-step" || requestPath.includes("/parking/cards/"));
 }
 
-function renderParkingSessionsCardsHtml(sessions, lookbackWindowInMinutes) {
-  return `<div class="app-card-list">${sessions.map(session => {
+function renderParkingSessionsCardsHtml(sessions, lookbackWindowInMinutes, options = {}) {
+  const selection = options.selection || null;
+
+  return `<div class="app-card-list">${sessions.map((session, index) => {
     const childSessions = Array.isArray(session.childSessions) ? session.childSessions : [];
     const vehicle = session.vehicle || {};
     const location = session.location || {};
+    const isSelected = selection && selection.selectedIndex === index;
 
     return `
-      <article class="app-card">
+      <article class="app-card ${isSelected ? "app-card-selected" : ""}">
         <strong>${escapeHtml(vehicle.name || vehicle.licensePlate || session.licensePlate || "Parkovací relace")}</strong>
         <p>${escapeHtml(location.name || location.address || "Parkovací místo")} · ${escapeHtml(location.sectionCode || session.parkingSectionCode || "Bez zóny")}</p>
         <div class="app-card-meta">
@@ -4952,8 +4957,14 @@ function renderParkingSessionsCardsHtml(sessions, lookbackWindowInMinutes) {
                 <div class="app-session-extension-time">
                   ${escapeHtml(formatDate(child.parkingFrom))} - ${escapeHtml(formatDate(child.parkingTo))}
                 </div>
-              </div>
+          </div>
             `).join("")}
+          </div>` : ""}
+        ${selection ? `
+          <div class="app-card-actions">
+            <button type="button" class="app-card-select" data-selection-index="${index}">
+              ${escapeHtml(isSelected ? (selection.selectedButtonLabel || "Vybráno") : (selection.buttonLabel || "Vybrat"))}
+            </button>
           </div>` : ""}
       </article>
     `;
