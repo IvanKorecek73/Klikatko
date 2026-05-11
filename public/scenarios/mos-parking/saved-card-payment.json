@@ -20,7 +20,7 @@
         "V panelu Přístup nejprve vložte MOS API klíč.",
         "První část scénáře založí parkování přes běžnou kartu s požadavkem na vytvoření tokenu.",
         "Po zaplacení na platební bráně vložte návratový payload do kroku zpracování výsledku brány.",
-        "Pro část s uloženou kartou je potřeba doplnit paymentGWToken. Swagger jej popisuje jako token získaný z OrderTicketResponse/payment gateway flow; pokud jej MOS nevrátí přímo, vložte jej ručně podle dostupných diagnostických dat."
+        "Pro část s uloženou kartou se jako paymentGWToken použije paymentGWReference vrácený z kroku zpracování výsledku platební brány."
       ],
       "steps": [
         {
@@ -131,6 +131,7 @@
           },
           "extract": {
             "mosTokenizingPaymentSuccessful": "$.paymentSuccessful",
+            "mosPaymentGwToken": "$.paymentGWReference",
             "mosTokenizingTicketGuid": "$.ticket.ticketGUID",
             "mosTokenizingPaymentStatus": "$.ticket.paymentStatus"
           }
@@ -154,7 +155,7 @@
         {
           "id": "mos-create-street-parking-with-token",
           "title": "Založit parkování uloženou kartou",
-          "description": "Založí navazující parkování a jako platební metodu pošle token uložené karty.",
+          "description": "Založí navazující parkování a jako platební metodu pošle token uložené karty získaný z paymentGWReference.",
           "fields": [
             {
               "name": "licensePlate",
@@ -193,7 +194,8 @@
               "name": "paymentGWToken",
               "label": "Payment GW token uložené karty",
               "type": "text",
-              "placeholder": "Token získaný z tokenizačního flow"
+              "value": "{{context.mosPaymentGwToken}}",
+              "placeholder": "Předvyplní se z paymentGWReference"
             },
             {
               "name": "paymentGWReturnURL",
