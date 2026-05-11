@@ -243,6 +243,28 @@
           "targetBaseUrl": "https://pidl2-backend.int.pidlitacka.cz/"
         }
       ]
+    },
+    {
+      "id": "mos-parking",
+      "name": "MOS Parking",
+      "description": "Přímé diagnostické scénáře nad pre-parking MOS API.",
+      "manifest": "mos-parking/index.json",
+      "defaultBaseUrl": "/api",
+      "auth": {
+        "type": "apiKey",
+        "panelTitle": "Přístup (MOS API klíč)",
+        "apiKeyHeader": "apiKey",
+        "apiKeyLabel": "MOS API klíč",
+        "apiKeyPlaceholder": "Vložte apiKey pro pre-parking MOS"
+      },
+      "defaultEnvironmentId": "mos-pre-parking",
+      "environments": [
+        {
+          "id": "mos-pre-parking",
+          "name": "PRE-PARKING",
+          "targetBaseUrl": "https://pre-parking.mos.oict.cz"
+        }
+      ]
     }
   ]
 }

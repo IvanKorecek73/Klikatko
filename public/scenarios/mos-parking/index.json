@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "defaultPackId": "mos-parking-saved-card",
+  "packs": [
+    {
+      "id": "mos-parking-saved-card",
+      "name": "MOS Parking - uložená karta",
+      "description": "První diagnostický pack pro přímé volání pre-parking MOS API.",
+      "file": "saved-card-payment.json"
+    }
+  ]
+}

@@ -251,7 +251,17 @@ function requiresAuthorization(item) {
 }
 
 function getAuthorizationBadgeLabel() {
-  return getProjectAuthConfig().type === "login" ? "Přihlášení" : "JWT";
+  const type = getProjectAuthConfig().type;
+
+  if (type === "login") {
+    return "Přihlášení";
+  }
+
+  if (type === "apiKey") {
+    return "API klíč";
+  }
+
+  return "JWT";
 }
 
 async function loadProject(projectId) {
@@ -740,14 +750,18 @@ function renderTargetInfo() {
 function renderAuthPanel() {
   const authConfig = getProjectAuthConfig();
   const activeLoginConfig = getActiveLoginRequestConfig(authConfig);
-  elements.authPanelTitle.textContent = authConfig.panelTitle || (authConfig.type === "login" ? "Přihlášení" : "Přístup (JWT)");
+  elements.authPanelTitle.textContent = authConfig.panelTitle || (authConfig.type === "login"
+    ? "Přihlášení"
+    : authConfig.type === "apiKey"
+      ? "Přístup (API klíč)"
+      : "Přístup (JWT)");
   renderAuthForm();
   renderAuthPanelStatus();
   elements.authLoginAction.textContent = activeLoginConfig?.buttonText || authConfig.login?.buttonText || (authConfig.type === "login" ? "Přihlásit" : "Uložit");
   elements.authRefreshAction.textContent = authConfig.refresh?.buttonText || "Obnovit";
   elements.authLogoutAction.textContent = authConfig.logout?.buttonText || "Odhlásit";
   elements.authResetAction.textContent = authConfig.type === "login" ? "Vymazat" : "Vyčistit";
-  elements.authLoginAction.disabled = authConfig.type !== "login" && authConfig.type !== "jwt";
+  elements.authLoginAction.disabled = !["login", "jwt", "apiKey"].includes(authConfig.type);
   elements.authRefreshAction.disabled = !(authConfig.type === "login" && authConfig.refresh && state.authSession?.refreshToken);
   elements.authLogoutAction.disabled = !(authConfig.type === "login" && authConfig.logout && state.authSession?.accessToken);
 }
@@ -784,6 +798,10 @@ function getAuthorizationSummary(info) {
     return "Nepřihlášen";
   }
 
+  if (authConfig.type === "apiKey") {
+    return info.valid ? "API klíč připraven" : "API klíč chybí";
+  }
+
   if (info.valid) {
     return "JWT připraven";
   }
@@ -817,6 +835,16 @@ function renderAuthForm() {
     }
 
       return;
+  }
+
+  if (authConfig.type === "apiKey") {
+    elements.authForm.appendChild(createAuthField({
+      name: "apiKey",
+      label: authConfig.apiKeyLabel || "API klíč",
+      type: "password",
+      placeholder: authConfig.apiKeyPlaceholder || "Vložte API klíč pro cílové API"
+    }));
+    return;
   }
 
   const field = {
@@ -1010,7 +1038,7 @@ function removeSelectedAuthProfile() {
 async function executeAuthLogin() {
   const authConfig = getProjectAuthConfig();
 
-  if (authConfig.type === "jwt") {
+  if (authConfig.type === "jwt" || authConfig.type === "apiKey") {
     saveAuthFormValues();
     renderAuthPanelStatus();
     renderModeBanner();
@@ -1348,6 +1376,10 @@ function getCurrentJwtToken() {
   return String(state.authFormValues?.jwtToken || "").trim();
 }
 
+function getCurrentApiKey() {
+  return String(state.authFormValues?.apiKey || "").trim();
+}
+
 function getAuthorizationInfo() {
   const authConfig = getProjectAuthConfig();
 
@@ -1355,7 +1387,27 @@ function getAuthorizationInfo() {
     return getLoginSessionInfo();
   }
 
+  if (authConfig.type === "apiKey") {
+    return getApiKeyInfo();
+  }
+
   return getJwtInfo(getCurrentJwtToken());
+}
+
+function getApiKeyInfo() {
+  return getCurrentApiKey()
+    ? {
+        level: "ok",
+        valid: true,
+        expired: false,
+        message: "API klíč je vyplněn."
+      }
+    : {
+        level: "warn",
+        valid: false,
+        expired: false,
+        message: "API klíč není vyplněn."
+      };
 }
 
 function getJwtInfo(token) {
@@ -1509,6 +1561,10 @@ function hasUsableAuthorization() {
     return Boolean(state.authSession?.refreshToken && authConfig.refresh);
   }
 
+  if (authConfig.type === "apiKey") {
+    return getCurrentApiKey() !== "";
+  }
+
   return getJwtInfo(getCurrentJwtToken()).valid;
 }
 
@@ -1582,6 +1638,14 @@ async function ensureAuthorizationReady() {
     return { ok: false, message: "Nejste přihlášen." };
   }
 
+  if (authConfig.type === "apiKey") {
+    const info = getApiKeyInfo();
+    return {
+      ok: info.valid,
+      message: info.message
+    };
+  }
+
   const info = getJwtInfo(getCurrentJwtToken());
   return {
     ok: info.valid,
@@ -1611,6 +1675,10 @@ function detectTargetEnvironment(baseUrl) {
 
     if (full.includes(".int.") || host.startsWith("int.") || full.includes("integration")) {
       return { kind: "int", label: "INT" };
+    }
+
+    if (full.includes("pre-parking") || host.startsWith("pre.") || host.startsWith("pre-")) {
+      return { kind: "int", label: "PRE" };
     }
 
     if (full.includes("test") || full.includes("stage") || full.includes("staging") || full.includes("uat") || full.includes("dev")) {
@@ -3174,13 +3242,25 @@ function buildRequest(step) {
   }
 
   if (requiresAuthorizationForStep(step) && !headers.Authorization) {
-    const token = getProjectAuthConfig().type === "login"
+    const authConfig = getProjectAuthConfig();
+
+    if (authConfig.type === "apiKey") {
+      const apiKey = getCurrentApiKey();
+      const headerName = authConfig.apiKeyHeader || "apiKey";
+
+      if (apiKey) {
+        headers[headerName] = apiKey;
+        visibleHeaders[headerName] = "***";
+      }
+    } else {
+      const token = authConfig.type === "login"
       ? state.authSession?.accessToken
       : getCurrentJwtToken();
 
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-      visibleHeaders.Authorization = "Bearer ***";
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+        visibleHeaders.Authorization = "Bearer ***";
+      }
     }
   }
 
@@ -3707,9 +3787,12 @@ function renderModeBanner() {
   }
 
   if (requiresAuthorization(state.scenario) && !hasUsableAuthorization()) {
-    elements.modeBanner.textContent = getProjectAuthConfig().type === "login"
+    const authType = getProjectAuthConfig().type;
+    elements.modeBanner.textContent = authType === "login"
       ? "Tento scénář vyžaduje platné přihlášení v panelu Přístup."
-      : "Tento scénář vyžaduje platný JWT bearer token v panelu Přístup.";
+      : authType === "apiKey"
+        ? "Tento scénář vyžaduje API klíč v panelu Přístup."
+        : "Tento scénář vyžaduje platný JWT bearer token v panelu Přístup.";
     elements.modeBanner.className = "mode-banner";
     return;
   }
@@ -4205,6 +4288,18 @@ function buildAppCardsHtml(body, step = currentStep()) {
     `;
   }
 
+  if (isMosParkingOrderResponse(body)) {
+    return renderMosParkingOrderCardHtml(body);
+  }
+
+  if (isMosSavedCardPaymentResponse(body)) {
+    return renderMosSavedCardPaymentCardHtml(body);
+  }
+
+  if (isMosTicketInfoResponse(body)) {
+    return renderMosTicketInfoCardHtml(body);
+  }
+
   if (typeof body.exists === "boolean" && typeof body.isActive === "boolean") {
     return buildCardListHtml([body], item => ({
       title: "Stav účtu",
@@ -4439,6 +4534,85 @@ function renderSavedCardPaymentCardHtml(body) {
   `;
 }
 
+function renderMosParkingOrderCardHtml(body) {
+  const ticket = body.ticket || {};
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>${escapeHtml(body.success ? "Parkování založeno" : "Parkování se nepodařilo založit")}</strong>
+        <p>${escapeHtml(ticket.licensePlate || body.licensePlate || "Vozidlo")} má připravený MOS ticket.</p>
+        <div class="app-card-meta">
+          ${renderAppChip(ticket.sectionCode ? `Zóna ${ticket.sectionCode}` : "MOS")}
+          ${renderAppChip(ticket.acceptedMinutes ? `${ticket.acceptedMinutes} min` : "")}
+          ${renderAppChip(ticket.priceTotal !== undefined ? `${ticket.priceTotal} CZK` : "")}
+          ${renderAppChip(formatMosPaymentStatus(ticket.paymentStatus))}
+        </div>
+        <div class="app-card-details">
+          <div class="app-detail-row"><span>SPZ</span><span>${escapeHtml(ticket.licensePlate || body.licensePlate || "-")}</span></div>
+          <div class="app-detail-row"><span>Od</span><span>${escapeHtml(formatDate(ticket.parkingFrom))}</span></div>
+          <div class="app-detail-row"><span>Do</span><span>${escapeHtml(formatDate(ticket.parkingTo))}</span></div>
+          <div class="app-detail-row"><span>Ticket GUID</span><span>${escapeHtml(ticket.ticketGUID || "-")}</span></div>
+          <div class="app-detail-row"><span>Doklad</span><span>${escapeHtml(ticket.formattedReceiptNumber || "-")}</span></div>
+          <div class="app-detail-row"><span>Reference</span><span>${escapeHtml(body.paymentGWReference || "-")}</span></div>
+        </div>
+        ${body.paymentGWRedirectURL ? `
+          <div class="app-card-actions">
+            <a class="app-card-link" href="${escapeHtml(body.paymentGWRedirectURL)}" target="_blank" rel="noopener">Otevřít platební bránu</a>
+          </div>` : ""}
+      </article>
+    </div>
+  `;
+}
+
+function renderMosSavedCardPaymentCardHtml(body) {
+  const ticket = body.ticket || {};
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>${escapeHtml(body.paymentSuccessful ? "Platba uloženou kartou proběhla" : "Výsledek platby uloženou kartou")}</strong>
+        <p>${escapeHtml(body.paymentInProgress ? "Platba je stále ve zpracování." : (body.resultMessage || "MOS vrátil výsledek tokenové platby."))}</p>
+        <div class="app-card-meta">
+          ${renderAppChip(ticket.sectionCode ? `Zóna ${ticket.sectionCode}` : "MOS")}
+          ${renderAppChip(ticket.acceptedMinutes ? `${ticket.acceptedMinutes} min` : "")}
+          ${renderAppChip(ticket.priceTotal !== undefined ? `${ticket.priceTotal} CZK` : "")}
+          ${renderAppChip(formatMosPaymentStatus(ticket.paymentStatus))}
+        </div>
+        <div class="app-card-details">
+          <div class="app-detail-row"><span>SPZ</span><span>${escapeHtml(ticket.licensePlate || "-")}</span></div>
+          <div class="app-detail-row"><span>Od</span><span>${escapeHtml(formatDate(ticket.parkingFrom))}</span></div>
+          <div class="app-detail-row"><span>Do</span><span>${escapeHtml(formatDate(ticket.parkingTo))}</span></div>
+          <div class="app-detail-row"><span>Ticket GUID</span><span>${escapeHtml(ticket.ticketGUID || "-")}</span></div>
+          <div class="app-detail-row"><span>Stav platby</span><span>${escapeHtml(formatMosPaymentStatus(ticket.paymentStatus))}</span></div>
+          <div class="app-detail-row"><span>PaymentInProgress</span><span>${escapeHtml(formatBooleanAnswer(body.paymentInProgress))}</span></div>
+          <div class="app-detail-row"><span>PaymentSuccessful</span><span>${escapeHtml(formatBooleanAnswer(body.paymentSuccessful))}</span></div>
+        </div>
+      </article>
+    </div>
+  `;
+}
+
+function renderMosTicketInfoCardHtml(ticket) {
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>${escapeHtml(ticket.licensePlate || "MOS ticket")}</strong>
+        <p>${escapeHtml(ticket.sectionCode || ticket.parkMachineCode || "Parkovací ticket")}</p>
+        <div class="app-card-meta">
+          ${renderAppChip(ticket.priceTotal !== undefined ? `${ticket.priceTotal} CZK` : "")}
+          ${renderAppChip(ticket.acceptedMinutes ? `${ticket.acceptedMinutes} min` : "")}
+          ${renderAppChip(formatMosPaymentStatus(ticket.paymentStatus))}
+        </div>
+        <div class="app-card-details">
+          <div class="app-detail-row"><span>Ticket GUID</span><span>${escapeHtml(ticket.ticketGUID || "-")}</span></div>
+          <div class="app-detail-row"><span>Od</span><span>${escapeHtml(formatDate(ticket.parkingFrom))}</span></div>
+          <div class="app-detail-row"><span>Do</span><span>${escapeHtml(formatDate(ticket.parkingTo))}</span></div>
+          <div class="app-detail-row"><span>Doklad</span><span>${escapeHtml(ticket.formattedReceiptNumber || "-")}</span></div>
+        </div>
+      </article>
+    </div>
+  `;
+}
+
 function formatBooleanAnswer(value) {
   if (value === true) {
     return "ano";
@@ -4449,6 +4623,26 @@ function formatBooleanAnswer(value) {
   }
 
   return "-";
+}
+
+function formatMosPaymentStatus(value) {
+  if (value === 0) {
+    return "Ordered";
+  }
+
+  if (value === 1) {
+    return "Authorized";
+  }
+
+  if (value === 2) {
+    return "Paid";
+  }
+
+  if (value === 3) {
+    return "Cancelled";
+  }
+
+  return value !== undefined && value !== null ? String(value) : "";
 }
 
 function renderEmptyAppCardHtml(title, text) {
@@ -4843,6 +5037,36 @@ function isSavedCardPaymentResponse(value) {
     && !Array.isArray(value)
     && value.parkingTicket
     && typeof value.parkingTicket === "object";
+}
+
+function isMosParkingOrderResponse(value) {
+  return value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && "success" in value
+    && value.ticket
+    && typeof value.ticket === "object"
+    && "ticketGUID" in value.ticket;
+}
+
+function isMosSavedCardPaymentResponse(value) {
+  return value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && "paymentSuccessful" in value
+    && "paymentInProgress" in value
+    && value.ticket
+    && typeof value.ticket === "object"
+    && "ticketGUID" in value.ticket;
+}
+
+function isMosTicketInfoResponse(value) {
+  return value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && "ticketGUID" in value
+    && "paymentStatus" in value
+    && ("parkingFrom" in value || "dateCreated" in value);
 }
 
 function isSavedVehiclesStep(step) {

@@ -1,0 +1,378 @@
+{
+  "version": 1,
+  "name": "MOS Parking - uložená karta",
+  "description": "Přímé diagnostické scénáře nad pre-parking MOS API.",
+  "scenarios": [
+    {
+      "id": "mos-parking-saved-card-diagnostic",
+      "title": "MOS - platba uloženou kartou",
+      "description": "Diagnostický průchod platbou parkování přímo proti MOS API, bez PidLitacka BE.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["parking", "payment", "cards", "diagnostics", "mos"],
+      "app": {
+        "section": "parking",
+        "title": "Parkování",
+        "subtitle": "Přímé volání MOS API"
+      },
+      "instructions": [
+        "V panelu Přístup nejprve vložte MOS API klíč.",
+        "První část scénáře založí parkování přes běžnou kartu s požadavkem na vytvoření tokenu.",
+        "Po zaplacení na platební bráně vložte návratový payload do kroku zpracování výsledku brány.",
+        "Pro část s uloženou kartou je potřeba doplnit paymentGWToken. Swagger jej popisuje jako token získaný z OrderTicketResponse/payment gateway flow; pokud jej MOS nevrátí přímo, vložte jej ručně podle dostupných diagnostických dat."
+      ],
+      "steps": [
+        {
+          "id": "mos-create-tokenizing-street-parking",
+          "title": "Založit parkování s tokenizací karty",
+          "description": "Založí street parking ticket přes MOS a vyžádá vytvoření tokenu karty.",
+          "fields": [
+            {
+              "name": "licensePlate",
+              "label": "SPZ",
+              "type": "text",
+              "value": "1ABC222A"
+            },
+            {
+              "name": "email",
+              "label": "E-mail",
+              "type": "email",
+              "value": "adams.k@litacka.cz"
+            },
+            {
+              "name": "phone",
+              "label": "Telefon",
+              "type": "text",
+              "value": "777888999"
+            },
+            {
+              "name": "sectionCode",
+              "label": "Zóna",
+              "type": "text",
+              "value": "P7-0127"
+            },
+            {
+              "name": "requestedMinutes",
+              "label": "Délka parkování",
+              "type": "number",
+              "value": "30",
+              "min": 1,
+              "step": 15,
+              "suffix": "min"
+            },
+            {
+              "name": "paymentGWReturnURL",
+              "label": "Návratová URL",
+              "type": "url",
+              "value": "http://127.0.0.1:5500/html/GwResponsePage.html"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/api/v1/Tickets/streetParking",
+            "body": {
+              "licensePlate": "{{form.licensePlate}}",
+              "email": "{{form.email}}",
+              "phone": "{{form.phone}}",
+              "sectionCode": "{{form.sectionCode}}",
+              "parkMachineCode": null,
+              "requestedMinutes": "{{form.requestedMinutes}}",
+              "ticketPayment": {
+                "paymentMethod": 0,
+                "createToken": true,
+                "paymentGWToken": null,
+                "paymentGWBrowserData": null,
+                "paymentGWReturnURL": "{{form.paymentGWReturnURL}}",
+                "autoProcessPaymentGWResult": false,
+                "sdkUsed": false,
+                "sdk": null,
+                "paymentData": null
+              },
+              "language": "cs"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.success",
+                "equals": true
+              }
+            ]
+          },
+          "extract": {
+            "mosTokenizingTicketGuid": "$.ticket.ticketGUID",
+            "mosTokenizingPaymentStatus": "$.ticket.paymentStatus",
+            "mosPaymentGwReference": "$.paymentGWReference"
+          }
+        },
+        {
+          "id": "mos-process-tokenizing-gateway-result",
+          "title": "Zpracovat výsledek platební brány",
+          "description": "Po zaplacení na bráně vložte celý návratový payload. MOS tím dokončí platbu a tokenizační výsledek.",
+          "fields": [
+            {
+              "name": "gatewayResultPayload",
+              "label": "Návratový payload z platební brány",
+              "type": "textarea",
+              "rows": 5,
+              "placeholder": "payId=...&dttm=...&resultCode=0&..."
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/api/v1/Payment/GatewayResult/Process",
+            "contentType": "text/plain",
+            "body": "{{form.gatewayResultPayload}}"
+          },
+          "expected": {
+            "status": 200
+          },
+          "extract": {
+            "mosTokenizingPaymentSuccessful": "$.paymentSuccessful",
+            "mosTokenizingTicketGuid": "$.ticket.ticketGUID",
+            "mosTokenizingPaymentStatus": "$.ticket.paymentStatus"
+          }
+        },
+        {
+          "id": "mos-check-tokenizing-ticket",
+          "title": "Ověřit stav prvního ticketu",
+          "description": "Zkontroluje stav ticketu po zpracování návratu z platební brány.",
+          "requiresContext": ["mosTokenizingTicketGuid"],
+          "request": {
+            "method": "POST",
+            "path": "/api/v1/Tickets/streetParking/{{context.mosTokenizingTicketGuid}}/checkStatus"
+          },
+          "expected": {
+            "status": 200
+          },
+          "extract": {
+            "mosTokenizingPaymentStatus": "$.paymentStatus"
+          }
+        },
+        {
+          "id": "mos-create-street-parking-with-token",
+          "title": "Založit parkování uloženou kartou",
+          "description": "Založí navazující parkování a jako platební metodu pošle token uložené karty.",
+          "fields": [
+            {
+              "name": "licensePlate",
+              "label": "SPZ",
+              "type": "text",
+              "value": "1ABC222A"
+            },
+            {
+              "name": "email",
+              "label": "E-mail",
+              "type": "email",
+              "value": "adams.k@litacka.cz"
+            },
+            {
+              "name": "phone",
+              "label": "Telefon",
+              "type": "text",
+              "value": "777888999"
+            },
+            {
+              "name": "sectionCode",
+              "label": "Zóna",
+              "type": "text",
+              "value": "P7-0127"
+            },
+            {
+              "name": "requestedMinutes",
+              "label": "Délka parkování",
+              "type": "number",
+              "value": "30",
+              "min": 1,
+              "step": 15,
+              "suffix": "min"
+            },
+            {
+              "name": "paymentGWToken",
+              "label": "Payment GW token uložené karty",
+              "type": "text",
+              "placeholder": "Token získaný z tokenizačního flow"
+            },
+            {
+              "name": "paymentGWReturnURL",
+              "label": "Návratová URL",
+              "type": "url",
+              "value": "http://127.0.0.1:5500/html/GwResponsePage.html"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/api/v1/Tickets/streetParking",
+            "body": {
+              "licensePlate": "{{form.licensePlate}}",
+              "email": "{{form.email}}",
+              "phone": "{{form.phone}}",
+              "sectionCode": "{{form.sectionCode}}",
+              "parkMachineCode": null,
+              "requestedMinutes": "{{form.requestedMinutes}}",
+              "ticketPayment": {
+                "paymentMethod": 1,
+                "createToken": false,
+                "paymentGWToken": "{{form.paymentGWToken}}",
+                "paymentGWBrowserData": {
+                  "acceptHeader": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                  "javaEnabled": false,
+                  "language": "cs-CZ",
+                  "colorDepth": 24,
+                  "screenWidth": 390,
+                  "screenHeight": 844,
+                  "timezone": -60,
+                  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
+                  "challengeWindowSize": "05",
+                  "javascriptEnabled": true
+                },
+                "paymentGWReturnURL": "{{form.paymentGWReturnURL}}",
+                "autoProcessPaymentGWResult": false,
+                "sdkUsed": false,
+                "sdk": null,
+                "paymentData": null
+              },
+              "language": "cs"
+            }
+          },
+          "remember": {
+            "mosPaymentGwToken": "{{form.paymentGWToken}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.success",
+                "equals": true
+              }
+            ]
+          },
+          "extract": {
+            "mosSavedCardTicketGuid": "$.ticket.ticketGUID",
+            "mosSavedCardPaymentStatus": "$.ticket.paymentStatus"
+          }
+        },
+        {
+          "id": "mos-check-token-ticket-before-process",
+          "title": "Ověřit stav před process",
+          "description": "Než se zavolá token payment process, ověří aktuální stav ticketu.",
+          "requiresContext": ["mosSavedCardTicketGuid"],
+          "request": {
+            "method": "POST",
+            "path": "/api/v1/Tickets/streetParking/{{context.mosSavedCardTicketGuid}}/checkStatus"
+          },
+          "expected": {
+            "status": 200
+          },
+          "extract": {
+            "mosSavedCardPaymentStatus": "$.paymentStatus"
+          }
+        },
+        {
+          "id": "mos-process-customer-token-payment",
+          "title": "Odeslat platbu uloženou kartou",
+          "description": "Zavolá MOS CustomerTokenPayment/Process. Pokud už je ticket zaplacený, krok se jen označí upozorněním.",
+          "warningWhen": [
+            {
+              "conditions": [
+                {
+                  "contextEquals": {
+                    "key": "mosSavedCardPaymentStatus",
+                    "value": 2
+                  }
+                }
+              ],
+              "appMessage": "MOS už hlásí Paid. Tento process krok nespouštějte a pokračujte ověřením stavu nebo dokladem.",
+              "message": "Provedení tohoto kroku je nežádoucí, protože ticket už je zaplacený.",
+              "detail": "Pokračujte na kontrolu stavu nebo stažení dokladu."
+            }
+          ],
+          "requiresContext": ["mosSavedCardTicketGuid", "mosPaymentGwToken"],
+          "request": {
+            "method": "POST",
+            "path": "/api/v1/Payment/CustomerTokenPayment/Process",
+            "body": {
+              "ticketGUID": "{{context.mosSavedCardTicketGuid}}",
+              "paymentGWToken": "{{context.mosPaymentGwToken}}",
+              "paymentGWBrowserData": {
+                "acceptHeader": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "javaEnabled": false,
+                "language": "cs-CZ",
+                "colorDepth": 24,
+                "screenWidth": 390,
+                "screenHeight": 844,
+                "timezone": -60,
+                "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
+                "challengeWindowSize": "05",
+                "javascriptEnabled": true
+              }
+            }
+          },
+          "expected": {
+            "status": 200,
+            "warnings": [
+              {
+                "appMessage": "Platba ještě není dokončená. Počkejte asi 30 sekund a spusťte tento krok znovu.",
+                "message": "Tokenová platba je stále ve zpracování. Počkejte přibližně 30 sekund a spusťte tento krok znovu.",
+                "when": [
+                  {
+                    "path": "$.paymentSuccessful",
+                    "equals": false
+                  },
+                  {
+                    "path": "$.paymentInProgress",
+                    "equals": true
+                  }
+                ]
+              }
+            ],
+            "assertions": [
+              {
+                "path": "$.paymentSuccessful",
+                "equals": true
+              },
+              {
+                "path": "$.paymentInProgress",
+                "equals": false
+              }
+            ]
+          },
+          "extract": {
+            "mosSavedCardPaymentStatus": "$.ticket.paymentStatus"
+          }
+        },
+        {
+          "id": "mos-check-token-ticket-after-process",
+          "title": "Ověřit stav po process",
+          "description": "Znovu ověří stav ticketu po tokenové platbě.",
+          "requiresContext": ["mosSavedCardTicketGuid"],
+          "request": {
+            "method": "POST",
+            "path": "/api/v1/Tickets/streetParking/{{context.mosSavedCardTicketGuid}}/checkStatus"
+          },
+          "expected": {
+            "status": 200
+          },
+          "extract": {
+            "mosSavedCardPaymentStatus": "$.paymentStatus"
+          }
+        },
+        {
+          "id": "mos-download-token-ticket-receipt",
+          "title": "Stáhnout MOS doklad",
+          "description": "Stáhne PDF doklad přímo z MOS podle ticket GUID.",
+          "requiresContext": ["mosSavedCardTicketGuid"],
+          "request": {
+            "method": "GET",
+            "path": "/api/v1/Receipts/{{context.mosSavedCardTicketGuid}}/pdf"
+          },
+          "expected": {
+            "status": 200
+          }
+        }
+      ]
+    }
+  ]
+}
