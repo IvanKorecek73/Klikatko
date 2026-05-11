@@ -4,8 +4,8 @@
   "packs": [
     {
       "id": "mos-parking-saved-card",
-      "name": "MOS Parking - uložená karta",
-      "description": "První diagnostický pack pro přímé volání pre-parking MOS API.",
+      "name": "MOS Parking - obecné parkování",
+      "description": "Diagnostický pack pro přímé volání pre-parking MOS API v oblasti parkování.",
       "file": "saved-card-payment.json"
     }
   ]

@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "name": "MOS Parking - uložená karta",
-  "description": "Přímé diagnostické scénáře nad pre-parking MOS API.",
+  "name": "MOS Parking - obecné parkování",
+  "description": "Přímé diagnostické scénáře nad pre-parking MOS API v oblasti parkování.",
   "scenarios": [
     {
       "id": "mos-parking-saved-card-diagnostic",
