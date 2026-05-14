@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "PidLitacka - AccountCreation",
+  "name": "PidLitacka - založení účtu",
   "scenarios": [
     {
       "id": "account-creation-new-user",

@@ -4,8 +4,8 @@
   "packs": [
     {
       "id": "pidlitacka-feature-729",
-      "name": "PidLitacka - AccountCreation",
-      "description": "První ruční pack pro account creation nad větví feature/729_overeni_exsitence_uzivatele.",
+      "name": "PidLitacka - založení účtu",
+      "description": "Scénáře pro založení účtu, aktivaci, reaktivaci a obnovu hesla.",
       "file": "feature-729-overeni-existence-uzivatele.json"
     },
     {
