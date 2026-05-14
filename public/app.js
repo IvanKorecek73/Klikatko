@@ -2236,6 +2236,10 @@ function getMobileActionTitle(step) {
     return "Stav klientských dat";
   }
 
+  if (path.includes("/v1/auth/client/data")) {
+    return "Uložení klientských dat";
+  }
+
   if (path.includes("/v1/parking/tickets/street-parking")) {
     if (text.includes("prodlou") || text.includes("extension") || text.includes("saved-card")) {
       return "Prodloužení parkování";
@@ -2314,6 +2318,14 @@ function getMobileActionSubtitle(step) {
     return "Uliční parkování v zadané zóně.";
   }
 
+  if (path.includes("/v1/auth/client/status")) {
+    return "Stav klientského profilu aktuálního uživatele.";
+  }
+
+  if (path.includes("/v1/auth/client/data")) {
+    return "Uložení osobních údajů klienta.";
+  }
+
   if (path.includes("/v1/auth/")) {
     return "Účet uživatele v PidLitacka.";
   }
@@ -2362,6 +2374,9 @@ function renderField(field, value) {
     }
 
     input.value = String(value ?? "");
+  } else if (field.type === "checkbox") {
+    input.checked = value === true || value === "true";
+    input.value = "true";
   } else {
     input.value = value;
   }
@@ -2386,10 +2401,10 @@ function renderField(field, value) {
     input.placeholder = field.placeholder;
   }
 
-  input.addEventListener("input", () => {
-    state.values[field.name] = input.value;
+  input.addEventListener(field.type === "checkbox" ? "change" : "input", () => {
+    state.values[field.name] = field.type === "checkbox" ? String(input.checked) : input.value;
 
-    if (shouldTrackDirty(field) && input.value !== input.dataset.defaultValue) {
+    if (shouldTrackDirty(field) && state.values[field.name] !== input.dataset.defaultValue) {
       state.dirty = true;
       renderModeBanner();
     }
@@ -3574,6 +3589,14 @@ function makeAppMessage(body, status, level) {
     return "Klientský profil i osobní údaje jsou k dispozici.";
   }
 
+  if (isSaveClientDataResponse(body)) {
+    if (body.created) {
+      return "Klient byl založen a osobní údaje byly uloženy.";
+    }
+
+    return "Osobní údaje existujícího klienta byly uloženy.";
+  }
+
   if (body.moduleName && body.status) {
     return `Služba ${body.moduleName} je ve stavu ${body.status}.`;
   }
@@ -4337,6 +4360,10 @@ function buildAppCardsHtml(body, step = currentStep()) {
     return renderClientStatusCardHtml(body);
   }
 
+  if (isSaveClientDataResponse(body)) {
+    return renderSaveClientDataCardHtml(body);
+  }
+
   if (typeof body.exists === "boolean" && typeof body.isActive === "boolean") {
     return buildCardListHtml([body], item => ({
       title: "Stav účtu",
@@ -4698,6 +4725,42 @@ function renderClientStatusCardHtml(body) {
   `;
 }
 
+function renderSaveClientDataCardHtml(body) {
+  const client = body.client || {};
+  const personalData = client.personalData || {};
+  const displayName = personalData.displayName
+    || [personalData.firstName, personalData.lastName].filter(Boolean).join(" ")
+    || "Klient";
+
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>${escapeHtml(body.created ? "Klient založen" : "Klientská data uložena")}</strong>
+        <p>${escapeHtml(body.created
+          ? "Backend vytvořil klientský profil a uložil osobní údaje."
+          : "Backend aktualizoval osobní údaje existujícího klienta.")}</p>
+        <div class="app-card-meta">
+          ${renderAppChip(getClientStatusLabel(body.status))}
+          ${renderAppChip(body.created ? "nový klient" : "existující klient")}
+          ${renderAppChip(body.personalDataConsentApplied ? "souhlas uložen" : "souhlas neodeslán")}
+        </div>
+        <div class="app-card-details">
+          <div class="app-detail-row"><span>Výsledek</span><span>${escapeHtml(getClientStatusLabel(body.status))}</span></div>
+          <div class="app-detail-row"><span>Klient založen</span><span>${escapeHtml(formatBooleanAnswer(body.created))}</span></div>
+          <div class="app-detail-row"><span>Souhlas s údaji</span><span>${escapeHtml(formatBooleanAnswer(body.personalDataConsentApplied))}</span></div>
+          <div class="app-detail-row"><span>Osobní údaje</span><span>${escapeHtml(formatBooleanAnswer(client.hasPersonalData))}</span></div>
+          ${personalData ? `
+            <div class="app-detail-row"><span>Jméno</span><span>${escapeHtml(displayName)}</span></div>
+            ${personalData.mobile ? `<div class="app-detail-row"><span>Telefon</span><span>${escapeHtml(personalData.mobile)}</span></div>` : ""}
+            ${personalData.dateOfBirth ? `<div class="app-detail-row"><span>Datum narození</span><span>${escapeHtml(formatDate(personalData.dateOfBirth))}</span></div>` : ""}
+            ${personalData.registeredNumberIsic ? `<div class="app-detail-row"><span>ISIC</span><span>${escapeHtml(personalData.registeredNumberIsic)}</span></div>` : ""}
+          ` : ""}
+        </div>
+      </article>
+    </div>
+  `;
+}
+
 function getClientStatusTitle(body) {
   if (!body.exists) {
     return "Klient zatím není založen";
@@ -4978,6 +5041,10 @@ function summarizeBody(body) {
   }
 
   if (isClientStatusResponse(body)) {
+    return [];
+  }
+
+  if (isSaveClientDataResponse(body)) {
     return [];
   }
 
@@ -5300,6 +5367,18 @@ function isClientStatusResponse(value) {
     && typeof value.status === "string"
     && ("personalData" in value)
     && ("photo" in value);
+}
+
+function isSaveClientDataResponse(value) {
+  return value
+    && typeof value === "object"
+    && typeof value.status === "string"
+    && typeof value.created === "boolean"
+    && typeof value.personalDataConsentApplied === "boolean"
+    && value.client
+    && typeof value.client === "object"
+    && typeof value.client.exists === "boolean"
+    && typeof value.client.hasPersonalData === "boolean";
 }
 
 function getParkingPriceSuccessful(value) {

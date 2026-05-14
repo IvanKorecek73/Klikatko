@@ -186,6 +186,387 @@
           }
         }
       ]
+    },
+    {
+      "id": "client-data-create-and-save",
+      "title": "Klientská data - založení klienta a uložení údajů",
+      "description": "Ověří celý první průchod: uživatel zatím není klientem, backend založí klientský profil a uloží jeho osobní údaje.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["Profil", "Klientská data", "Založení klienta", "Osobní údaje"],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Klientská data"
+      },
+      "instructions": [
+        "V panelu Přístup vyberte účet, který ještě nemá založený klientský profil.",
+        "První krok musí vrátit Missing.",
+        "Druhý krok pošle osobní údaje. Backend má klienta založit a uložit údaje.",
+        "Po úspěšném průchodu už účet nebude vhodný pro opakování tohoto scénáře jako nový klient."
+      ],
+      "steps": [
+        {
+          "id": "client-data-create-check-missing",
+          "title": "Ověřit, že klient zatím neexistuje",
+          "description": "Kontrola před uložením údajů má potvrdit, že pro účet ještě neexistuje klientský profil.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/auth/client/status"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.exists",
+                "equals": false
+              },
+              {
+                "path": "$.status",
+                "equals": "Missing"
+              }
+            ]
+          }
+        },
+        {
+          "id": "client-data-create-save",
+          "title": "Založit klienta a uložit osobní údaje",
+          "description": "Odešle osobní údaje, nastaví souhlas a očekává založení klienta.",
+          "fields": [
+            {
+              "name": "displayName",
+              "label": "Zobrazované jméno",
+              "type": "text",
+              "value": "Jan Testovací"
+            },
+            {
+              "name": "personalDataConsent",
+              "label": "Souhlas s osobními údaji",
+              "type": "checkbox",
+              "value": true
+            },
+            {
+              "name": "title",
+              "label": "Titul",
+              "type": "text",
+              "value": ""
+            },
+            {
+              "name": "firstName",
+              "label": "Jméno",
+              "type": "text",
+              "value": "Jan"
+            },
+            {
+              "name": "middleName",
+              "label": "Prostřední jméno",
+              "type": "text",
+              "value": ""
+            },
+            {
+              "name": "lastName",
+              "label": "Příjmení",
+              "type": "text",
+              "value": "Testovací"
+            },
+            {
+              "name": "mobile",
+              "label": "Telefon",
+              "type": "text",
+              "value": "+420777888999"
+            },
+            {
+              "name": "dateOfBirth",
+              "label": "Datum narození",
+              "type": "date",
+              "value": "1990-05-20"
+            },
+            {
+              "name": "loginPuk",
+              "label": "Login PUK",
+              "type": "text",
+              "value": "PUK123"
+            },
+            {
+              "name": "registeredNumberIsic",
+              "label": "ISIC",
+              "type": "text",
+              "value": "ISIC123"
+            },
+            {
+              "name": "language",
+              "label": "Jazyk",
+              "type": "text",
+              "value": "cs"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/client/data",
+            "body": {
+              "displayName": "{{form.displayName}}",
+              "personalDataConsent": "{{form.personalDataConsent}}",
+              "title": "{{form.title}}",
+              "firstName": "{{form.firstName}}",
+              "middleName": "{{form.middleName}}",
+              "lastName": "{{form.lastName}}",
+              "mobile": "{{form.mobile}}",
+              "dateOfBirth": "{{form.dateOfBirth}}",
+              "loginPuk": "{{form.loginPuk}}",
+              "registeredNumberIsic": "{{form.registeredNumberIsic}}",
+              "language": "{{form.language}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.created",
+                "equals": true
+              },
+              {
+                "path": "$.personalDataConsentApplied",
+                "equals": true
+              },
+              {
+                "path": "$.client.exists",
+                "equals": true
+              },
+              {
+                "path": "$.client.hasPersonalData",
+                "equals": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "client-data-create-verify-completed",
+          "title": "Ověřit uložená klientská data",
+          "description": "Znovu načte stav klienta a ověří, že osobní údaje jsou dostupné.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/auth/client/status"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.hasPersonalData",
+                "equals": true
+              },
+              {
+                "path": "$.personalData",
+                "notEmpty": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-data-save-existing",
+      "title": "Klientská data - uložení údajů existujícího klienta",
+      "description": "Ověří uložení osobních údajů pro účet, který už klientský profil má.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["Profil", "Klientská data", "Osobní údaje"],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Klientská data"
+      },
+      "instructions": [
+        "V panelu Přístup vyberte účet, který už má založený klientský profil.",
+        "První krok má potvrdit, že klient existuje.",
+        "Druhý krok uloží nebo aktualizuje osobní údaje bez očekávání vytvoření nového klienta."
+      ],
+      "steps": [
+        {
+          "id": "client-data-existing-check",
+          "title": "Ověřit existujícího klienta",
+          "description": "Kontrola má potvrdit, že klientský profil už existuje.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/auth/client/status"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.exists",
+                "equals": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "client-data-existing-save",
+          "title": "Uložit osobní údaje existujícího klienta",
+          "description": "Aktualizuje osobní údaje klienta a neočekává vytvoření nového klienta.",
+          "fields": [
+            {
+              "name": "displayName",
+              "label": "Zobrazované jméno",
+              "type": "text",
+              "value": "Jana Testovací"
+            },
+            {
+              "name": "personalDataConsent",
+              "label": "Souhlas s osobními údaji",
+              "type": "checkbox",
+              "value": true
+            },
+            {
+              "name": "title",
+              "label": "Titul",
+              "type": "text",
+              "value": ""
+            },
+            {
+              "name": "firstName",
+              "label": "Jméno",
+              "type": "text",
+              "value": "Jana"
+            },
+            {
+              "name": "middleName",
+              "label": "Prostřední jméno",
+              "type": "text",
+              "value": ""
+            },
+            {
+              "name": "lastName",
+              "label": "Příjmení",
+              "type": "text",
+              "value": "Testovací"
+            },
+            {
+              "name": "mobile",
+              "label": "Telefon",
+              "type": "text",
+              "value": "+420777888999"
+            },
+            {
+              "name": "dateOfBirth",
+              "label": "Datum narození",
+              "type": "date",
+              "value": "1990-05-20"
+            },
+            {
+              "name": "loginPuk",
+              "label": "Login PUK",
+              "type": "text",
+              "value": "PUK123"
+            },
+            {
+              "name": "registeredNumberIsic",
+              "label": "ISIC",
+              "type": "text",
+              "value": "ISIC123"
+            },
+            {
+              "name": "language",
+              "label": "Jazyk",
+              "type": "text",
+              "value": "cs"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/client/data",
+            "body": {
+              "displayName": "{{form.displayName}}",
+              "personalDataConsent": "{{form.personalDataConsent}}",
+              "title": "{{form.title}}",
+              "firstName": "{{form.firstName}}",
+              "middleName": "{{form.middleName}}",
+              "lastName": "{{form.lastName}}",
+              "mobile": "{{form.mobile}}",
+              "dateOfBirth": "{{form.dateOfBirth}}",
+              "loginPuk": "{{form.loginPuk}}",
+              "registeredNumberIsic": "{{form.registeredNumberIsic}}",
+              "language": "{{form.language}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.created",
+                "equals": false
+              },
+              {
+                "path": "$.client.exists",
+                "equals": true
+              },
+              {
+                "path": "$.client.hasPersonalData",
+                "equals": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-data-validation",
+      "title": "Klientská data - povinné údaje",
+      "description": "Negativní scénář: ověří, že backend odmítne uložení bez povinných klientských údajů.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": false,
+      "tags": ["Profil", "Klientská data", "Negativní", "Validace"],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Klientská data"
+      },
+      "instructions": [
+        "Scénář záměrně posílá prázdné povinné hodnoty.",
+        "Správný výsledek je HTTP 400 s validační chybou."
+      ],
+      "steps": [
+        {
+          "id": "client-data-validation-step",
+          "title": "Odeslat neúplná klientská data",
+          "description": "Backend má odmítnout požadavek bez povinných údajů.",
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/client/data",
+            "body": {
+              "displayName": "",
+              "personalDataConsent": true,
+              "title": "",
+              "firstName": "",
+              "middleName": "",
+              "lastName": "",
+              "mobile": "",
+              "dateOfBirth": "0001-01-01",
+              "loginPuk": "",
+              "registeredNumberIsic": "",
+              "language": "cs"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "outcome": "expectedError"
+          }
+        }
+      ]
     }
   ]
 }
