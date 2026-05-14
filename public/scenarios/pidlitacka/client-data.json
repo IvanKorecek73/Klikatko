@@ -19,7 +19,7 @@
       "instructions": [
         "Nejprve se přihlaste v panelu Přístup.",
         "Spusťte krok a ověřte, jaký stav klientských dat backend pro daného uživatele vrací.",
-        "Možné stavy jsou Missing, PendingPersonalData a Completed."
+        "Možné stavy jsou InactiveUser, Missing, PendingPersonalData a Completed."
       ],
       "steps": [
         {
@@ -36,6 +36,58 @@
               {
                 "path": "$.status",
                 "notEmpty": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-status-inactive-user",
+      "title": "Klientská data - neaktivní uživatel",
+      "description": "Ověří stav účtu, který není aktivní a nemůže pokračovat v založení klienta ani ukládání osobních údajů.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["Profil", "Klientská data", "Neaktivní uživatel", "Negativní"],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Klientská data"
+      },
+      "instructions": [
+        "V panelu Přístup vyberte účet, který existuje, ale není aktivní.",
+        "Očekávaný výsledek je InactiveUser: uživatel není aktivní a scénáře založení klienta nesmí pokračovat.",
+        "Pokud se vrátí jiný stav, účet není vhodný pro tento konkrétní scénář."
+      ],
+      "steps": [
+        {
+          "id": "client-status-inactive-user-step",
+          "title": "Ověřit neaktivního uživatele",
+          "description": "Kontrola má potvrdit, že přihlášený uživatel není aktivní.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/auth/client/status"
+          },
+          "expected": {
+            "status": 200,
+            "outcome": "expectedError",
+            "assertions": [
+              {
+                "path": "$.isUserActive",
+                "equals": false
+              },
+              {
+                "path": "$.exists",
+                "equals": false
+              },
+              {
+                "path": "$.hasPersonalData",
+                "equals": false
+              },
+              {
+                "path": "$.status",
+                "equals": "InactiveUser"
               }
             ]
           }
@@ -75,6 +127,10 @@
               {
                 "path": "$.exists",
                 "equals": false
+              },
+              {
+                "path": "$.isUserActive",
+                "equals": true
               },
               {
                 "path": "$.hasPersonalData",
@@ -124,6 +180,10 @@
                 "equals": true
               },
               {
+                "path": "$.isUserActive",
+                "equals": true
+              },
+              {
                 "path": "$.hasPersonalData",
                 "equals": false
               },
@@ -168,6 +228,10 @@
             "assertions": [
               {
                 "path": "$.exists",
+                "equals": true
+              },
+              {
+                "path": "$.isUserActive",
                 "equals": true
               },
               {
@@ -221,6 +285,10 @@
               {
                 "path": "$.exists",
                 "equals": false
+              },
+              {
+                "path": "$.isUserActive",
+                "equals": true
               },
               {
                 "path": "$.status",
@@ -338,6 +406,10 @@
                 "equals": true
               },
               {
+                "path": "$.client.isUserActive",
+                "equals": true
+              },
+              {
                 "path": "$.client.hasPersonalData",
                 "equals": true
               }
@@ -358,6 +430,10 @@
               {
                 "path": "$.status",
                 "equals": "Completed"
+              },
+              {
+                "path": "$.isUserActive",
+                "equals": true
               },
               {
                 "path": "$.hasPersonalData",
@@ -404,6 +480,10 @@
             "assertions": [
               {
                 "path": "$.exists",
+                "equals": true
+              },
+              {
+                "path": "$.isUserActive",
                 "equals": true
               }
             ]
@@ -511,6 +591,10 @@
               },
               {
                 "path": "$.client.exists",
+                "equals": true
+              },
+              {
+                "path": "$.client.isUserActive",
                 "equals": true
               },
               {

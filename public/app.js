@@ -3578,6 +3578,10 @@ function makeAppMessage(body, status, level) {
   }
 
   if (isClientStatusResponse(body)) {
+    if (body.isUserActive === false) {
+      return "Přihlášený uživatel není aktivní a nemůže pokračovat v založení klienta.";
+    }
+
     if (!body.exists) {
       return "Přihlášený uživatel zatím nemá založený klientský profil.";
     }
@@ -4698,12 +4702,14 @@ function renderClientStatusCardHtml(body) {
         <strong>${escapeHtml(getClientStatusTitle(body))}</strong>
         <p>${escapeHtml(getClientStatusText(body))}</p>
         <div class="app-card-meta">
+          ${renderAppChip(body.isUserActive ? "uživatel aktivní" : "uživatel neaktivní")}
           ${renderAppChip(body.exists ? "klient existuje" : "klient chybí")}
           ${renderAppChip(body.hasPersonalData ? "osobní údaje uložené" : "bez osobních údajů")}
           ${renderAppChip(getClientStatusLabel(body.status))}
         </div>
         <div class="app-card-details">
           <div class="app-detail-row"><span>Stav</span><span>${escapeHtml(getClientStatusLabel(body.status))}</span></div>
+          <div class="app-detail-row"><span>Uživatel aktivní</span><span>${escapeHtml(formatBooleanAnswer(body.isUserActive))}</span></div>
           <div class="app-detail-row"><span>Klient založen</span><span>${escapeHtml(formatBooleanAnswer(body.exists))}</span></div>
           <div class="app-detail-row"><span>Osobní údaje</span><span>${escapeHtml(formatBooleanAnswer(body.hasPersonalData))}</span></div>
           ${body.hasPersonalData ? `
@@ -4742,10 +4748,12 @@ function renderSaveClientDataCardHtml(body) {
         <div class="app-card-meta">
           ${renderAppChip(getClientStatusLabel(body.status))}
           ${renderAppChip(body.created ? "nový klient" : "existující klient")}
+          ${renderAppChip(client.isUserActive ? "uživatel aktivní" : "uživatel neaktivní")}
           ${renderAppChip(body.personalDataConsentApplied ? "souhlas uložen" : "souhlas neodeslán")}
         </div>
         <div class="app-card-details">
           <div class="app-detail-row"><span>Výsledek</span><span>${escapeHtml(getClientStatusLabel(body.status))}</span></div>
+          <div class="app-detail-row"><span>Uživatel aktivní</span><span>${escapeHtml(formatBooleanAnswer(client.isUserActive))}</span></div>
           <div class="app-detail-row"><span>Klient založen</span><span>${escapeHtml(formatBooleanAnswer(body.created))}</span></div>
           <div class="app-detail-row"><span>Souhlas s údaji</span><span>${escapeHtml(formatBooleanAnswer(body.personalDataConsentApplied))}</span></div>
           <div class="app-detail-row"><span>Osobní údaje</span><span>${escapeHtml(formatBooleanAnswer(client.hasPersonalData))}</span></div>
@@ -4762,6 +4770,10 @@ function renderSaveClientDataCardHtml(body) {
 }
 
 function getClientStatusTitle(body) {
+  if (body.isUserActive === false) {
+    return "Uživatel není aktivní";
+  }
+
   if (!body.exists) {
     return "Klient zatím není založen";
   }
@@ -4774,6 +4786,10 @@ function getClientStatusTitle(body) {
 }
 
 function getClientStatusText(body) {
+  if (body.isUserActive === false) {
+    return "Neaktivní uživatel nemůže pokračovat v založení klienta ani ukládání osobních údajů.";
+  }
+
   if (!body.exists) {
     return "Pro přihlášeného uživatele nebyl v Core MOS nalezen klientský profil.";
   }
@@ -4786,6 +4802,10 @@ function getClientStatusText(body) {
 }
 
 function getClientStatusLabel(value) {
+  if (value === "InactiveUser") {
+    return "Uživatel neaktivní";
+  }
+
   if (value === "Missing") {
     return "Chybí";
   }
@@ -5363,6 +5383,7 @@ function isClientStatusResponse(value) {
   return value
     && typeof value === "object"
     && typeof value.exists === "boolean"
+    && typeof value.isUserActive === "boolean"
     && typeof value.hasPersonalData === "boolean"
     && typeof value.status === "string"
     && ("personalData" in value)
@@ -5378,6 +5399,7 @@ function isSaveClientDataResponse(value) {
     && value.client
     && typeof value.client === "object"
     && typeof value.client.exists === "boolean"
+    && typeof value.client.isUserActive === "boolean"
     && typeof value.client.hasPersonalData === "boolean";
 }
 
