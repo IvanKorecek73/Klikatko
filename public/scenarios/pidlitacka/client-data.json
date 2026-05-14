@@ -1,0 +1,191 @@
+{
+  "version": 1,
+  "name": "PidLitacka - klientská data",
+  "description": "Scénáře pro ověření, zda má přihlášený uživatel založený klientský profil a osobní údaje.",
+  "scenarios": [
+    {
+      "id": "client-status-current-user",
+      "title": "Klientská data - stav přihlášeného uživatele",
+      "description": "Načte stav klientského profilu pro aktuálně přihlášeného uživatele. Scénář je obecný a nevyžaduje konkrétní stav účtu.",
+      "requiresAuth": true,
+      "smoke": true,
+      "manualInputRequired": false,
+      "tags": ["Profil", "Klientská data", "Ověření"],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Klientská data"
+      },
+      "instructions": [
+        "Nejprve se přihlaste v panelu Přístup.",
+        "Spusťte krok a ověřte, jaký stav klientských dat backend pro daného uživatele vrací.",
+        "Možné stavy jsou Missing, PendingPersonalData a Completed."
+      ],
+      "steps": [
+        {
+          "id": "client-status-current-user-step",
+          "title": "Načíst stav klientských dat",
+          "description": "Vrátí informaci, zda je přihlášený uživatel už klientem a zda má uložené osobní údaje.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/auth/client/status"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "notEmpty": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-status-missing",
+      "title": "Klientská data - uživatel bez klienta",
+      "description": "Ověří stav účtu, který ještě nemá založený klientský profil v Core MOS.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["Profil", "Klientská data", "Bez klienta"],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Klientská data"
+      },
+      "instructions": [
+        "V panelu Přístup vyberte nebo přidejte účet, který ještě nemá založený klientský profil.",
+        "Očekávaný výsledek je Missing: klient neexistuje a osobní údaje nejsou dostupné.",
+        "Pokud se vrátí jiný stav, účet už není vhodný pro tento konkrétní scénář."
+      ],
+      "steps": [
+        {
+          "id": "client-status-missing-step",
+          "title": "Ověřit chybějícího klienta",
+          "description": "Kontrola má potvrdit, že přihlášený uživatel zatím není klientem.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/auth/client/status"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.exists",
+                "equals": false
+              },
+              {
+                "path": "$.hasPersonalData",
+                "equals": false
+              },
+              {
+                "path": "$.status",
+                "equals": "Missing"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-status-pending-personal-data",
+      "title": "Klientská data - klient bez osobních údajů",
+      "description": "Ověří stav účtu, který už má klientský profil, ale ještě nemá uložené osobní údaje.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["Profil", "Klientská data", "Osobní údaje"],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Klientská data"
+      },
+      "instructions": [
+        "V panelu Přístup vyberte účet, který má v Core MOS založený klientský profil bez osobních údajů.",
+        "Očekávaný výsledek je PendingPersonalData: klient existuje, ale osobní údaje nejsou dostupné.",
+        "Tento stav bude důležitý pro navazující scénáře založení nebo uložení osobních údajů."
+      ],
+      "steps": [
+        {
+          "id": "client-status-pending-personal-data-step",
+          "title": "Ověřit klienta bez osobních údajů",
+          "description": "Kontrola má potvrdit, že klient existuje, ale osobní údaje ještě nejsou uložené.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/auth/client/status"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.exists",
+                "equals": true
+              },
+              {
+                "path": "$.hasPersonalData",
+                "equals": false
+              },
+              {
+                "path": "$.status",
+                "equals": "PendingPersonalData"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-status-completed",
+      "title": "Klientská data - klient s osobními údaji",
+      "description": "Ověří stav účtu, který má založený klientský profil i uložené osobní údaje.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["Profil", "Klientská data", "Osobní údaje"],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Klientská data"
+      },
+      "instructions": [
+        "V panelu Přístup vyberte účet, který už má uložené osobní údaje.",
+        "Očekávaný výsledek je Completed: klient existuje a backend vrátí osobní údaje.",
+        "Ve výstupu v mobilu zkontrolujte jméno, e-mail, telefon, datum narození a případně stav fotografie."
+      ],
+      "steps": [
+        {
+          "id": "client-status-completed-step",
+          "title": "Ověřit klienta s osobními údaji",
+          "description": "Kontrola má potvrdit, že klient existuje a osobní údaje jsou dostupné.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/auth/client/status"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.exists",
+                "equals": true
+              },
+              {
+                "path": "$.hasPersonalData",
+                "equals": true
+              },
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.personalData",
+                "notEmpty": true
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

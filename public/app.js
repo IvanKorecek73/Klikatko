@@ -2113,6 +2113,13 @@ function getMobileNavigation(step) {
     };
   }
 
+  if (text.includes("client/status")) {
+    return {
+      items: ["Profil", "Údaje", "Nastavení"],
+      activeIndex: 1
+    };
+  }
+
   if (isAccountStepText(text)) {
     if (text.includes("complete") || text.includes("activation")) {
       return {
@@ -2164,6 +2171,9 @@ function getMobileNavigation(step) {
 function isAccountStepText(text) {
   return includesAny(text, [
     "account",
+    "client/status",
+    "klient",
+    "klientsk",
     "auth/register",
     "auth/password",
     "password-recovery",
@@ -2220,6 +2230,10 @@ function getMobileActionTitle(step) {
 
   if (path.includes("/v1/parking/payment/card-token/process")) {
     return "Platba uloženou kartou";
+  }
+
+  if (path.includes("/v1/auth/client/status")) {
+    return "Stav klientských dat";
   }
 
   if (path.includes("/v1/parking/tickets/street-parking")) {
@@ -2628,6 +2642,10 @@ function getMobileDescription(step) {
   }
 
   if (isAccountStepText(text)) {
+    if (text.includes("client/status")) {
+      return "Klientská data a osobní údaje.";
+    }
+
     return "Založení a správa účtu.";
   }
 
@@ -3544,6 +3562,18 @@ function makeAppMessage(body, status, level) {
       : `Našli jsme ${count} cenových variant parkování.`;
   }
 
+  if (isClientStatusResponse(body)) {
+    if (!body.exists) {
+      return "Přihlášený uživatel zatím nemá založený klientský profil.";
+    }
+
+    if (!body.hasPersonalData) {
+      return "Klientský profil existuje, ale osobní údaje zatím nejsou uložené.";
+    }
+
+    return "Klientský profil i osobní údaje jsou k dispozici.";
+  }
+
   if (body.moduleName && body.status) {
     return `Služba ${body.moduleName} je ve stavu ${body.status}.`;
   }
@@ -4303,6 +4333,10 @@ function buildAppCardsHtml(body, step = currentStep()) {
     return renderMosTicketInfoCardHtml(body);
   }
 
+  if (isClientStatusResponse(body)) {
+    return renderClientStatusCardHtml(body);
+  }
+
   if (typeof body.exists === "boolean" && typeof body.isActive === "boolean") {
     return buildCardListHtml([body], item => ({
       title: "Stav účtu",
@@ -4623,6 +4657,87 @@ function renderMosTicketInfoCardHtml(ticket) {
   `;
 }
 
+function renderClientStatusCardHtml(body) {
+  const personalData = body.personalData || {};
+  const photo = body.photo || {};
+  const displayName = personalData.displayName
+    || [personalData.firstName, personalData.lastName].filter(Boolean).join(" ")
+    || personalData.email
+    || "Přihlášený uživatel";
+
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>${escapeHtml(getClientStatusTitle(body))}</strong>
+        <p>${escapeHtml(getClientStatusText(body))}</p>
+        <div class="app-card-meta">
+          ${renderAppChip(body.exists ? "klient existuje" : "klient chybí")}
+          ${renderAppChip(body.hasPersonalData ? "osobní údaje uložené" : "bez osobních údajů")}
+          ${renderAppChip(getClientStatusLabel(body.status))}
+        </div>
+        <div class="app-card-details">
+          <div class="app-detail-row"><span>Stav</span><span>${escapeHtml(getClientStatusLabel(body.status))}</span></div>
+          <div class="app-detail-row"><span>Klient založen</span><span>${escapeHtml(formatBooleanAnswer(body.exists))}</span></div>
+          <div class="app-detail-row"><span>Osobní údaje</span><span>${escapeHtml(formatBooleanAnswer(body.hasPersonalData))}</span></div>
+          ${body.hasPersonalData ? `
+            <div class="app-detail-row"><span>Jméno</span><span>${escapeHtml(displayName)}</span></div>
+            ${personalData.email ? `<div class="app-detail-row"><span>E-mail</span><span>${escapeHtml(personalData.email)}</span></div>` : ""}
+            ${personalData.mobile ? `<div class="app-detail-row"><span>Telefon</span><span>${escapeHtml(personalData.mobile)}</span></div>` : ""}
+            ${personalData.dateOfBirth ? `<div class="app-detail-row"><span>Datum narození</span><span>${escapeHtml(formatDate(personalData.dateOfBirth))}</span></div>` : ""}
+            ${personalData.registeredNumberIsic ? `<div class="app-detail-row"><span>ISIC</span><span>${escapeHtml(personalData.registeredNumberIsic)}</span></div>` : ""}
+          ` : ""}
+          ${body.photo ? `
+            <div class="app-detail-row"><span>Fotografie</span><span>${escapeHtml(photo.exists ? "ano" : "ne")}</span></div>
+            ${photo.statusName ? `<div class="app-detail-row"><span>Stav fotografie</span><span>${escapeHtml(photo.statusName)}</span></div>` : ""}
+            ${photo.approvalDate ? `<div class="app-detail-row"><span>Schváleno</span><span>${escapeHtml(formatDate(photo.approvalDate))}</span></div>` : ""}
+            ${photo.reason ? `<div class="app-detail-row"><span>Poznámka k fotografii</span><span>${escapeHtml(photo.reason)}</span></div>` : ""}
+          ` : ""}
+        </div>
+      </article>
+    </div>
+  `;
+}
+
+function getClientStatusTitle(body) {
+  if (!body.exists) {
+    return "Klient zatím není založen";
+  }
+
+  if (!body.hasPersonalData) {
+    return "Klient čeká na osobní údaje";
+  }
+
+  return "Klientská data jsou připravena";
+}
+
+function getClientStatusText(body) {
+  if (!body.exists) {
+    return "Pro přihlášeného uživatele nebyl v Core MOS nalezen klientský profil.";
+  }
+
+  if (!body.hasPersonalData) {
+    return "Profil existuje, ale backend nevrátil uložené osobní údaje.";
+  }
+
+  return "Backend vrátil osobní údaje přihlášeného klienta.";
+}
+
+function getClientStatusLabel(value) {
+  if (value === "Missing") {
+    return "Chybí";
+  }
+
+  if (value === "PendingPersonalData") {
+    return "Čeká na údaje";
+  }
+
+  if (value === "Completed") {
+    return "Dokončeno";
+  }
+
+  return value || "Neznámý stav";
+}
+
 function formatBooleanAnswer(value) {
   if (value === true) {
     return "ano";
@@ -4859,6 +4974,10 @@ function summarizeBody(body) {
   }
 
   if (isParkingPriceMultiResponse(body)) {
+    return [];
+  }
+
+  if (isClientStatusResponse(body)) {
     return [];
   }
 
@@ -5171,6 +5290,16 @@ function isParkingPriceMultiResponse(value) {
     && ((typeof value.calculationSuccessful === "boolean" && Array.isArray(value.calculations))
       || (typeof value.success === "boolean" && Array.isArray(value.priceCalculations)))
     && getParkingPriceCalculations(value).length > 0;
+}
+
+function isClientStatusResponse(value) {
+  return value
+    && typeof value === "object"
+    && typeof value.exists === "boolean"
+    && typeof value.hasPersonalData === "boolean"
+    && typeof value.status === "string"
+    && ("personalData" in value)
+    && ("photo" in value);
 }
 
 function getParkingPriceSuccessful(value) {

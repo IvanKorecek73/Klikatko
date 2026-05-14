@@ -9,6 +9,12 @@
       "file": "feature-729-overeni-existence-uzivatele.json"
     },
     {
+      "id": "pidlitacka-client-data",
+      "name": "PidLitacka - klientská data",
+      "description": "Scénáře pro ověření stavu klientského profilu a osobních údajů přihlášeného uživatele.",
+      "file": "client-data.json"
+    },
+    {
       "id": "pidlitacka-parking-basic",
       "name": "PidLitacka - Parkování",
       "description": "První ruční pack pro základní parkovací scénáře nad veřejným API parkování.",
