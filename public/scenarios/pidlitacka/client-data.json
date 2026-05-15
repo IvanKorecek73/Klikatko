@@ -10,7 +10,11 @@
       "requiresAuth": true,
       "smoke": true,
       "manualInputRequired": false,
-      "tags": ["profile", "client-data", "client-check"],
+      "tags": [
+        "profile",
+        "client-data",
+        "client-check"
+      ],
       "app": {
         "section": "profile",
         "title": "Profil",
@@ -49,7 +53,13 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["profile", "client-data", "client-check", "inactive-account", "negative"],
+      "tags": [
+        "profile",
+        "client-data",
+        "client-check",
+        "inactive-account",
+        "negative"
+      ],
       "app": {
         "section": "profile",
         "title": "Profil",
@@ -101,7 +111,12 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["profile", "client-data", "client-check", "missing-client"],
+      "tags": [
+        "profile",
+        "client-data",
+        "client-check",
+        "missing-client"
+      ],
       "app": {
         "section": "profile",
         "title": "Profil",
@@ -152,7 +167,12 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["profile", "client-data", "client-check", "personal-data"],
+      "tags": [
+        "profile",
+        "client-data",
+        "client-check",
+        "personal-data"
+      ],
       "app": {
         "section": "profile",
         "title": "Profil",
@@ -203,7 +223,12 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["profile", "client-data", "client-check", "personal-data"],
+      "tags": [
+        "profile",
+        "client-data",
+        "client-check",
+        "personal-data"
+      ],
       "app": {
         "section": "profile",
         "title": "Profil",
@@ -258,7 +283,13 @@
       "requiresAuth": true,
       "smoke": true,
       "manualInputRequired": false,
-      "tags": ["profile", "client-data", "client-read", "personal-data", "client-photo"],
+      "tags": [
+        "profile",
+        "client-data",
+        "client-read",
+        "personal-data",
+        "client-photo"
+      ],
       "app": {
         "section": "profile",
         "title": "Profil",
@@ -297,7 +328,14 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["profile", "client-data", "client-save", "client-create", "personal-data", "client-photo"],
+      "tags": [
+        "profile",
+        "client-data",
+        "client-save",
+        "client-create",
+        "personal-data",
+        "client-photo"
+      ],
       "app": {
         "section": "profile",
         "title": "Profil",
@@ -345,7 +383,10 @@
               "type": "info",
               "label": "Fotografie klienta",
               "text": "Součástí požadavku je alespoň jedna fotografie posílaná jako multipart/form-data. Můžete ponechat obě testovací fotky, vybrat vlastní, nebo jednu z nich odebrat.",
-              "items": ["Barevná fotografie", "Černobílá fotografie"]
+              "items": [
+                "Barevná fotografie",
+                "Černobílá fotografie"
+              ]
             },
             {
               "name": "photoColor",
@@ -354,8 +395,8 @@
               "accept": "image/*",
               "fileName": "klient-foto-color.png",
               "contentType": "image/png",
-              "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR42mP8z8BQDwAFgwJ/lR8J2wAAAABJRU5ErkJggg==",
-              "help": "Výchozí je malý testovací PNG obrázek. Pro reálnější test můžete vybrat vlastní fotografii."
+              "base64": "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",
+              "help": "Výchozí je malá testovací průkazová fotografie pod limitem 4096 B. Pro reálnější test můžete vybrat vlastní fotografii."
             },
             {
               "name": "photoBw",
@@ -364,8 +405,8 @@
               "accept": "image/*",
               "fileName": "klient-foto-bw.png",
               "contentType": "image/png",
-              "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAwUBAcgn6SMAAAAASUVORK5CYII=",
-              "help": "Pokud backend vyžaduje skutečně černobílou verzi, vyberte odpovídající soubor."
+              "base64": "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",
+              "help": "Výchozí je malá černobílá testovací průkazová fotografie pod limitem 4096 B. Pokud backend vyžaduje konkrétní podobu, vyberte odpovídající soubor."
             },
             {
               "name": "displayName",
@@ -523,7 +564,13 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["profile", "client-data", "client-save", "personal-data", "client-photo"],
+      "tags": [
+        "profile",
+        "client-data",
+        "client-save",
+        "personal-data",
+        "client-photo"
+      ],
       "app": {
         "section": "profile",
         "title": "Profil",
@@ -566,7 +613,10 @@
               "type": "info",
               "label": "Fotografie klienta",
               "text": "Součástí požadavku je alespoň jedna fotografie posílaná jako multipart/form-data. Můžete ponechat obě testovací fotky, vybrat vlastní, nebo jednu z nich odebrat.",
-              "items": ["Barevná fotografie", "Černobílá fotografie"]
+              "items": [
+                "Barevná fotografie",
+                "Černobílá fotografie"
+              ]
             },
             {
               "name": "photoColor",
@@ -575,8 +625,8 @@
               "accept": "image/*",
               "fileName": "klient-foto-color.png",
               "contentType": "image/png",
-              "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR42mP8z8BQDwAFgwJ/lR8J2wAAAABJRU5ErkJggg==",
-              "help": "Výchozí je malý testovací PNG obrázek. Pro reálnější test můžete vybrat vlastní fotografii."
+              "base64": "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",
+              "help": "Výchozí je malá testovací průkazová fotografie pod limitem 4096 B. Pro reálnější test můžete vybrat vlastní fotografii."
             },
             {
               "name": "photoBw",
@@ -585,8 +635,8 @@
               "accept": "image/*",
               "fileName": "klient-foto-bw.png",
               "contentType": "image/png",
-              "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAwUBAcgn6SMAAAAASUVORK5CYII=",
-              "help": "Pokud backend vyžaduje skutečně černobílou verzi, vyberte odpovídající soubor."
+              "base64": "iVBORw0KGgoAAAANSUhEUgAAAGAAAAB4CAYAAAANHffOAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAi3SURBVHhe7Zzri09bGMf9Q9544RWFxBvUUEpIbrkTRSJySXJiXM6RIUNIkpJLI4NmMGLIJMUZwuRyJnMwkVferdN3155+Pc++/vZaz7O2s158Gn6/vfdaz/e717PXbf9GDX0dNu//+TegALQfhX/0/f0+oAC0HzGgf2CQORRwA7RmBuDvz58/AwI0ah4MUCAYoEwwQJlggDLBAGWCAcoEA5QJBigTDFAmGKBMMECZYIAywQBlggHKBAOUCQYoEwxQJhigTDBAmWCAMrU14Nu3b+bBgwe54Dh6rk/UwoDPnz+b69evm2PHjpmVK1eaWbNmmXHjxhVm+vTp0XlHjhwxly9fNh8+fGBlaOGtAS9fvjQnT540S5YsYYLaYMGCBZEhz549Y2VL4p0BSBsbN25kgrkEraOzs5PVRQJvDMAdDyGoOJIgtXV3d7O6uUTdADwkkQqoGJrs3Lkzeu7QurpA1QAEiVxMBfABtIa3b9+yOttGzQCfxY+RMEHNAFe9G9vABJdjCRUD0KengfoMusM0BluoGICBEQ3SZyZNmuTsoSxuALqbNMA64Kp7Km4ABjw0uDpw9uxZFosNxA24dOkSC64OHDp0iMViA3EDMMihwdWBxYsXs1hsIG5A2ZlMCcaPH88+o0ycONHJg1jUgCdPnrDA6gSmsmlMVRE1YP/+/SyoOrFu3ToWU1VEDahb/5/iYjwgZgCG8zSgOoJxDI2tCmIGYFKLBlNHsGBEY6uCmAGoOA2mjth+EIsZULcJuDRsT8yJGXDhwgUWTB4zZsxgn9mkmU4BdmbQ2KogZgCaLg0mj23btplbt26Zo0ePmvXr15v58+ezY8owZ84cs3btWnP48GFz48YNc+DAAXZMHrU1oJlnAATq6upiwMzjx49HBuWB4y5evMiuAdrb21mZedT2GdDMNDTEo6LZBMbQMvOwPS0tZgAGMDSYPM6fP89EswnSEC0zD9sbucQMABhJ0oCyuHbtGhMNrQJrCvTzIiSdO2HCBFZuFra3NYoasHXrVhZQGnhgNgoF4SZPnmxGjx5txo4da65cucIETiPr3BUrVrCy08BGAhpTVUQNQP6kQaWBdYNGEffu3RsJGLNlyxYmdBpZ56JV0LLTsD0GAKIGYD5o6tSpLLAk0NtoFBF37ZgxY0ZEPHXqFBM6jaxz0c1F66DlJ+Fij5CoAaDIihhNPzEYzG3atCkaF9Dv8sg6F2MDWgeKi/QDxA3AXZT3MEb/nIrkErS2vIex7Um4GHEDAHIpDTAGI14qkARZLRPPEBqDLVQMABjS00CXLl0a5WQqjhQYOdM64V2F325rYgzWiPfs2TMyZUAF0eDMmTNRfXbs2GF91JuEqgHgzZs3TAQfsL3ylYa6AUNDQyx4H7A94k1D3QDQ09PDBNDk7t275vv376yeLvDCAN/SkFT6AV4Y8OPHj9Kt4ObNm+yzLG7fvl3oHNz9w8PDrI6u8MIAUKYVnDhxwixfvjz6C2Hp9xTM+2O0ix4X/Y4iefcDbwwo0wowmYb3y8CiRYui/x88eDCaZsDfGHQlYVR8LEzIMkz67gfeGAA+ffrEREmjra0tGjXH4maxatWq6FXYLPGBi8m2PLwyALx48YIJkwUWbc6dOxfd8bt37x5pDQApKmlRJ4m+vj5WFwm8MwCp6OHDh0wglyD1SaeeGO8MAJh7kTIB4mMwSOsghZcGAAyEent7mWA28eH3hLw1AMCEx48fM+FsgBamLT7w2oCYgYEBc+/ePSZiM6Cr+fr1a1aGFrUwAKA1lO0hUdDT+fLlC7u2JrUxIAa9FfTXiz4fkOdfvXrlRbpJonYGNIK7eXBwMJrGgMgxSDH4XLN3U5RaG/A7EAxQJhigTDBAmWCAMrU3oL+/3zx69Ijx/PlzdqyP1MIA9OHv378fvdu1YcMG09LSYqZMmVKYadOmRefhlac7d+5Yf9u9Ct4a8PTp02iTFISjgtpg9erV0e48tBZatiReGYA7HT/oNHfuXCaYS2bPnh2ZrdEyvDDg3bt3UXopm1psg1SFjbh4rtA6ukLVAAS6a9cuJkQSa9asMadPn65M0ZSGdwmQBmmdbaNmwNWrV6M7jgaeBnY//Pr1qzKbN29m184CqYnW3SbiBnz8+DG6u2igRcAsKBW0DJhJLWN6DB7YrtKSqAG466vkeaQQKmoZOjo62DWLAuNctAYxA9Dlo0GVBc8BKmoZtm/fzq5ZFttvy4gYgFeSaCDNghRGhS0C6tFM+knCpgnODbApPsDPF1Bxi4BdcfRaVbBlglMDbIsP0I2k4hYBu+botapiwwRnBuC9XFphW2CpkQqcBeozc+ZMdh0bYH6Jxl4GJwagy2Yr3yaBN9+pyFlgDxC9hk0wwUc1KIoTA9BvppW0Sdk0tG/fPnYNm2Auqdl5JOsGoK9MK2gbtC4MqqjQabhKP400m4qsGuA69TSCQRUVOgnM59BzXdHM1LZVA5qdYmgGzOlQsZNobW1l57pi2bJlTJM8rBmAKWVaIZegpaFcKjgF+Zme65KyrcCaAS76/HlgcEUFbwTrwvQc15QdG1gzQHoVC2BwRUVvBL8/Qc9xDVpmmX2oVgxAs6MVkSAvDc2bN4+dIwFmfalGaVgxAM2OVkIKDLKo8AA9MnqsFBinUI3SsGLAwoULWSWkwCCLig+wdkCPlSJumUWwYkCVRZaqYJCFOlADsIRJj5Wk6Mi4sgEoiBYuDQZbjeJj6ZIeI03RnXmVDdDo6lEw2Go0AGsG9Bhpik7QVTYABdHCpcFgq9EALF3SY6TBdDzVKonKBmAnGy1cgzgNYcmSfqdB0V/ZrWwAfoGcFq4BBl0wwJcbougOisoGSM42ZoFBFwwouvPNNbgxqVZJVDbAlyYP8DI3/UyLotsaKxsAaOFaaE09JIHZYapTEokG9A8MRh8U5a+2dvNH65+BBqhGaUBrZkBAnsiAoa/DzKEidPf0sjvg/0xHZxfTKA9o/x82NHrlflzDiAAAAABJRU5ErkJggg==",
+              "help": "Výchozí je malá černobílá testovací průkazová fotografie pod limitem 4096 B. Pokud backend vyžaduje konkrétní podobu, vyberte odpovídající soubor."
             },
             {
               "name": "displayName",
@@ -710,7 +760,13 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": false,
-      "tags": ["profile", "client-data", "client-save", "validation", "negative"],
+      "tags": [
+        "profile",
+        "client-data",
+        "client-save",
+        "validation",
+        "negative"
+      ],
       "app": {
         "section": "profile",
         "title": "Profil",
