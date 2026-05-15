@@ -976,6 +976,33 @@ p {
   color: var(--muted);
 }
 
+.image-file-field {
+  background: #f8fbfc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.image-file-preview {
+  width: 96px;
+  height: 96px;
+  border: 1px solid #d6dee8;
+  border-radius: 8px;
+  background: #fff;
+  object-fit: cover;
+}
+
+.image-file-meta {
+  color: #526273;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.image-file-field input[type="file"] {
+  border-style: dashed;
+  padding: 9px;
+}
+
 .mobile-info-field {
   background: #f4fbf8;
   border: 1px solid #b9e2d0;

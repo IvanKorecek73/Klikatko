@@ -2358,6 +2358,10 @@ function renderField(field, value) {
     return renderTagListField(wrapper, field, value);
   }
 
+  if (field.type === "image-file") {
+    return renderImageFileField(wrapper, field, value);
+  }
+
   const input = field.type === "textarea"
     ? document.createElement("textarea")
     : field.type === "select"
@@ -2424,6 +2428,107 @@ function renderField(field, value) {
   }
 
   return wrapper;
+}
+
+function renderImageFileField(wrapper, field, value) {
+  const initialValue = normalizeImageFileValue(value, field);
+  state.values[field.name] = initialValue;
+  wrapper.classList.add("image-file-field");
+
+  const preview = document.createElement("img");
+  preview.className = "image-file-preview";
+  preview.alt = field.label || field.name;
+
+  const meta = document.createElement("div");
+  meta.className = "image-file-meta";
+
+  const input = document.createElement("input");
+  input.id = `field-${field.name}`;
+  input.name = field.name;
+  input.type = "file";
+  input.accept = field.accept || "image/*";
+
+  const updatePreview = image => {
+    const normalized = normalizeImageFileValue(image, field);
+    const size = normalized.size || base64ToBytes(normalized.base64).byteLength;
+
+    preview.src = `data:${normalized.contentType || "image/png"};base64,${normalized.base64}`;
+    meta.textContent = `${normalized.fileName || "obrázek"} · ${normalized.contentType || "image/png"} · ${formatBytes(size)}`;
+  };
+
+  input.addEventListener("change", () => {
+    const file = input.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      const dataUrl = String(reader.result || "");
+      const base64 = dataUrl.includes(",") ? dataUrl.split(",").pop() : "";
+      const nextValue = {
+        fileName: file.name,
+        contentType: file.type || "application/octet-stream",
+        base64,
+        size: file.size
+      };
+
+      state.values[field.name] = nextValue;
+      updatePreview(nextValue);
+
+      if (shouldTrackDirty(field)) {
+        state.dirty = true;
+        renderModeBanner();
+      }
+    });
+    reader.readAsDataURL(file);
+  });
+
+  updatePreview(initialValue);
+  wrapper.appendChild(preview);
+  wrapper.appendChild(meta);
+  wrapper.appendChild(input);
+
+  if (field.help) {
+    const help = document.createElement("small");
+    help.textContent = field.help;
+    wrapper.appendChild(help);
+  }
+
+  return wrapper;
+}
+
+function normalizeImageFileValue(value, field) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return {
+      fileName: value.fileName || field.fileName || `${field.name}.png`,
+      contentType: value.contentType || field.contentType || "image/png",
+      base64: value.base64 || field.base64 || "",
+      size: value.size || null
+    };
+  }
+
+  return {
+    fileName: field.fileName || `${field.name}.png`,
+    contentType: field.contentType || "image/png",
+    base64: field.base64 || "",
+    size: null
+  };
+}
+
+function formatBytes(size) {
+  const value = Number(size);
+
+  if (!Number.isFinite(value)) {
+    return "";
+  }
+
+  if (value < 1024) {
+    return `${value} B`;
+  }
+
+  return `${(value / 1024).toFixed(1)} kB`;
 }
 
 function renderInfoField(field) {
@@ -5677,11 +5782,16 @@ function resolveObject(value, fieldValues, step) {
   }
 
   if (typeof value === "string") {
-    const resolved = resolveTemplate(value, { fieldValues });
     const formFieldMatch = value.match(/^\{\{form\.([a-zA-Z0-9_]+)\}\}$/);
     const formField = formFieldMatch
       ? (step.fields || []).find(field => field.name === formFieldMatch[1])
       : null;
+
+    if (formField?.type === "image-file") {
+      return fieldValues[formField.name] || normalizeImageFileValue(null, formField);
+    }
+
+    const resolved = resolveTemplate(value, { fieldValues });
 
     if (formField?.type === "tag-list") {
       return Array.isArray(fieldValues[formField.name]) ? fieldValues[formField.name] : [];
@@ -5724,6 +5834,14 @@ function resolveExpectedValue(value, step) {
 function resolveFieldDefaultValue(field) {
   if (Array.isArray(field.value)) {
     return field.value.map(item => resolveTemplate(String(item), { fieldValues: {} }));
+  }
+
+  if (field.value && typeof field.value === "object") {
+    return resolveObject(field.value, {}, { fields: [] });
+  }
+
+  if (field.type === "image-file") {
+    return normalizeImageFileValue(null, field);
   }
 
   return resolveTemplate(field.value ?? "", { fieldValues: {} });

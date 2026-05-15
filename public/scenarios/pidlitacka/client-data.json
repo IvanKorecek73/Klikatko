@@ -305,8 +305,28 @@
             {
               "type": "info",
               "label": "Fotografie klienta",
-              "text": "Součástí požadavku jsou dvě testovací fotografie posílané v pozadí jako multipart/form-data.",
+              "text": "Součástí požadavku jsou dvě fotografie posílané jako multipart/form-data. Můžete ponechat testovací obrázky nebo vybrat vlastní.",
               "items": ["Barevná fotografie", "Černobílá fotografie"]
+            },
+            {
+              "name": "photoColor",
+              "label": "Barevná fotografie",
+              "type": "image-file",
+              "accept": "image/*",
+              "fileName": "klient-foto-color.png",
+              "contentType": "image/png",
+              "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR42mP8z8BQDwAFgwJ/lR8J2wAAAABJRU5ErkJggg==",
+              "help": "Výchozí je malý testovací PNG obrázek. Pro reálnější test můžete vybrat vlastní fotografii."
+            },
+            {
+              "name": "photoBw",
+              "label": "Černobílá fotografie",
+              "type": "image-file",
+              "accept": "image/*",
+              "fileName": "klient-foto-bw.png",
+              "contentType": "image/png",
+              "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAwUBAcgn6SMAAAAASUVORK5CYII=",
+              "help": "Pokud backend vyžaduje skutečně černobílou verzi, vyberte odpovídající soubor."
             },
             {
               "name": "displayName",
@@ -391,16 +411,8 @@
               "loginPuk": "{{form.loginPuk}}",
               "registeredNumberIsic": "{{form.registeredNumberIsic}}",
               "language": "{{form.language}}",
-              "PhotoColor": {
-                "fileName": "klient-foto-color.png",
-                "contentType": "image/png",
-                "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
-              },
-              "PhotoBW": {
-                "fileName": "klient-foto-bw.png",
-                "contentType": "image/png",
-                "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
-              }
+              "PhotoColor": "{{form.photoColor}}",
+              "PhotoBW": "{{form.photoBw}}"
             }
           },
           "expected": {
@@ -514,8 +526,28 @@
             {
               "type": "info",
               "label": "Fotografie klienta",
-              "text": "Součástí požadavku jsou dvě testovací fotografie posílané v pozadí jako multipart/form-data.",
+              "text": "Součástí požadavku jsou dvě fotografie posílané jako multipart/form-data. Můžete ponechat testovací obrázky nebo vybrat vlastní.",
               "items": ["Barevná fotografie", "Černobílá fotografie"]
+            },
+            {
+              "name": "photoColor",
+              "label": "Barevná fotografie",
+              "type": "image-file",
+              "accept": "image/*",
+              "fileName": "klient-foto-color.png",
+              "contentType": "image/png",
+              "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR42mP8z8BQDwAFgwJ/lR8J2wAAAABJRU5ErkJggg==",
+              "help": "Výchozí je malý testovací PNG obrázek. Pro reálnější test můžete vybrat vlastní fotografii."
+            },
+            {
+              "name": "photoBw",
+              "label": "Černobílá fotografie",
+              "type": "image-file",
+              "accept": "image/*",
+              "fileName": "klient-foto-bw.png",
+              "contentType": "image/png",
+              "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAwUBAcgn6SMAAAAASUVORK5CYII=",
+              "help": "Pokud backend vyžaduje skutečně černobílou verzi, vyberte odpovídající soubor."
             },
             {
               "name": "displayName",
@@ -600,16 +632,8 @@
               "loginPuk": "{{form.loginPuk}}",
               "registeredNumberIsic": "{{form.registeredNumberIsic}}",
               "language": "{{form.language}}",
-              "PhotoColor": {
-                "fileName": "klient-foto-color.png",
-                "contentType": "image/png",
-                "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
-              },
-              "PhotoBW": {
-                "fileName": "klient-foto-bw.png",
-                "contentType": "image/png",
-                "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
-              }
+              "PhotoColor": "{{form.photoColor}}",
+              "PhotoBW": "{{form.photoBw}}"
             }
           },
           "expected": {
