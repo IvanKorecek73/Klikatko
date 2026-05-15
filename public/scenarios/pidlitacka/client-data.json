@@ -303,6 +303,12 @@
           "description": "Odešle osobní údaje, nastaví souhlas a očekává založení klienta.",
           "fields": [
             {
+              "type": "info",
+              "label": "Fotografie klienta",
+              "text": "Součástí požadavku jsou dvě testovací fotografie posílané v pozadí jako multipart/form-data.",
+              "items": ["Barevná fotografie", "Černobílá fotografie"]
+            },
+            {
               "name": "displayName",
               "label": "Zobrazované jméno",
               "type": "text",
@@ -505,6 +511,12 @@
           "title": "Uložit osobní údaje existujícího klienta",
           "description": "Aktualizuje osobní údaje klienta a neočekává vytvoření nového klienta.",
           "fields": [
+            {
+              "type": "info",
+              "label": "Fotografie klienta",
+              "text": "Součástí požadavku jsou dvě testovací fotografie posílané v pozadí jako multipart/form-data.",
+              "items": ["Barevná fotografie", "Černobílá fotografie"]
+            },
             {
               "name": "displayName",
               "label": "Zobrazované jméno",

@@ -2036,6 +2036,11 @@ function renderStep() {
   elements.stepForm.appendChild(renderMobileActionHeader(step));
 
   for (const field of step.fields || []) {
+    if (field.type === "info") {
+      elements.stepForm.appendChild(renderInfoField(field));
+      continue;
+    }
+
     const defaultValue = resolveFieldDefaultValue(field);
     state.values[field.name] = defaultValue;
 
@@ -2421,6 +2426,23 @@ function renderField(field, value) {
   return wrapper;
 }
 
+function renderInfoField(field) {
+  const wrapper = document.createElement("section");
+  wrapper.className = "mobile-info-field";
+
+  const items = (field.items || [])
+    .map(item => `<span>${escapeHtml(item)}</span>`)
+    .join("");
+
+  wrapper.innerHTML = `
+    <strong>${escapeHtml(field.label || "Informace")}</strong>
+    ${field.text ? `<p>${escapeHtml(field.text)}</p>` : ""}
+    ${items ? `<div class="mobile-info-items">${items}</div>` : ""}
+  `;
+
+  return wrapper;
+}
+
 function renderMobileActionHeader(step) {
   const wrapper = document.createElement("section");
   wrapper.className = "mobile-action-header";
@@ -2441,7 +2463,7 @@ function renderMobileActionHeader(step) {
 }
 
 function getVisibleFields(step) {
-  return (step.fields || []).filter(field => !field.hidden);
+  return (step.fields || []).filter(field => !field.hidden && field.type !== "info");
 }
 
 function renderTagListField(wrapper, field, value) {
