@@ -2442,14 +2442,40 @@ function renderImageFileField(wrapper, field, value) {
   const meta = document.createElement("div");
   meta.className = "image-file-meta";
 
+  const actions = document.createElement("div");
+  actions.className = "image-file-actions";
+
   const input = document.createElement("input");
   input.id = `field-${field.name}`;
   input.name = field.name;
   input.type = "file";
   input.accept = field.accept || "image/*";
 
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.className = "secondary image-file-remove";
+  removeButton.textContent = "Odebrat";
+
+  const restoreButton = document.createElement("button");
+  restoreButton.type = "button";
+  restoreButton.className = "secondary image-file-restore";
+  restoreButton.textContent = "Vrátit výchozí";
+  restoreButton.hidden = true;
+
   const updatePreview = image => {
     const normalized = normalizeImageFileValue(image, field);
+    const hasImage = Boolean(normalized.base64);
+
+    wrapper.classList.toggle("is-empty", !hasImage);
+    removeButton.hidden = !hasImage;
+    restoreButton.hidden = hasImage || !field.base64;
+
+    if (!hasImage) {
+      preview.removeAttribute("src");
+      meta.textContent = "Fotografie nebude odeslána.";
+      return;
+    }
+
     const size = normalized.size || base64ToBytes(normalized.base64).byteLength;
 
     preview.src = `data:${normalized.contentType || "image/png"};base64,${normalized.base64}`;
@@ -2485,9 +2511,41 @@ function renderImageFileField(wrapper, field, value) {
     reader.readAsDataURL(file);
   });
 
+  removeButton.addEventListener("click", () => {
+    state.values[field.name] = {
+      fileName: "",
+      contentType: "",
+      base64: "",
+      size: 0,
+      removed: true
+    };
+    input.value = "";
+    updatePreview(state.values[field.name]);
+
+    if (shouldTrackDirty(field)) {
+      state.dirty = true;
+      renderModeBanner();
+    }
+  });
+
+  restoreButton.addEventListener("click", () => {
+    const restored = normalizeImageFileValue(null, field);
+    state.values[field.name] = restored;
+    input.value = "";
+    updatePreview(restored);
+
+    if (shouldTrackDirty(field)) {
+      state.dirty = true;
+      renderModeBanner();
+    }
+  });
+
   updatePreview(initialValue);
   wrapper.appendChild(preview);
   wrapper.appendChild(meta);
+  actions.appendChild(removeButton);
+  actions.appendChild(restoreButton);
+  wrapper.appendChild(actions);
   wrapper.appendChild(input);
 
   if (field.help) {
@@ -2501,6 +2559,16 @@ function renderImageFileField(wrapper, field, value) {
 
 function normalizeImageFileValue(value, field) {
   if (value && typeof value === "object" && !Array.isArray(value)) {
+    if (value.removed || value.base64 === "") {
+      return {
+        fileName: "",
+        contentType: "",
+        base64: "",
+        size: 0,
+        removed: true
+      };
+    }
+
     return {
       fileName: value.fileName || field.fileName || `${field.name}.png`,
       contentType: value.contentType || field.contentType || "image/png",
@@ -3468,6 +3536,11 @@ function buildMultipartBody(step) {
   for (const [name, template] of Object.entries(step.request.body || {})) {
     const value = resolveObject(template, state.values, step);
 
+    if (isRemovedMultipartFilePart(value)) {
+      visibleBody[name] = "neodesílá se";
+      continue;
+    }
+
     if (isMultipartFilePart(value)) {
       const bytes = base64ToBytes(value.base64);
       const contentType = value.contentType || "application/octet-stream";
@@ -3496,7 +3569,15 @@ function isMultipartFilePart(value) {
   return value
     && typeof value === "object"
     && !Array.isArray(value)
+    && !value.removed
     && typeof value.base64 === "string";
+}
+
+function isRemovedMultipartFilePart(value) {
+  return value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && (value.removed || value.base64 === "");
 }
 
 function base64ToBytes(base64) {

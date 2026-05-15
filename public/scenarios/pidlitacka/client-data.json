@@ -305,7 +305,7 @@
             {
               "type": "info",
               "label": "Fotografie klienta",
-              "text": "Součástí požadavku jsou dvě fotografie posílané jako multipart/form-data. Můžete ponechat testovací obrázky nebo vybrat vlastní.",
+              "text": "Součástí požadavku je alespoň jedna fotografie posílaná jako multipart/form-data. Můžete ponechat obě testovací fotky, vybrat vlastní, nebo jednu z nich odebrat.",
               "items": ["Barevná fotografie", "Černobílá fotografie"]
             },
             {
@@ -526,7 +526,7 @@
             {
               "type": "info",
               "label": "Fotografie klienta",
-              "text": "Součástí požadavku jsou dvě fotografie posílané jako multipart/form-data. Můžete ponechat testovací obrázky nebo vybrat vlastní.",
+              "text": "Součástí požadavku je alespoň jedna fotografie posílaná jako multipart/form-data. Můžete ponechat obě testovací fotky, vybrat vlastní, nebo jednu z nich odebrat.",
               "items": ["Barevná fotografie", "Černobílá fotografie"]
             },
             {

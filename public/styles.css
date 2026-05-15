@@ -992,10 +992,25 @@ p {
   object-fit: cover;
 }
 
+.image-file-field.is-empty .image-file-preview {
+  display: none;
+}
+
 .image-file-meta {
   color: #526273;
   font-size: 12px;
   line-height: 1.35;
+}
+
+.image-file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.image-file-actions button {
+  padding: 7px 10px;
+  font-size: 12px;
 }
 
 .image-file-field input[type="file"] {
