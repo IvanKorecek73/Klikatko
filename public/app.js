@@ -1,4 +1,4 @@
-﻿const state = {
+const state = {
   projectIndex: null,
   currentProject: null,
   currentProjectBasePath: "",
@@ -2237,11 +2237,11 @@ function getMobileActionTitle(step) {
     return "Platba uloženou kartou";
   }
 
-  if (path.includes("/v1/auth/client/status")) {
+  if (path.includes("/v1/client/status")) {
     return "Stav klientských dat";
   }
 
-  if (path.includes("/v1/auth/client/data")) {
+  if (path.includes("/v1/client/data")) {
     return method === "GET" ? "Detail klientských dat" : "Uložení klientských dat";
   }
 
@@ -2323,11 +2323,11 @@ function getMobileActionSubtitle(step) {
     return "Uliční parkování v zadané zóně.";
   }
 
-  if (path.includes("/v1/auth/client/status")) {
+  if (path.includes("/v1/client/status")) {
     return "Stav klientského profilu aktuálního uživatele.";
   }
 
-  if (path.includes("/v1/auth/client/data")) {
+  if (path.includes("/v1/client/data")) {
     return (step.request?.method || "GET") === "GET"
       ? "Kompletní klientská data aktuálního uživatele."
       : "Uložení osobních údajů klienta.";
@@ -5839,7 +5839,7 @@ function isClientDataResponse(value) {
 
 function isClientDataStep(step) {
   return step?.request?.method === "GET"
-    && String(step.request.path || "").includes("/v1/auth/client/data");
+    && String(step.request.path || "").includes("/v1/client/data");
 }
 
 function isSaveClientDataResponse(value) {
@@ -6418,7 +6418,7 @@ function deriveScenarioTags(item) {
     tags.push("client-check");
   }
 
-  if (includesAny(text, ["/v1/auth/client/data", "načíst kompletní", "nacist kompletni", "detail klient"])) {
+  if (includesAny(text, ["/v1/client/data", "načíst kompletní", "nacist kompletni", "detail klient"])) {
     tags.push("client-read");
   }
 
@@ -6687,4 +6687,3 @@ function getCategoryLabel(category) {
 function includesAny(text, needles) {
   return needles.some(needle => text.includes(needle));
 }
-
