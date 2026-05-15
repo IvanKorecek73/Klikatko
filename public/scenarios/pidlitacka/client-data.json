@@ -10,7 +10,7 @@
       "requiresAuth": true,
       "smoke": true,
       "manualInputRequired": false,
-      "tags": ["Profil", "Klientská data", "Ověření"],
+      "tags": ["profile", "client-data", "client-check"],
       "app": {
         "section": "profile",
         "title": "Profil",
@@ -49,7 +49,7 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["Profil", "Klientská data", "Neaktivní uživatel", "Negativní"],
+      "tags": ["profile", "client-data", "client-check", "inactive-account", "negative"],
       "app": {
         "section": "profile",
         "title": "Profil",
@@ -101,7 +101,7 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["Profil", "Klientská data", "Bez klienta"],
+      "tags": ["profile", "client-data", "client-check", "missing-client"],
       "app": {
         "section": "profile",
         "title": "Profil",
@@ -152,7 +152,7 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["Profil", "Klientská data", "Osobní údaje"],
+      "tags": ["profile", "client-data", "client-check", "personal-data"],
       "app": {
         "section": "profile",
         "title": "Profil",
@@ -203,7 +203,7 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["Profil", "Klientská data", "Osobní údaje"],
+      "tags": ["profile", "client-data", "client-check", "personal-data"],
       "app": {
         "section": "profile",
         "title": "Profil",
@@ -258,7 +258,7 @@
       "requiresAuth": true,
       "smoke": true,
       "manualInputRequired": false,
-      "tags": ["Profil", "Klientská data", "Osobní údaje", "Fotografie", "Načtení"],
+      "tags": ["profile", "client-data", "client-read", "personal-data", "client-photo"],
       "app": {
         "section": "profile",
         "title": "Profil",
@@ -297,7 +297,7 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["Profil", "Klientská data", "Založení klienta", "Osobní údaje"],
+      "tags": ["profile", "client-data", "client-save", "client-create", "personal-data", "client-photo"],
       "app": {
         "section": "profile",
         "title": "Profil",
@@ -523,7 +523,7 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["Profil", "Klientská data", "Osobní údaje"],
+      "tags": ["profile", "client-data", "client-save", "personal-data", "client-photo"],
       "app": {
         "section": "profile",
         "title": "Profil",
@@ -710,7 +710,7 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": false,
-      "tags": ["Profil", "Klientská data", "Negativní", "Validace"],
+      "tags": ["profile", "client-data", "client-save", "validation", "negative"],
       "app": {
         "section": "profile",
         "title": "Profil",

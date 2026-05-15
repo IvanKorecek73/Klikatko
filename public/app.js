@@ -6376,7 +6376,7 @@ function deriveScenarioTags(item) {
     ])
   ].filter(Boolean).join(" ").toLowerCase();
 
-  const tags = [...(item.tags || [])];
+  const tags = (item.tags || []).map(normalizeTag);
 
   if (includesAny(text, ["diagnostic", "persistence", "module-info", "/_test/ticket-service/persistence"])) {
     tags.push("diagnostics");
@@ -6408,6 +6408,30 @@ function deriveScenarioTags(item) {
 
   if (includesAny(text, ["account-creation", "activation", "uzivatel", "username", "user name", "login"])) {
     tags.push("account");
+  }
+
+  if (includesAny(text, ["client-data", "client/status", "client/data", "klientsk", "osobn"])) {
+    tags.push("client-data");
+  }
+
+  if (includesAny(text, ["client/status", "stav klient", "ověřit klient", "overit klient", "ověření klient", "overeni klient"])) {
+    tags.push("client-check");
+  }
+
+  if (includesAny(text, ["/v1/auth/client/data", "načíst kompletní", "nacist kompletni", "detail klient"])) {
+    tags.push("client-read");
+  }
+
+  if (includesAny(text, ["uložit", "ulozit", "save", "post", "založit klient", "zalozit klient"])) {
+    tags.push("client-save");
+  }
+
+  if (includesAny(text, ["photo", "foto", "fotograf"])) {
+    tags.push("client-photo");
+  }
+
+  if (includesAny(text, ["validace", "validation"])) {
+    tags.push("validation");
   }
 
   if (includesAny(text, ["parking", "parkov", "/v1/parking"])) {
@@ -6447,6 +6471,38 @@ function deriveScenarioTags(item) {
   }
 
   return [...new Set(tags)];
+}
+
+function normalizeTag(tag) {
+  const value = String(tag || "").trim();
+  const normalized = value.toLowerCase();
+
+  const map = {
+    "profil": "profile",
+    "klientská data": "client-data",
+    "klientska data": "client-data",
+    "ověření": "client-check",
+    "overeni": "client-check",
+    "ověření klienta": "client-check",
+    "overeni klienta": "client-check",
+    "načtení": "client-read",
+    "nacteni": "client-read",
+    "uložení": "client-save",
+    "ulozeni": "client-save",
+    "založení klienta": "client-create",
+    "zalozeni klienta": "client-create",
+    "bez klienta": "missing-client",
+    "osobní údaje": "personal-data",
+    "osobni udaje": "personal-data",
+    "fotografie": "client-photo",
+    "neaktivní uživatel": "inactive-account",
+    "neaktivni uzivatel": "inactive-account",
+    "negativní": "negative",
+    "negativni": "negative",
+    "validace": "validation"
+  };
+
+  return map[normalized] || value;
 }
 
 function categorizeScenarioLike(item) {
@@ -6557,6 +6613,26 @@ function getCategoryLabel(category) {
       return "Za\u0159\u00edzen\u00ed";
     case "account":
       return "U\u017eivatelsk\u00fd \u00fa\u010det";
+    case "profile":
+      return "Profil";
+    case "client-data":
+      return "Klientská data";
+    case "client-check":
+      return "Ověření klienta";
+    case "client-read":
+      return "Načtení";
+    case "client-save":
+      return "Uložení";
+    case "client-create":
+      return "Založení klienta";
+    case "missing-client":
+      return "Bez klienta";
+    case "personal-data":
+      return "Osobní údaje";
+    case "client-photo":
+      return "Fotografie";
+    case "validation":
+      return "Validace";
     case "account-creation":
       return "Zalo\u017een\u00ed \u00fa\u010dtu";
     case "new-account":
