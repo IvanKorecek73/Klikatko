@@ -3303,6 +3303,10 @@ function buildRequest(step) {
       body = resolveTemplate(String(step.request.body), { fieldValues: state.values });
       visibleBody = body;
       headers["Content-Type"] = "text/plain";
+    } else if (step.request.contentType === "multipart/form-data") {
+      const multipart = buildMultipartBody(step);
+      body = multipart.body;
+      visibleBody = multipart.visibleBody;
     } else if (step.request.contentType === "application/x-www-form-urlencoded") {
       const form = new URLSearchParams();
 
@@ -3328,6 +3332,55 @@ function buildRequest(step) {
     visibleHeaders,
     visibleBody
   };
+}
+
+function buildMultipartBody(step) {
+  const form = new FormData();
+  const visibleBody = {};
+
+  for (const [name, template] of Object.entries(step.request.body || {})) {
+    const value = resolveObject(template, state.values, step);
+
+    if (isMultipartFilePart(value)) {
+      const bytes = base64ToBytes(value.base64);
+      const contentType = value.contentType || "application/octet-stream";
+      const fileName = value.fileName || `${name}.bin`;
+      const blob = new Blob([bytes], { type: contentType });
+
+      form.set(name, blob, fileName);
+      visibleBody[name] = {
+        fileName,
+        contentType,
+        size: bytes.byteLength
+      };
+    } else {
+      form.set(name, value == null ? "" : String(value));
+      visibleBody[name] = value;
+    }
+  }
+
+  return {
+    body: form,
+    visibleBody
+  };
+}
+
+function isMultipartFilePart(value) {
+  return value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && typeof value.base64 === "string";
+}
+
+function base64ToBytes(base64) {
+  const binary = atob(String(base64).replace(/\s/g, ""));
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return bytes;
 }
 
 async function readResponseBody(response) {

@@ -372,6 +372,7 @@
           "request": {
             "method": "POST",
             "path": "/v1/auth/client/data",
+            "contentType": "multipart/form-data",
             "body": {
               "displayName": "{{form.displayName}}",
               "personalDataConsent": "{{form.personalDataConsent}}",
@@ -383,7 +384,17 @@
               "dateOfBirth": "{{form.dateOfBirth}}",
               "loginPuk": "{{form.loginPuk}}",
               "registeredNumberIsic": "{{form.registeredNumberIsic}}",
-              "language": "{{form.language}}"
+              "language": "{{form.language}}",
+              "PhotoColor": {
+                "fileName": "klient-foto-color.png",
+                "contentType": "image/png",
+                "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+              },
+              "PhotoBW": {
+                "fileName": "klient-foto-bw.png",
+                "contentType": "image/png",
+                "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+              }
             }
           },
           "expected": {
@@ -564,6 +575,7 @@
           "request": {
             "method": "POST",
             "path": "/v1/auth/client/data",
+            "contentType": "multipart/form-data",
             "body": {
               "displayName": "{{form.displayName}}",
               "personalDataConsent": "{{form.personalDataConsent}}",
@@ -575,7 +587,17 @@
               "dateOfBirth": "{{form.dateOfBirth}}",
               "loginPuk": "{{form.loginPuk}}",
               "registeredNumberIsic": "{{form.registeredNumberIsic}}",
-              "language": "{{form.language}}"
+              "language": "{{form.language}}",
+              "PhotoColor": {
+                "fileName": "klient-foto-color.png",
+                "contentType": "image/png",
+                "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+              },
+              "PhotoBW": {
+                "fileName": "klient-foto-bw.png",
+                "contentType": "image/png",
+                "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+              }
             }
           },
           "expected": {
@@ -631,6 +653,7 @@
           "request": {
             "method": "POST",
             "path": "/v1/auth/client/data",
+            "contentType": "multipart/form-data",
             "body": {
               "displayName": "",
               "personalDataConsent": true,
