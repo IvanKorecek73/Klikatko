@@ -3840,14 +3840,15 @@ function makeAppMessage(body, status, level) {
       : `Našli jsme ${count} cenových variant parkování.`;
   }
 
-  if (isClientDataResponse(body)) {
-    const photoCount = getClientPhotoDataItems(body.photoData).length;
+  if (isClientDataResponse(body) || isClientDataStep(currentStep())) {
+    const view = getClientDataViewModel(body);
+    const photoCount = getClientPhotoDataItems(view.photoData).length;
 
-    if (!body.exists) {
+    if (!view.exists) {
       return "Přihlášený uživatel zatím nemá založený klientský profil.";
     }
 
-    if (!body.hasPersonalData) {
+    if (!view.hasPersonalData) {
       return "Klientský profil existuje, ale osobní údaje zatím nejsou uložené.";
     }
 
@@ -4639,7 +4640,7 @@ function buildAppCardsHtml(body, step = currentStep()) {
     return renderMosTicketInfoCardHtml(body);
   }
 
-  if (isClientDataResponse(body)) {
+  if (isClientDataResponse(body) || isClientDataStep(step)) {
     return renderClientDataCardHtml(body);
   }
 
@@ -5015,9 +5016,10 @@ function renderClientStatusCardHtml(body) {
 }
 
 function renderClientDataCardHtml(body) {
-  const personalData = body.personalData || {};
-  const photo = body.photo || {};
-  const photoItems = getClientPhotoDataItems(body.photoData);
+  const view = getClientDataViewModel(body);
+  const personalData = view.personalData || {};
+  const photo = view.photo || {};
+  const photoItems = getClientPhotoDataItems(view.photoData);
   const displayName = personalData.displayName
     || [personalData.firstName, personalData.lastName].filter(Boolean).join(" ")
     || personalData.email
@@ -5026,23 +5028,23 @@ function renderClientDataCardHtml(body) {
   return `
     <div class="app-card-list">
       <article class="app-card">
-        <strong>${escapeHtml(getClientStatusTitle(body))}</strong>
+        <strong>${escapeHtml(getClientStatusTitle(view))}</strong>
         <p>${escapeHtml(photoItems.length > 0
           ? "Backend vrátil kompletní klientská data včetně obrazových dat fotografií."
-          : getClientStatusText(body))}</p>
+          : getClientStatusText(view))}</p>
         <div class="app-card-meta">
-          ${renderAppChip(body.isUserActive ? "uživatel aktivní" : "uživatel neaktivní")}
-          ${renderAppChip(body.exists ? "klient existuje" : "klient chybí")}
-          ${renderAppChip(body.hasPersonalData ? "osobní údaje uložené" : "bez osobních údajů")}
+          ${renderAppChip(view.isUserActive ? "uživatel aktivní" : "uživatel neaktivní")}
+          ${renderAppChip(view.exists ? "klient existuje" : "klient chybí")}
+          ${renderAppChip(view.hasPersonalData ? "osobní údaje uložené" : "bez osobních údajů")}
           ${renderAppChip(photoItems.length > 0 ? `${photoItems.length} foto` : "bez fotek")}
-          ${renderAppChip(getClientStatusLabel(body.status))}
+          ${renderAppChip(getClientStatusLabel(view.status))}
         </div>
         <div class="app-card-details">
-          <div class="app-detail-row"><span>Stav</span><span>${escapeHtml(getClientStatusLabel(body.status))}</span></div>
-          <div class="app-detail-row"><span>Uživatel aktivní</span><span>${escapeHtml(formatBooleanAnswer(body.isUserActive))}</span></div>
-          <div class="app-detail-row"><span>Klient založen</span><span>${escapeHtml(formatBooleanAnswer(body.exists))}</span></div>
-          <div class="app-detail-row"><span>Osobní údaje</span><span>${escapeHtml(formatBooleanAnswer(body.hasPersonalData))}</span></div>
-          ${body.hasPersonalData ? `
+          <div class="app-detail-row"><span>Stav</span><span>${escapeHtml(getClientStatusLabel(view.status))}</span></div>
+          <div class="app-detail-row"><span>Uživatel aktivní</span><span>${escapeHtml(formatBooleanAnswer(view.isUserActive))}</span></div>
+          <div class="app-detail-row"><span>Klient založen</span><span>${escapeHtml(formatBooleanAnswer(view.exists))}</span></div>
+          <div class="app-detail-row"><span>Osobní údaje</span><span>${escapeHtml(formatBooleanAnswer(view.hasPersonalData))}</span></div>
+          ${view.hasPersonalData ? `
             <div class="app-detail-row"><span>Jméno</span><span>${escapeHtml(displayName)}</span></div>
             ${personalData.email ? `<div class="app-detail-row"><span>E-mail</span><span>${escapeHtml(personalData.email)}</span></div>` : ""}
             ${personalData.title ? `<div class="app-detail-row"><span>Titul</span><span>${escapeHtml(personalData.title)}</span></div>` : ""}
@@ -5053,7 +5055,7 @@ function renderClientDataCardHtml(body) {
             ${personalData.dateOfBirth ? `<div class="app-detail-row"><span>Datum narození</span><span>${escapeHtml(formatDate(personalData.dateOfBirth))}</span></div>` : ""}
             ${personalData.registeredNumberIsic ? `<div class="app-detail-row"><span>ISIC</span><span>${escapeHtml(personalData.registeredNumberIsic)}</span></div>` : ""}
           ` : ""}
-          ${body.photo ? `
+          ${view.photo ? `
             <div class="app-detail-row"><span>Fotografie</span><span>${escapeHtml(photo.exists ? "ano" : "ne")}</span></div>
             ${photo.statusName ? `<div class="app-detail-row"><span>Stav fotografie</span><span>${escapeHtml(photo.statusName)}</span></div>` : ""}
             ${photo.statusId != null ? `<div class="app-detail-row"><span>Kód stavu fotografie</span><span>${escapeHtml(photo.statusId)}</span></div>` : ""}
@@ -5065,6 +5067,39 @@ function renderClientDataCardHtml(body) {
       </article>
     </div>
   `;
+}
+
+function getClientDataViewModel(body) {
+  const client = body?.client && typeof body.client === "object" ? body.client : {};
+  const personalData = body?.personalData || client.personalData || {};
+  const photo = body?.photo || client.photo || null;
+  const photoData = body?.photoData || body?.photos || body?.photoPayload || client.photoData || null;
+  const exists = coalesceBoolean(body?.exists, client.exists, Boolean(personalData && Object.keys(personalData).length));
+  const isUserActive = coalesceBoolean(body?.isUserActive, body?.isActive, client.isUserActive, client.isActive, true);
+  const hasPersonalData = coalesceBoolean(
+    body?.hasPersonalData,
+    client.hasPersonalData,
+    Boolean(personalData && Object.keys(personalData).length));
+
+  return {
+    exists,
+    isUserActive,
+    hasPersonalData,
+    status: body?.status || client.status || "",
+    personalData,
+    photo,
+    photoData
+  };
+}
+
+function coalesceBoolean(...values) {
+  for (const value of values) {
+    if (typeof value === "boolean") {
+      return value;
+    }
+  }
+
+  return false;
 }
 
 function renderClientPhotoDataHtml(photoItems) {
@@ -5097,11 +5132,11 @@ function getClientPhotoDataItems(photoData) {
   }
 
   return [
-    { key: "colorPhoto", label: "Barevná fotografie" },
-    { key: "blackWhitePhoto", label: "Černobílá fotografie" }
+    { keys: ["colorPhoto", "ColorPhoto"], label: "Barevná fotografie" },
+    { keys: ["blackWhitePhoto", "BlackWhitePhoto", "photoBW", "PhotoBW"], label: "Černobílá fotografie" }
   ]
     .map(item => {
-      const base64 = photoData[item.key];
+      const base64 = item.keys.map(key => photoData[key]).find(value => value);
 
       if (!base64 || typeof base64 !== "string") {
         return null;
@@ -5463,7 +5498,7 @@ function summarizeBody(body) {
     return [];
   }
 
-  if (isClientDataResponse(body)) {
+  if (isClientDataResponse(body) || isClientDataStep(currentStep())) {
     return [];
   }
 
@@ -5800,6 +5835,11 @@ function isClientStatusResponse(value) {
 function isClientDataResponse(value) {
   return isClientStatusResponse(value)
     && ("photoData" in value);
+}
+
+function isClientDataStep(step) {
+  return step?.request?.method === "GET"
+    && String(step.request.path || "").includes("/v1/auth/client/data");
 }
 
 function isSaveClientDataResponse(value) {
