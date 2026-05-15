@@ -252,6 +252,45 @@
       ]
     },
     {
+      "id": "client-data-detail",
+      "title": "Klientská data - načtení detailu",
+      "description": "Načte kompletní klientská data přihlášeného uživatele včetně osobních údajů a dostupných fotografií.",
+      "requiresAuth": true,
+      "smoke": true,
+      "manualInputRequired": false,
+      "tags": ["Profil", "Klientská data", "Osobní údaje", "Fotografie", "Načtení"],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Klientská data"
+      },
+      "instructions": [
+        "Nejprve se přihlaste v panelu Přístup.",
+        "Spusťte krok a v mobilu zkontrolujte osobní údaje a fotografie, pokud je backend vrátí.",
+        "Scénář je obecný: u uživatele bez klientských dat může vrátit stav Missing nebo PendingPersonalData."
+      ],
+      "steps": [
+        {
+          "id": "client-data-detail-step",
+          "title": "Načíst kompletní klientská data",
+          "description": "Vrátí stav klienta, osobní údaje, metadata fotografie a případně i obrazová data.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/auth/client/data"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "notEmpty": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "client-data-create-and-save",
       "title": "Klientská data - založení klienta a uložení údajů",
       "description": "Ověří celý první průchod: uživatel zatím není klientem, backend založí klientský profil a uloží jeho osobní údaje.",

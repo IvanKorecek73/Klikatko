@@ -1018,6 +1018,53 @@ p {
   padding: 9px;
 }
 
+.client-photo-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  margin-top: 12px;
+}
+
+.client-photo-card {
+  background: #f8fbfc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 0;
+  overflow: hidden;
+}
+
+.client-photo-card img {
+  width: 100%;
+  aspect-ratio: 1;
+  background: #fff;
+  display: block;
+  object-fit: cover;
+}
+
+.client-photo-card figcaption {
+  display: grid;
+  gap: 3px;
+  padding: 8px 9px;
+}
+
+.client-photo-card strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.client-photo-card span,
+.client-photo-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.client-photo-empty {
+  background: #f8fbfc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 11px;
+}
+
 .mobile-info-field {
   background: #f4fbf8;
   border: 1px solid #b9e2d0;
