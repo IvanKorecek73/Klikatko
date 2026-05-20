@@ -3775,7 +3775,7 @@ function describeExpectedErrorBody(body) {
     messages.push(`Validace: ${validationMessages.join(" | ")}`);
   }
 
-  for (const key of ["createLoginResult", "notificationAccountRegistrationResult", "createNewPasswordResult"]) {
+  for (const key of ["createLoginResult", "notificationAccountRegistrationResult", "createNewPasswordResult", "changePasswordResult"]) {
     const result = body[key];
     if (result?.type === "Error" && result.text) {
       messages.push(`${key}: ${result.text}`);
@@ -4815,7 +4815,7 @@ function isProblemDetailsResponse(body) {
     return false;
   }
 
-  const hasBusinessError = ["createLoginResult", "notificationAccountRegistrationResult", "createNewPasswordResult"]
+  const hasBusinessError = ["createLoginResult", "notificationAccountRegistrationResult", "createNewPasswordResult", "changePasswordResult"]
     .some(key => body[key]?.type === "Error");
 
   return Number(body.status) >= 400 || Boolean(body.errors) || hasBusinessError;
@@ -4829,7 +4829,7 @@ function renderProblemDetailsCardHtml(body) {
       ? values.map(value => ({ field, value }))
       : [{ field, value: values }])
     .filter(item => !isEmpty(item.value));
-  const businessMessages = ["createLoginResult", "notificationAccountRegistrationResult", "createNewPasswordResult"]
+  const businessMessages = ["createLoginResult", "notificationAccountRegistrationResult", "createNewPasswordResult", "changePasswordResult"]
     .map(key => body[key])
     .filter(result => result?.type === "Error" && result.text)
     .map(result => result.text);

@@ -1313,6 +1313,10 @@
                         {
                             "path": "$.passwordChanged",
                             "equals": true
+                        },
+                        {
+                            "path": "$.changePasswordResult.type",
+                            "equals": "OK"
                         }
                     ]
                 }
@@ -1322,7 +1326,7 @@
     {
         "id": "password-change-wrong-current-password",
         "title": "Změna hesla - chybné aktuální heslo",
-        "description": "Negativní scénář ověří, že backend odmítne změnu hesla, pokud uživatel nezadá správné aktuální heslo.",
+        "description": "Negativní scénář ověří, že backend odmítne změnu hesla, pokud uživatel nezadá správné aktuální heslo. Aktuální BE vrací business chybu uvnitř HTTP 200 odpovědi.",
         "smoke": false,
         "manualInputRequired": true,
         "requiresAuth": true,
@@ -1340,7 +1344,7 @@
             {
                 "id": "password-change-submit-wrong-current-password",
                 "title": "Odmítnout chybné aktuální heslo",
-                "description": "Odešle záměrně neplatné aktuální heslo a očekává business chybu.",
+                "description": "Odešle záměrně neplatné aktuální heslo a očekává business chybu v changePasswordResult.",
                 "fields": [
                     {
                         "name": "currentPassword",
@@ -1366,16 +1370,16 @@
                     }
                 },
                 "expected": {
-                    "status": 400,
+                    "status": 200,
                     "outcome": "expectedError",
                     "assertions": [
                         {
-                            "path": "$.title",
-                            "equals": "Password change failed"
+                            "path": "$.changePasswordResult.type",
+                            "equals": "Error"
                         },
                         {
-                            "path": "$.detail",
-                            "equals": "Password could not be changed."
+                            "path": "$.changePasswordResult.text",
+                            "equals": "Error_MOSAPI_ChangePassword"
                         }
                     ]
                 }
