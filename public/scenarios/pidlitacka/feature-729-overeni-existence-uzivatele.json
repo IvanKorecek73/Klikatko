@@ -1315,7 +1315,11 @@
                             "equals": true
                         },
                         {
-                            "path": "$.changePasswordResult.type",
+                            "path": "$.changePasswordResult.id",
+                            "equals": 0
+                        },
+                        {
+                            "path": "$.changePasswordResult.text",
                             "equals": "OK"
                         }
                     ]
