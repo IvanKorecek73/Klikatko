@@ -5,7 +5,7 @@
     {
       "id": "pidlitacka-feature-729",
       "name": "PidLitacka - založení účtu",
-      "description": "Scénáře pro založení účtu, aktivaci, reaktivaci a obnovu hesla.",
+      "description": "Scénáře pro založení účtu, aktivaci, reaktivaci, obnovu hesla a změnu hesla.",
       "file": "feature-729-overeni-existence-uzivatele.json"
     },
     {

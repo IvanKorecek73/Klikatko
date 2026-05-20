@@ -1258,6 +1258,241 @@
           }
         }
       ]
+    },
+    {
+        "id": "password-change-success",
+        "title": "Změna hesla - hladký průběh",
+        "description": "Ověří, že přihlášený aktivní uživatel může změnit své heslo po zadání aktuálního hesla.",
+        "smoke": false,
+        "manualInputRequired": true,
+        "requiresAuth": true,
+        "tags": [
+            "account",
+            "password-change",
+            "password",
+            "active-account"
+        ],
+        "instructions": [
+            "Před spuštěním se přihlaste běžným uživatelem, ne anonymně.",
+            "Aktuální heslo je předvyplněné z přihlašovacího formuláře. Nové heslo vyplňte ručně.",
+            "Po úspěšné změně se zkuste přihlásit novým heslem. Klikátko pak uloženému uživateli aktualizuje heslo v seznamu rychlého výběru."
+        ],
+        "steps": [
+            {
+                "id": "password-change-submit",
+                "title": "Změnit heslo přihlášeného uživatele",
+                "description": "Odešle aktuální a nové heslo na endpoint změny hesla.",
+                "fields": [
+                    {
+                        "name": "currentPassword",
+                        "label": "Aktuální heslo",
+                        "type": "password",
+                        "value": "{{auth.password}}",
+                        "placeholder": "Aktuální heslo přihlášeného uživatele",
+                        "help": "Hodnota se bere z vybraného přihlašovacího profilu."
+                    },
+                    {
+                        "name": "newPassword",
+                        "label": "Nové heslo",
+                        "type": "password",
+                        "value": "",
+                        "placeholder": "Zadejte nové heslo"
+                    }
+                ],
+                "request": {
+                    "method": "POST",
+                    "path": "/v1/auth/password/change",
+                    "body": {
+                        "currentPassword": "{{form.currentPassword}}",
+                        "newPassword": "{{form.newPassword}}"
+                    }
+                },
+                "expected": {
+                    "status": 200,
+                    "assertions": [
+                        {
+                            "path": "$.passwordChanged",
+                            "equals": true
+                        }
+                    ]
+                }
+            }
+        ]
+    },
+    {
+        "id": "password-change-wrong-current-password",
+        "title": "Změna hesla - chybné aktuální heslo",
+        "description": "Negativní scénář ověří, že backend odmítne změnu hesla, pokud uživatel nezadá správné aktuální heslo.",
+        "smoke": false,
+        "manualInputRequired": true,
+        "requiresAuth": true,
+        "tags": [
+            "account",
+            "password-change",
+            "password",
+            "negative"
+        ],
+        "instructions": [
+            "Před spuštěním se přihlaste běžným uživatelem.",
+            "Aktuální heslo je záměrně chybné. Úspěchem scénáře je odmítnutí změny hesla."
+        ],
+        "steps": [
+            {
+                "id": "password-change-submit-wrong-current-password",
+                "title": "Odmítnout chybné aktuální heslo",
+                "description": "Odešle záměrně neplatné aktuální heslo a očekává business chybu.",
+                "fields": [
+                    {
+                        "name": "currentPassword",
+                        "label": "Aktuální heslo",
+                        "type": "password",
+                        "value": "spatne-heslo-123",
+                        "placeholder": "Záměrně chybné heslo"
+                    },
+                    {
+                        "name": "newPassword",
+                        "label": "Nové heslo",
+                        "type": "password",
+                        "value": "Test!ZmenaHesla123",
+                        "placeholder": "Validní nové heslo"
+                    }
+                ],
+                "request": {
+                    "method": "POST",
+                    "path": "/v1/auth/password/change",
+                    "body": {
+                        "currentPassword": "{{form.currentPassword}}",
+                        "newPassword": "{{form.newPassword}}"
+                    }
+                },
+                "expected": {
+                    "status": 400,
+                    "outcome": "expectedError",
+                    "assertions": [
+                        {
+                            "path": "$.title",
+                            "equals": "Password change failed"
+                        },
+                        {
+                            "path": "$.detail",
+                            "equals": "Password could not be changed."
+                        }
+                    ]
+                }
+            }
+        ]
+    },
+    {
+        "id": "password-change-weak-new-password",
+        "title": "Změna hesla - slabé nové heslo",
+        "description": "Validační scénář ověří, že nové heslo musí splnit minimální pravidla endpointu.",
+        "smoke": false,
+        "manualInputRequired": true,
+        "requiresAuth": true,
+        "tags": [
+            "account",
+            "password-change",
+            "password-validation",
+            "negative"
+        ],
+        "instructions": [
+            "Před spuštěním se přihlaste běžným uživatelem.",
+            "Nové heslo je záměrně příliš krátké. Úspěchem scénáře je validační chyba."
+        ],
+        "steps": [
+            {
+                "id": "password-change-submit-weak-new-password",
+                "title": "Odmítnout slabé nové heslo",
+                "description": "Odešle slabé nové heslo a očekává validační chybu.",
+                "fields": [
+                    {
+                        "name": "currentPassword",
+                        "label": "Aktuální heslo",
+                        "type": "password",
+                        "value": "{{auth.password}}",
+                        "placeholder": "Aktuální heslo přihlášeného uživatele"
+                    },
+                    {
+                        "name": "newPassword",
+                        "label": "Slabé nové heslo",
+                        "type": "password",
+                        "value": "short",
+                        "placeholder": "Záměrně slabé heslo"
+                    }
+                ],
+                "request": {
+                    "method": "POST",
+                    "path": "/v1/auth/password/change",
+                    "body": {
+                        "currentPassword": "{{form.currentPassword}}",
+                        "newPassword": "{{form.newPassword}}"
+                    }
+                },
+                "expected": {
+                    "status": 400,
+                    "outcome": "expectedError",
+                    "assertions": [
+                        {
+                            "path": "$.title",
+                            "equals": "Validation Error"
+                        },
+                        {
+                            "path": "$.errors.NewPassword",
+                            "lengthAtLeast": 1
+                        }
+                    ]
+                }
+            }
+        ]
+    },
+    {
+        "id": "password-change-without-login",
+        "title": "Změna hesla - bez přihlášení",
+        "description": "Bezpečnostní scénář ověří, že změna hesla není dostupná bez platného přihlášení.",
+        "smoke": false,
+        "manualInputRequired": false,
+        "tags": [
+            "account",
+            "password-change",
+            "authorization",
+            "negative"
+        ],
+        "instructions": [
+            "Před spuštěním se odhlaste. Úspěchem scénáře je odmítnutí požadavku kvůli chybějícímu access tokenu."
+        ],
+        "steps": [
+            {
+                "id": "password-change-submit-without-login",
+                "title": "Odmítnout změnu bez přihlášení",
+                "description": "Odešle požadavek bez přístupového tokenu a očekává HTTP 401.",
+                "fields": [
+                    {
+                        "name": "currentPassword",
+                        "label": "Aktuální heslo",
+                        "type": "password",
+                        "value": "CurrentSecret123"
+                    },
+                    {
+                        "name": "newPassword",
+                        "label": "Nové heslo",
+                        "type": "password",
+                        "value": "NewSecret123"
+                    }
+                ],
+                "request": {
+                    "method": "POST",
+                    "path": "/v1/auth/password/change",
+                    "body": {
+                        "currentPassword": "{{form.currentPassword}}",
+                        "newPassword": "{{form.newPassword}}"
+                    }
+                },
+                "expected": {
+                    "status": 401,
+                    "outcome": "expectedError"
+                }
+            }
+        ]
     }
   ]
 }

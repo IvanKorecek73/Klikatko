@@ -2182,7 +2182,10 @@ function isAccountStepText(text) {
     "auth/register",
     "auth/password",
     "password-recovery",
+    "password-change",
     "obnova hesla",
+    "změna hesla",
+    "zmena hesla",
     "resetovat heslo"
   ]);
 }
@@ -2281,6 +2284,10 @@ function getMobileActionTitle(step) {
     return "Obnova hesla";
   }
 
+  if (path.includes("/v1/auth/password/change")) {
+    return "Změna hesla";
+  }
+
   if (path.includes("/v1/auth/password/complete")) {
     return "Nastavení nového hesla";
   }
@@ -2331,6 +2338,10 @@ function getMobileActionSubtitle(step) {
     return (step.request?.method || "GET") === "GET"
       ? "Kompletní klientská data aktuálního uživatele."
       : "Uložení osobních údajů klienta.";
+  }
+
+  if (path.includes("/v1/auth/password/change")) {
+    return "Změna hesla aktuálně přihlášeného uživatele.";
   }
 
   if (path.includes("/v1/auth/")) {
@@ -6410,6 +6421,10 @@ function deriveScenarioTags(item) {
     tags.push("account");
   }
 
+  if (includesAny(text, ["password/change", "password-change", "změna hesla", "zmena hesla", "change password"])) {
+    tags.push("password-change");
+  }
+
   if (includesAny(text, ["client-data", "client/status", "client/data", "klientsk", "osobn"])) {
     tags.push("client-data");
   }
@@ -6651,8 +6666,12 @@ function getCategoryLabel(category) {
       return "Ov\u011b\u0159en\u00ed u\u017eivatele";
     case "password-recovery":
       return "Obnova hesla";
+    case "password-change":
+      return "Změna hesla";
     case "password-validation":
       return "Validace hesla";
+    case "authorization":
+      return "Autorizace";
     case "unknown-email":
       return "Nezn\u00e1m\u00fd e-mail";
     case "token":
