@@ -366,6 +366,132 @@
       ]
     },
     {
+      "id": "client-identifiers-tokenize-phone",
+      "title": "Klientská data - tokenizace telefonu",
+      "description": "Zaregistruje telefon jako MobApp identifikátor aktuálně přihlášeného klienta a následně znovu načte seznam identifikátorů.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "profile",
+        "client-data",
+        "client-identifiers",
+        "phone-tokenization",
+        "client-save"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Tokenizace telefonu"
+      },
+      "instructions": [
+        "Použijte účet, který má založeného aktivního klienta v Core MOS.",
+        "Scénář zapisuje nový MobApp identifikátor, proto není součástí smoke runu.",
+        "RegId, CLN a token jsou předvyplněné náhodnými hodnotami. Při opakovaném průchodu ponechte nové vygenerované hodnoty, aby nedošlo ke kolizi s dříve uloženým tokenem.",
+        "Po tokenizaci se znovu načtou identifikátory, aby bylo možné ověřit, že ukládací část propsala nový záznam."
+      ],
+      "steps": [
+        {
+          "id": "client-identifiers-tokenize-phone-step",
+          "title": "Tokenizovat telefon",
+          "description": "Přímo zaregistruje telefonní MobApp identifikátor a přiřadí ho aktuálnímu klientovi.",
+          "fields": [
+            {
+              "name": "regId",
+              "label": "Registrační ID",
+              "value": "{{uuid}}",
+              "placeholder": "Unikátní registrační identifikátor"
+            },
+            {
+              "name": "cln",
+              "label": "CLN telefonu",
+              "value": "{{uuid}}",
+              "placeholder": "Identifikátor zařízení / telefonu"
+            },
+            {
+              "name": "maskedPan",
+              "label": "Zobrazený název",
+              "value": "Testovací telefon / XXXX",
+              "placeholder": "Např. iPhone / XXXX"
+            },
+            {
+              "name": "identifierSubtype",
+              "label": "Podtyp identifikátoru",
+              "type": "select",
+              "value": "1",
+              "options": [
+                {
+                  "value": "1",
+                  "text": "1 - mobilní aplikace"
+                }
+              ]
+            },
+            {
+              "name": "tokenValue",
+              "label": "Token",
+              "value": "{{hex64}}",
+              "placeholder": "64 znaků SHA-256 hex"
+            },
+            {
+              "name": "tokenVersion",
+              "label": "Verze tokenu",
+              "type": "number",
+              "value": 1,
+              "min": 1,
+              "step": 1
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/identifiers/mobile",
+            "body": {
+              "regId": "{{form.regId}}",
+              "cln": "{{form.cln}}",
+              "maskedPan": "{{form.maskedPan}}",
+              "identifierSubtype": "{{form.identifierSubtype}}",
+              "tokenValue": "{{form.tokenValue}}",
+              "tokenVersion": "{{form.tokenVersion}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.steps",
+                "lengthAtLeast": 4
+              }
+            ]
+          }
+        },
+        {
+          "id": "client-identifiers-after-tokenization",
+          "title": "Ověřit identifikátory po tokenizaci",
+          "description": "Znovu načte seznam identifikátorů klienta po registraci telefonu.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "client-data-create-and-save",
       "title": "Klientská data - založení klienta a uložení údajů",
       "description": "Ověří celý první průchod: uživatel zatím není klientem, backend založí klientský profil a uloží jeho osobní údaje.",

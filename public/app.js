@@ -2245,7 +2245,7 @@ function getMobileActionTitle(step) {
   }
 
   if (path.includes("/v1/client/identifiers")) {
-    return "Identifikátory klienta";
+    return method === "POST" ? "Tokenizace telefonu" : "Identifikátory klienta";
   }
 
   if (path.includes("/v1/client/data")) {
@@ -2339,7 +2339,9 @@ function getMobileActionSubtitle(step) {
   }
 
   if (path.includes("/v1/client/identifiers")) {
-    return "Nosiče a identifikátory dostupné pro aktuálního klienta.";
+    return (step.request?.method || "GET") === "POST"
+      ? "Registrace telefonního MobApp identifikátoru k aktuálnímu klientovi."
+      : "Nosiče a identifikátory dostupné pro aktuálního klienta.";
   }
 
   if (path.includes("/v1/client/data")) {
@@ -3868,6 +3870,14 @@ function makeAppMessage(body, status, level) {
         : `Našli jsme ${count} identifikátorů klienta.`;
   }
 
+  if (isTokenizeMobileIdentifierResponse(body)) {
+    return body.status === "Completed"
+      ? "Telefonní identifikátor byl úspěšně tokenizován."
+      : body.status === "PartiallyCompleted"
+        ? "Tokenizace telefonu proběhla jen částečně."
+        : "Tokenizace telefonu nebyla dokončena.";
+  }
+
   if (isClientDataResponse(body) || isClientDataStep(currentStep())) {
     const view = getClientDataViewModel(body);
     const photoCount = getClientPhotoDataItems(view.photoData).length;
@@ -4672,6 +4682,10 @@ function buildAppCardsHtml(body, step = currentStep()) {
     return renderClientIdentifiersCardHtml(body);
   }
 
+  if (isTokenizeMobileIdentifierResponse(body)) {
+    return renderTokenizeMobileIdentifierCardHtml(body);
+  }
+
   if (isClientDataResponse(body) || isClientDataStep(step)) {
     return renderClientDataCardHtml(body);
   }
@@ -5291,6 +5305,72 @@ function renderClientIdentifiersCardHtml(body) {
   });
 }
 
+function renderTokenizeMobileIdentifierCardHtml(body) {
+  const steps = Array.isArray(body.steps) ? body.steps : [];
+  const statusLabel = getIdentifierOperationStatusLabel(body.status);
+  const completed = body.status === "Completed";
+
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>${escapeHtml(completed ? "Telefon tokenizován" : "Tokenizace telefonu")}</strong>
+        <p>${escapeHtml(completed
+          ? "MobApp identifikátor byl zaregistrován a přiřazen ke klientovi."
+          : "Flow tokenizace se nedokončilo úplně. Zkontrolujte kroky níže.")}</p>
+        <div class="app-card-meta">
+          ${renderAppChip(statusLabel)}
+          ${body.identifierId ? renderAppChip(`ID ${body.identifierId}`) : ""}
+          ${renderAppChip(steps.length === 1 ? "1 krok" : `${steps.length} kroků`)}
+        </div>
+        ${steps.length > 0 ? `
+          <div class="app-card-details">
+            ${steps.map(step => `
+              <div class="app-detail-row">
+                <span>${escapeHtml(getIdentifierStepLabel(step.name))}</span>
+                <span>${escapeHtml([
+                  getIdentifierOperationStatusLabel(step.status),
+                  step.message,
+                  step.resultId !== null && step.resultId !== undefined ? `ID ${step.resultId}` : null,
+                  step.resultType
+                ].filter(Boolean).join(" - "))}</span>
+              </div>
+            `).join("")}
+          </div>` : ""}
+      </article>
+    </div>
+  `;
+}
+
+function getIdentifierOperationStatusLabel(value) {
+  switch (value) {
+    case "Completed":
+      return "Dokončeno";
+    case "PartiallyCompleted":
+      return "Částečně dokončeno";
+    case "Failed":
+      return "Selhalo";
+    case "Skipped":
+      return "Přeskočeno";
+    default:
+      return value || "Neznámý stav";
+  }
+}
+
+function getIdentifierStepLabel(value) {
+  switch (value) {
+    case "CustomerResolution":
+      return "Ověření klienta";
+    case "IdentRegistration":
+      return "Registrace identifikátoru";
+    case "SetTokenIsPersonalized":
+      return "Nastavení personalizace";
+    case "AssignToken":
+      return "Přiřazení klientovi";
+    default:
+      return value || "Krok";
+  }
+}
+
 function getClientStatusTitle(body) {
   if (body.isUserActive === false) {
     return "Uživatel není aktivní";
@@ -5601,6 +5681,10 @@ function summarizeBody(body) {
   }
 
   if (isClientIdentifiersResponse(body)) {
+    return [];
+  }
+
+  if (isTokenizeMobileIdentifierResponse(body)) {
     return [];
   }
 
@@ -5937,6 +6021,14 @@ function isClientIdentifiersResponse(value) {
     && Array.isArray(value.identifiers);
 }
 
+function isTokenizeMobileIdentifierResponse(value) {
+  return value
+    && typeof value === "object"
+    && typeof value.status === "string"
+    && Array.isArray(value.steps)
+    && ("identifierId" in value);
+}
+
 function isClientDataStep(step) {
   return step?.request?.method === "GET"
     && String(step.request.path || "").includes("/v1/client/data");
@@ -6222,11 +6314,18 @@ function resolveFieldDefaultValue(field) {
 function resolveTemplate(template, { fieldValues }) {
   return String(template)
     .replaceAll("{{uuid}}", crypto.randomUUID())
+    .replaceAll("{{hex64}}", randomHex(32))
     .replaceAll("{{now}}", new Date().toISOString())
     .replace(/\{\{form\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => fieldValues[name] ?? "")
     .replace(/\{\{context\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => state.context[name] ?? "")
     .replace(/\{\{session\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => state.authSession?.[name] ?? "")
     .replace(/\{\{auth\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => state.authFormValues?.[name] ?? "");
+}
+
+function randomHex(byteLength) {
+  const bytes = new Uint8Array(byteLength);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function getPath(value, selector) {
@@ -6522,6 +6621,10 @@ function deriveScenarioTags(item) {
     tags.push("client-identifiers");
   }
 
+  if (includesAny(text, ["identifiers/mobile", "tokenizace telefonu", "tokeniz", "mobapp"])) {
+    tags.push("phone-tokenization");
+  }
+
   if (includesAny(text, ["client/status", "stav klient", "ověřit klient", "overit klient", "ověření klient", "overeni klient"])) {
     tags.push("client-check");
   }
@@ -6731,6 +6834,8 @@ function getCategoryLabel(category) {
       return "Načtení";
     case "client-identifiers":
       return "Identifikátory";
+    case "phone-tokenization":
+      return "Tokenizace telefonu";
     case "client-save":
       return "Uložení";
     case "client-create":
