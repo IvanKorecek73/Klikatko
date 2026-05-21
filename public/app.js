@@ -2244,6 +2244,10 @@ function getMobileActionTitle(step) {
     return "Stav klientských dat";
   }
 
+  if (path.includes("/v1/client/identifiers")) {
+    return "Identifikátory klienta";
+  }
+
   if (path.includes("/v1/client/data")) {
     return method === "GET" ? "Detail klientských dat" : "Uložení klientských dat";
   }
@@ -2332,6 +2336,10 @@ function getMobileActionSubtitle(step) {
 
   if (path.includes("/v1/client/status")) {
     return "Stav klientského profilu aktuálního uživatele.";
+  }
+
+  if (path.includes("/v1/client/identifiers")) {
+    return "Nosiče a identifikátory dostupné pro aktuálního klienta.";
   }
 
   if (path.includes("/v1/client/data")) {
@@ -3851,6 +3859,15 @@ function makeAppMessage(body, status, level) {
       : `Našli jsme ${count} cenových variant parkování.`;
   }
 
+  if (isClientIdentifiersResponse(body)) {
+    const count = body.identifiers.length;
+    return count === 0
+      ? "Klient zatím nemá žádné dostupné identifikátory."
+      : count === 1
+        ? "Našli jsme 1 identifikátor klienta."
+        : `Našli jsme ${count} identifikátorů klienta.`;
+  }
+
   if (isClientDataResponse(body) || isClientDataStep(currentStep())) {
     const view = getClientDataViewModel(body);
     const photoCount = getClientPhotoDataItems(view.photoData).length;
@@ -4651,6 +4668,10 @@ function buildAppCardsHtml(body, step = currentStep()) {
     return renderMosTicketInfoCardHtml(body);
   }
 
+  if (isClientIdentifiersResponse(body)) {
+    return renderClientIdentifiersCardHtml(body);
+  }
+
   if (isClientDataResponse(body) || isClientDataStep(step)) {
     return renderClientDataCardHtml(body);
   }
@@ -5218,6 +5239,58 @@ function renderSaveClientDataCardHtml(body) {
   `;
 }
 
+function renderClientIdentifiersCardHtml(body) {
+  const identifiers = Array.isArray(body.identifiers) ? body.identifiers : [];
+
+  if (identifiers.length === 0) {
+    return renderEmptyAppCardHtml(
+      "Žádné identifikátory",
+      "Klient zatím nemá uložený žádný identifikátor. Pro současnou fázi vývoje je prázdný seznam v pořádku."
+    );
+  }
+
+  return buildCardListHtml(identifiers, identifier => {
+    const title = identifier.name
+      || identifier.maskedPan
+      || (identifier.identifierId !== undefined ? `Identifikátor ${identifier.identifierId}` : "Identifikátor");
+
+    const textParts = [
+      identifier.maskedPan,
+      identifier.expiry ? `platnost ${identifier.expiry}` : null
+    ].filter(Boolean);
+
+    return {
+      title,
+      text: textParts.length > 0
+        ? textParts.join(", ")
+        : "Identifikátor dostupný pro služby klienta.",
+      chips: [
+        identifier.type || null,
+        identifier.subtype || null,
+        identifier.isActive ? "aktivní" : "neaktivní",
+        identifier.isPersonalized === true ? "personalizovaný" : identifier.isPersonalized === false ? "nepersonalizovaný" : null,
+        identifier.isAvailableForTransportSystem ? "dostupný pro dopravu" : null,
+        identifier.isActiveForTransportSystem ? "aktivní v dopravě" : null
+      ],
+      details: [
+        { label: "ID", value: identifier.identifierId },
+        { label: "Název", value: identifier.name },
+        { label: "Typ", value: identifier.type },
+        { label: "Podtyp", value: identifier.subtype },
+        { label: "Maskovaná hodnota", value: identifier.maskedPan },
+        { label: "Expirace", value: identifier.expiry },
+        { label: "Aktivní", value: formatBooleanAnswer(identifier.isActive) },
+        { label: "Personalizovaný", value: identifier.isPersonalized === null || identifier.isPersonalized === undefined ? null : formatBooleanAnswer(identifier.isPersonalized) },
+        { label: "Blokace", value: identifier.blockedStatus },
+        { label: "Dostupný pro dopravu", value: formatBooleanAnswer(identifier.isAvailableForTransportSystem) },
+        { label: "Aktivní v dopravě", value: formatBooleanAnswer(identifier.isActiveForTransportSystem) },
+        { label: "Platný od", value: identifier.validFrom ? formatDate(identifier.validFrom) : null },
+        { label: "Platný do", value: identifier.validTo ? formatDate(identifier.validTo) : null }
+      ].filter(item => !isEmpty(item.value))
+    };
+  });
+}
+
 function getClientStatusTitle(body) {
   if (body.isUserActive === false) {
     return "Uživatel není aktivní";
@@ -5326,6 +5399,12 @@ function buildCardListHtml(items, mapItem, options = {}) {
         <strong>${escapeHtml(card.title)}</strong>
         <p>${escapeHtml(card.text || "")}</p>
         ${chips.length > 0 ? `<div class="app-card-meta">${chips.map(renderAppChip).join("")}</div>` : ""}
+        ${Array.isArray(card.details) && card.details.length > 0 ? `
+          <div class="app-card-details">
+            ${card.details.map(row => `
+              <div class="app-detail-row"><span>${escapeHtml(row.label)}</span><span>${escapeHtml(row.value)}</span></div>
+            `).join("")}
+          </div>` : ""}
         ${selection ? `
           <div class="app-card-actions">
             <button type="button" class="app-card-select" data-selection-index="${index}">
@@ -5518,6 +5597,10 @@ function summarizeBody(body) {
   }
 
   if (isSaveClientDataResponse(body)) {
+    return [];
+  }
+
+  if (isClientIdentifiersResponse(body)) {
     return [];
   }
 
@@ -5846,6 +5929,12 @@ function isClientStatusResponse(value) {
 function isClientDataResponse(value) {
   return isClientStatusResponse(value)
     && ("photoData" in value);
+}
+
+function isClientIdentifiersResponse(value) {
+  return value
+    && typeof value === "object"
+    && Array.isArray(value.identifiers);
 }
 
 function isClientDataStep(step) {
@@ -6429,6 +6518,10 @@ function deriveScenarioTags(item) {
     tags.push("client-data");
   }
 
+  if (includesAny(text, ["client/identifiers", "identifik", "identifier"])) {
+    tags.push("client-identifiers");
+  }
+
   if (includesAny(text, ["client/status", "stav klient", "ověřit klient", "overit klient", "ověření klient", "overeni klient"])) {
     tags.push("client-check");
   }
@@ -6636,6 +6729,8 @@ function getCategoryLabel(category) {
       return "Ověření klienta";
     case "client-read":
       return "Načtení";
+    case "client-identifiers":
+      return "Identifikátory";
     case "client-save":
       return "Uložení";
     case "client-create":
