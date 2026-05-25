@@ -368,7 +368,7 @@
     {
       "id": "client-identifiers-tokenize-phone",
       "title": "Klientská data - tokenizace telefonu",
-      "description": "Zaregistruje telefon jako MobApp identifikátor aktuálně přihlášeného klienta a následně znovu načte seznam identifikátorů.",
+      "description": "Ověří celé aktuální flow MobApp tokenizace: identRegistration pouze potvrdí registraci, TokenID se očekává z AssignToken a následně se volá SetTokenIsPersonalized(false).",
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
@@ -388,13 +388,16 @@
         "Použijte účet, který má založeného aktivního klienta v Core MOS.",
         "Scénář zapisuje nový MobApp identifikátor, proto není součástí smoke runu.",
         "RegId, CLN a token jsou předvyplněné náhodnými hodnotami. Při opakovaném průchodu ponechte nové vygenerované hodnoty, aby nedošlo ke kolizi s dříve uloženým tokenem.",
+        "STP hlavičky a podpis řeší backend z konfigurace, v Klikátku se nezadávají.",
+        "Úspěšné flow musí projít v pořadí: identRegistration -> AssignToken -> SetTokenIsPersonalized(false). TokenID má přijít až z AssignToken.",
+        "Pokud se vrátí PartiallyCompleted nebo chyba, v Mobilu a Logu zkontrolujte, zda prošla identRegistration a co přesně vrátil AssignToken.",
         "Po tokenizaci se znovu načtou identifikátory, aby bylo možné ověřit, že ukládací část propsala nový záznam."
       ],
       "steps": [
         {
           "id": "client-identifiers-tokenize-phone-step",
           "title": "Tokenizovat telefon",
-          "description": "Přímo zaregistruje telefonní MobApp identifikátor a přiřadí ho aktuálnímu klientovi.",
+          "description": "Odešle tokenizační požadavek. Backend má nejprve potvrdit identRegistration, potom získat TokenID z AssignToken a nakonec nastavit SetTokenIsPersonalized(false).",
           "fields": [
             {
               "name": "regId",
@@ -467,6 +470,38 @@
               {
                 "path": "$.steps",
                 "lengthAtLeast": 4
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "IdentRegistration"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[2].name",
+                "equals": "AssignToken"
+              },
+              {
+                "path": "$.steps[2].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[3].name",
+                "equals": "SetTokenIsPersonalized"
+              },
+              {
+                "path": "$.steps[3].status",
+                "equals": "Completed"
               }
             ]
           }

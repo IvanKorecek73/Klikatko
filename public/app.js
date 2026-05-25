@@ -5315,11 +5315,11 @@ function renderTokenizeMobileIdentifierCardHtml(body) {
       <article class="app-card">
         <strong>${escapeHtml(completed ? "Telefon tokenizován" : "Tokenizace telefonu")}</strong>
         <p>${escapeHtml(completed
-          ? "MobApp identifikátor byl zaregistrován a přiřazen ke klientovi."
-          : "Flow tokenizace se nedokončilo úplně. Zkontrolujte kroky níže.")}</p>
+          ? "MobApp identifikátor byl zaregistrován, AssignToken vrátil TokenID a personalizace byla vypnutá."
+          : "Flow tokenizace se nedokončilo úplně. Zkontrolujte, zda prošla identRegistration, co vrátil AssignToken a zda proběhlo SetTokenIsPersonalized(false).")}</p>
         <div class="app-card-meta">
           ${renderAppChip(statusLabel)}
-          ${body.identifierId ? renderAppChip(`ID ${body.identifierId}`) : ""}
+          ${body.identifierId ? renderAppChip(`TokenID ${body.identifierId}`) : ""}
           ${renderAppChip(steps.length === 1 ? "1 krok" : `${steps.length} kroků`)}
         </div>
         ${steps.length > 0 ? `
@@ -5327,18 +5327,24 @@ function renderTokenizeMobileIdentifierCardHtml(body) {
             ${steps.map(step => `
               <div class="app-detail-row">
                 <span>${escapeHtml(getIdentifierStepLabel(step.name))}</span>
-                <span>${escapeHtml([
-                  getIdentifierOperationStatusLabel(step.status),
-                  step.message,
-                  step.resultId !== null && step.resultId !== undefined ? `ID ${step.resultId}` : null,
-                  step.resultType
-                ].filter(Boolean).join(" - "))}</span>
+                <span>${escapeHtml(getIdentifierStepDetails(step, body))}</span>
               </div>
             `).join("")}
           </div>` : ""}
       </article>
     </div>
   `;
+}
+
+function getIdentifierStepDetails(step, body) {
+  return [
+    getIdentifierOperationStatusLabel(step.status),
+    step.name === "IdentRegistration" && step.status === "Completed" ? "registrace potvrzena" : null,
+    step.name === "AssignToken" && body.identifierId ? `TokenID ${body.identifierId}` : null,
+    step.message,
+    step.resultId !== null && step.resultId !== undefined ? `Result ID ${step.resultId}` : null,
+    step.resultType
+  ].filter(Boolean).join(" - ");
 }
 
 function getIdentifierOperationStatusLabel(value) {
@@ -5361,11 +5367,11 @@ function getIdentifierStepLabel(value) {
     case "CustomerResolution":
       return "Ověření klienta";
     case "IdentRegistration":
-      return "Registrace identifikátoru";
-    case "SetTokenIsPersonalized":
-      return "Nastavení personalizace";
+      return "identRegistration";
     case "AssignToken":
-      return "Přiřazení klientovi";
+      return "AssignToken (vrací TokenID)";
+    case "SetTokenIsPersonalized":
+      return "SetTokenIsPersonalized(false)";
     default:
       return value || "Krok";
   }
