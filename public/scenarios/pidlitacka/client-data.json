@@ -414,8 +414,8 @@
             {
               "name": "maskedPan",
               "label": "Zobrazený název",
-              "value": "Testovací telefon / XXXX",
-              "placeholder": "Např. iPhone / XXXX"
+              "value": "TestPhone-001",
+              "placeholder": "Max. 16 znaků, např. TestPhone-001"
             },
             {
               "name": "identifierSubtype",
