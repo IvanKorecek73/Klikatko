@@ -551,7 +551,7 @@
         "Scénář není součástí smoke runu, protože vyžaduje ruční dokončení tokenizační brány.",
         "V prvním kroku backend zahájí registraci a vrátí registrační ID a URL tokenizační brány.",
         "Otevřete odkaz na tokenizační bránu, dokončete registraci karty a potom spusťte krok kontroly stavu.",
-        "Úspěšný výsledek druhého kroku je stav COMPLETED, typ BPK a alespoň jeden vrácený token.",
+        "Úspěšný výsledek druhého kroku je dokončené volání backendu, typ BPK a alespoň jeden vrácený token. Hodnota registrationState je stav tokenizační brány a může být např. res_recv_backend_mos.",
         "Pokud brána ještě není dokončená, vraťte se na krok kontroly stavu a spusťte ho znovu."
       ],
       "steps": [
@@ -621,7 +621,7 @@
               },
               {
                 "path": "$.registrationState",
-                "equals": "COMPLETED"
+                "notEmpty": true
               },
               {
                 "path": "$.identifierType",
@@ -630,6 +630,14 @@
               {
                 "path": "$.tokens",
                 "lengthAtLeast": 1
+              },
+              {
+                "path": "$.tokens[0].tokenValue",
+                "notEmpty": true
+              },
+              {
+                "path": "$.tokens[0].tokenState",
+                "notEmpty": true
               },
               {
                 "path": "$.steps[0].name",
@@ -693,7 +701,7 @@
       "instructions": [
         "Použijte registrační ID vrácené scénářem tokenizace platební karty.",
         "Scénář se hodí, pokud se chcete k rozpracované registraci vrátit později nebo ověřit stav opakovaně.",
-        "Úspěšně dokončená tokenizace vrací registrationState = COMPLETED, identifierType = BPK a alespoň jeden token."
+        "Úspěšně dokončená tokenizace vrací status = Completed, identifierType = BPK a alespoň jeden token. Hodnota registrationState je stav tokenizační brány a nemusí být přesně COMPLETED."
       ],
       "steps": [
         {

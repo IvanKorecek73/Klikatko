@@ -3893,7 +3893,7 @@ function makeAppMessage(body, status, level) {
   }
 
   if (isIdentifierRegistrationStateResponse(body)) {
-    return body.registrationState === "COMPLETED"
+    return isCompletedIdentifierRegistrationState(body)
       ? "Tokenizace platební karty je dokončená."
       : `Tokenizace platební karty je ve stavu ${body.registrationState || body.status}.`;
   }
@@ -5371,7 +5371,7 @@ function renderStartIdentifierRegistrationCardHtml(body) {
 function renderIdentifierRegistrationStateCardHtml(body) {
   const tokens = Array.isArray(body.tokens) ? body.tokens : [];
   const steps = Array.isArray(body.steps) ? body.steps : [];
-  const completed = body.registrationState === "COMPLETED";
+  const completed = isCompletedIdentifierRegistrationState(body);
 
   return `
     <div class="app-card-list">
@@ -6181,6 +6181,14 @@ function isIdentifierRegistrationStateResponse(value) {
     && Array.isArray(value.steps)
     && Array.isArray(value.tokens)
     && ("registrationState" in value);
+}
+
+function isCompletedIdentifierRegistrationState(value) {
+  const tokens = Array.isArray(value?.tokens) ? value.tokens : [];
+
+  return value?.status === "Completed"
+    && value?.identifierType === "BPK"
+    && tokens.some(token => !isEmpty(token?.tokenValue));
 }
 
 function isClientDataStep(step) {
