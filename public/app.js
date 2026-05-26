@@ -2244,6 +2244,14 @@ function getMobileActionTitle(step) {
     return "Stav klientských dat";
   }
 
+  if (path.includes("/v1/client/identifiers/bank-card/registration")) {
+    return "Tokenizace platební karty";
+  }
+
+  if (path.includes("/v1/client/identifiers/registration/")) {
+    return "Stav tokenizace karty";
+  }
+
   if (path.includes("/v1/client/identifiers")) {
     return method === "POST" ? "Tokenizace telefonu" : "Identifikátory klienta";
   }
@@ -3878,6 +3886,18 @@ function makeAppMessage(body, status, level) {
         : "Tokenizace telefonu nebyla dokončena.";
   }
 
+  if (isStartIdentifierRegistrationResponse(body)) {
+    return body.status === "Completed"
+      ? "Registrace platební karty byla zahájena. Pokračujte v tokenizační bráně."
+      : "Registraci platební karty se nepodařilo zahájit.";
+  }
+
+  if (isIdentifierRegistrationStateResponse(body)) {
+    return body.registrationState === "COMPLETED"
+      ? "Tokenizace platební karty je dokončená."
+      : `Tokenizace platební karty je ve stavu ${body.registrationState || body.status}.`;
+  }
+
   if (isClientDataResponse(body) || isClientDataStep(currentStep())) {
     const view = getClientDataViewModel(body);
     const photoCount = getClientPhotoDataItems(view.photoData).length;
@@ -4682,6 +4702,14 @@ function buildAppCardsHtml(body, step = currentStep()) {
     return renderClientIdentifiersCardHtml(body);
   }
 
+  if (isStartIdentifierRegistrationResponse(body)) {
+    return renderStartIdentifierRegistrationCardHtml(body);
+  }
+
+  if (isIdentifierRegistrationStateResponse(body)) {
+    return renderIdentifierRegistrationStateCardHtml(body);
+  }
+
   if (isTokenizeMobileIdentifierResponse(body)) {
     return renderTokenizeMobileIdentifierCardHtml(body);
   }
@@ -5305,6 +5333,94 @@ function renderClientIdentifiersCardHtml(body) {
   });
 }
 
+function renderStartIdentifierRegistrationCardHtml(body) {
+  const steps = Array.isArray(body.steps) ? body.steps : [];
+  const completed = body.status === "Completed";
+
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>${escapeHtml(completed ? "Registrace karty zahájena" : "Registrace karty")}</strong>
+        <p>${escapeHtml(completed
+          ? "Otevřete tokenizační bránu, dokončete registraci karty a potom pokračujte kontrolou stavu."
+          : "Registraci platební karty se nepodařilo připravit. Zkontrolujte kroky níže.")}</p>
+        <div class="app-card-meta">
+          ${renderAppChip(getIdentifierOperationStatusLabel(body.status))}
+          ${body.registrationId ? renderAppChip(`Registrace ${body.registrationId}`) : ""}
+          ${renderAppChip(steps.length === 1 ? "1 krok" : `${steps.length} kroků`)}
+        </div>
+        <div class="app-card-details">
+          <div class="app-detail-row"><span>Registrační ID</span><span>${escapeHtml(body.registrationId || "-")}</span></div>
+          <div class="app-detail-row"><span>Tokenizační brána</span><span>${escapeHtml(body.gatewayRedirectUrl || "-")}</span></div>
+          ${steps.map(step => `
+            <div class="app-detail-row">
+              <span>${escapeHtml(getIdentifierStepLabel(step.name))}</span>
+              <span>${escapeHtml(getIdentifierStepDetails(step, body))}</span>
+            </div>
+          `).join("")}
+        </div>
+        ${body.gatewayRedirectUrl ? `
+          <div class="app-card-actions">
+            <a class="app-card-link" href="${escapeHtml(body.gatewayRedirectUrl)}" target="_blank" rel="noopener">Otevřít tokenizační bránu</a>
+          </div>` : ""}
+      </article>
+    </div>
+  `;
+}
+
+function renderIdentifierRegistrationStateCardHtml(body) {
+  const tokens = Array.isArray(body.tokens) ? body.tokens : [];
+  const steps = Array.isArray(body.steps) ? body.steps : [];
+  const completed = body.registrationState === "COMPLETED";
+
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>${escapeHtml(completed ? "Tokenizace karty dokončena" : "Stav tokenizace karty")}</strong>
+        <p>${escapeHtml(completed
+          ? "Tokenizační brána vrátila token platební karty."
+          : "Registrace karty zatím není dokončená nebo nevrátila aktivní token.")}</p>
+        <div class="app-card-meta">
+          ${renderAppChip(getIdentifierOperationStatusLabel(body.status))}
+          ${body.registrationState ? renderAppChip(body.registrationState) : ""}
+          ${body.identifierType ? renderAppChip(body.identifierType) : ""}
+          ${renderAppChip(tokens.length === 1 ? "1 token" : `${tokens.length} tokenů`)}
+        </div>
+        <div class="app-card-details">
+          <div class="app-detail-row"><span>Stav registrace</span><span>${escapeHtml(body.registrationState || "-")}</span></div>
+          <div class="app-detail-row"><span>Typ identifikátoru</span><span>${escapeHtml(body.identifierType || "-")}</span></div>
+          <div class="app-detail-row"><span>Režim</span><span>${escapeHtml(body.mode || "-")}</span></div>
+          <div class="app-detail-row"><span>Vytvořeno</span><span>${escapeHtml(body.created ? formatDate(body.created) : "-")}</span></div>
+        </div>
+        ${tokens.length > 0 ? `
+          <div class="app-card-details">
+            ${tokens.map((token, index) => `
+              <div class="app-detail-row">
+                <span>${escapeHtml(tokens.length === 1 ? "Token" : `Token ${index + 1}`)}</span>
+                <span>${escapeHtml([
+                  token.tokenState,
+                  token.tokenVersion ? `verze ${token.tokenVersion}` : null,
+                  token.tokenValue ? `hodnota ${formatCompactIdentifier(token.tokenValue)}` : null,
+                  token.validFrom && token.validTo ? `${token.validFrom} - ${token.validTo}` : null,
+                  token.isTestOnly ? "testovací" : null
+                ].filter(Boolean).join(" - "))}</span>
+              </div>
+            `).join("")}
+          </div>` : ""}
+        ${steps.length > 0 ? `
+          <div class="app-card-details">
+            ${steps.map(step => `
+              <div class="app-detail-row">
+                <span>${escapeHtml(getIdentifierStepLabel(step.name))}</span>
+                <span>${escapeHtml(getIdentifierStepDetails(step, body))}</span>
+              </div>
+            `).join("")}
+          </div>` : ""}
+      </article>
+    </div>
+  `;
+}
+
 function renderTokenizeMobileIdentifierCardHtml(body) {
   const steps = Array.isArray(body.steps) ? body.steps : [];
   const statusLabel = getIdentifierOperationStatusLabel(body.status);
@@ -5347,6 +5463,16 @@ function getIdentifierStepDetails(step, body) {
   ].filter(Boolean).join(" - ");
 }
 
+function formatCompactIdentifier(value) {
+  const text = String(value || "");
+
+  if (text.length <= 18) {
+    return text;
+  }
+
+  return `${text.slice(0, 8)}...${text.slice(-6)}`;
+}
+
 function getIdentifierOperationStatusLabel(value) {
   switch (value) {
     case "Completed":
@@ -5372,6 +5498,10 @@ function getIdentifierStepLabel(value) {
       return "AssignToken (vrací TokenID)";
     case "SetTokenIsPersonalized":
       return "SetTokenIsPersonalized(false)";
+    case "InitiateTokenRegistration":
+      return "Zahájení tokenizace";
+    case "GetTokenRegistrationState":
+      return "Načtení stavu tokenizace";
     default:
       return value || "Krok";
   }
@@ -6035,6 +6165,24 @@ function isTokenizeMobileIdentifierResponse(value) {
     && ("identifierId" in value);
 }
 
+function isStartIdentifierRegistrationResponse(value) {
+  return value
+    && typeof value === "object"
+    && typeof value.status === "string"
+    && Array.isArray(value.steps)
+    && ("registrationId" in value)
+    && ("gatewayRedirectUrl" in value);
+}
+
+function isIdentifierRegistrationStateResponse(value) {
+  return value
+    && typeof value === "object"
+    && typeof value.status === "string"
+    && Array.isArray(value.steps)
+    && Array.isArray(value.tokens)
+    && ("registrationState" in value);
+}
+
 function isClientDataStep(step) {
   return step?.request?.method === "GET"
     && String(step.request.path || "").includes("/v1/client/data");
@@ -6627,8 +6775,12 @@ function deriveScenarioTags(item) {
     tags.push("client-identifiers");
   }
 
-  if (includesAny(text, ["identifiers/mobile", "tokenizace telefonu", "tokeniz", "mobapp"])) {
+  if (includesAny(text, ["identifiers/mobile", "tokenizace telefonu", "telefonní identifikátor", "mobapp"])) {
     tags.push("phone-tokenization");
+  }
+
+  if (includesAny(text, ["identifiers/bank-card/registration", "identifiers/registration", "tokenizace platebn", "tokenizace karty", "bank-card"])) {
+    tags.push("card-tokenization");
   }
 
   if (includesAny(text, ["client/status", "stav klient", "ověřit klient", "overit klient", "ověření klient", "overeni klient"])) {
@@ -6842,6 +6994,8 @@ function getCategoryLabel(category) {
       return "Identifikátory";
     case "phone-tokenization":
       return "Tokenizace telefonu";
+    case "card-tokenization":
+      return "Tokenizace karty";
     case "client-save":
       return "Uložení";
     case "client-create":

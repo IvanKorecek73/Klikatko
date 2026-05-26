@@ -527,6 +527,212 @@
       ]
     },
     {
+      "id": "client-identifiers-tokenize-bank-card",
+      "title": "Klientská data - tokenizace platební karty",
+      "description": "Zahájí registraci platební karty přes tokenizační bránu, umožní ručně dokončit bránu a následně ověří stav registrace a vznik tokenu.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "profile",
+        "client-data",
+        "client-identifiers",
+        "cards",
+        "card-tokenization",
+        "client-save"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Tokenizace platební karty"
+      },
+      "instructions": [
+        "Použijte účet, který má založeného aktivního klienta v Core MOS.",
+        "Scénář není součástí smoke runu, protože vyžaduje ruční dokončení tokenizační brány.",
+        "V prvním kroku backend zahájí registraci a vrátí registrační ID a URL tokenizační brány.",
+        "Otevřete odkaz na tokenizační bránu, dokončete registraci karty a potom spusťte krok kontroly stavu.",
+        "Úspěšný výsledek druhého kroku je stav COMPLETED, typ BPK a alespoň jeden vrácený token.",
+        "Pokud brána ještě není dokončená, vraťte se na krok kontroly stavu a spusťte ho znovu."
+      ],
+      "steps": [
+        {
+          "id": "client-identifiers-bank-card-start",
+          "title": "Zahájit tokenizaci karty",
+          "description": "Založí registraci platební karty v tokenizační bráně a vrátí odkaz, který je potřeba otevřít ručně.",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/identifiers/bank-card/registration"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.registrationId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.gatewayRedirectUrl",
+                "notEmpty": true
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "InitiateTokenRegistration"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              }
+            ]
+          },
+          "extract": {
+            "bankCardRegistrationId": "$.registrationId",
+            "bankCardGatewayRedirectUrl": "$.gatewayRedirectUrl"
+          }
+        },
+        {
+          "id": "client-identifiers-bank-card-state",
+          "title": "Ověřit stav tokenizace karty",
+          "description": "Po dokončení tokenizační brány ověří, že registrace doběhla a vrátila token platební karty.",
+          "requiresContext": [
+            "bankCardRegistrationId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers/registration/{{context.bankCardRegistrationId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.registrationState",
+                "equals": "COMPLETED"
+              },
+              {
+                "path": "$.identifierType",
+                "equals": "BPK"
+              },
+              {
+                "path": "$.tokens",
+                "lengthAtLeast": 1
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "GetTokenRegistrationState"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              }
+            ]
+          }
+        },
+        {
+          "id": "client-identifiers-after-bank-card-tokenization",
+          "title": "Ověřit identifikátory po tokenizaci karty",
+          "description": "Znovu načte seznam identifikátorů klienta, aby bylo vidět, zda se tokenizovaná karta propsala do dostupných identifikátorů.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-identifiers-bank-card-state-by-id",
+      "title": "Klientská data - stav tokenizace karty podle ID",
+      "description": "Pomocný scénář pro opakované ověření stavu tokenizace platební karty podle ručně zadaného registračního ID.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "profile",
+        "client-data",
+        "client-identifiers",
+        "cards",
+        "card-tokenization",
+        "client-read"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Stav tokenizace karty"
+      },
+      "instructions": [
+        "Použijte registrační ID vrácené scénářem tokenizace platební karty.",
+        "Scénář se hodí, pokud se chcete k rozpracované registraci vrátit později nebo ověřit stav opakovaně.",
+        "Úspěšně dokončená tokenizace vrací registrationState = COMPLETED, identifierType = BPK a alespoň jeden token."
+      ],
+      "steps": [
+        {
+          "id": "client-identifiers-bank-card-state-manual",
+          "title": "Načíst stav tokenizace karty",
+          "description": "Načte aktuální stav tokenizační registrace podle ručně zadaného registračního ID.",
+          "fields": [
+            {
+              "name": "registrationId",
+              "label": "Registrační ID",
+              "value": "",
+              "placeholder": "Např. reg-123"
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers/registration/{{form.registrationId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.registrationState",
+                "notEmpty": true
+              },
+              {
+                "path": "$.identifierType",
+                "equals": "BPK"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "client-data-create-and-save",
       "title": "Klientská data - založení klienta a uložení údajů",
       "description": "Ověří celý první průchod: uživatel zatím není klientem, backend založí klientský profil a uloží jeho osobní údaje.",
