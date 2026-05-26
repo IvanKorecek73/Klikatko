@@ -2245,7 +2245,7 @@ function getMobileActionTitle(step) {
   }
 
   if (path.includes("/v1/client/identifiers/bank-card/registration")) {
-    return "Tokenizace platební karty";
+    return path.includes("/complete") ? "Kompletace tokenizace karty" : "Tokenizace platební karty";
   }
 
   if (path.includes("/v1/client/identifiers/registration/")) {
@@ -3886,6 +3886,12 @@ function makeAppMessage(body, status, level) {
         : "Tokenizace telefonu nebyla dokončena.";
   }
 
+  if (isCompleteIdentifierRegistrationResponse(body)) {
+    return body.status === "Completed"
+      ? "Tokenizace platební karty byla dokončena a token byl přiřazen klientovi."
+      : "Kompletace tokenizace platební karty nebyla dokončena.";
+  }
+
   if (isStartIdentifierRegistrationResponse(body)) {
     return body.status === "Completed"
       ? "Registrace platební karty byla zahájena. Pokračujte v tokenizační bráně."
@@ -4710,6 +4716,10 @@ function buildAppCardsHtml(body, step = currentStep()) {
     return renderIdentifierRegistrationStateCardHtml(body);
   }
 
+  if (isCompleteIdentifierRegistrationResponse(body)) {
+    return renderCompleteIdentifierRegistrationCardHtml(body);
+  }
+
   if (isTokenizeMobileIdentifierResponse(body)) {
     return renderTokenizeMobileIdentifierCardHtml(body);
   }
@@ -5421,6 +5431,39 @@ function renderIdentifierRegistrationStateCardHtml(body) {
   `;
 }
 
+function renderCompleteIdentifierRegistrationCardHtml(body) {
+  const steps = Array.isArray(body.steps) ? body.steps : [];
+  const completed = body.status === "Completed";
+
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>${escapeHtml(completed ? "Karta přiřazena klientovi" : "Kompletace tokenizace karty")}</strong>
+        <p>${escapeHtml(completed
+          ? "Primární token z tokenizační brány byl předán do AssignToken a vznikl klientský identifikátor platební karty."
+          : "Kompletace tokenizace karty se nedokončila. Zkontrolujte kroky níže.")}</p>
+        <div class="app-card-meta">
+          ${renderAppChip(getIdentifierOperationStatusLabel(body.status))}
+          ${body.identifierId ? renderAppChip(`TokenID ${body.identifierId}`) : ""}
+          ${body.registrationState ? renderAppChip(body.registrationState) : ""}
+          ${renderAppChip(steps.length === 1 ? "1 krok" : `${steps.length} kroků`)}
+        </div>
+        <div class="app-card-details">
+          <div class="app-detail-row"><span>Výsledek</span><span>${escapeHtml(getIdentifierOperationStatusLabel(body.status))}</span></div>
+          <div class="app-detail-row"><span>TokenID</span><span>${escapeHtml(body.identifierId || "-")}</span></div>
+          <div class="app-detail-row"><span>Stav registrace</span><span>${escapeHtml(body.registrationState || "-")}</span></div>
+          ${steps.map(step => `
+            <div class="app-detail-row">
+              <span>${escapeHtml(getIdentifierStepLabel(step.name))}</span>
+              <span>${escapeHtml(getIdentifierStepDetails(step, body))}</span>
+            </div>
+          `).join("")}
+        </div>
+      </article>
+    </div>
+  `;
+}
+
 function renderTokenizeMobileIdentifierCardHtml(body) {
   const steps = Array.isArray(body.steps) ? body.steps : [];
   const statusLabel = getIdentifierOperationStatusLabel(body.status);
@@ -5502,6 +5545,8 @@ function getIdentifierStepLabel(value) {
       return "Zahájení tokenizace";
     case "GetTokenRegistrationState":
       return "Načtení stavu tokenizace";
+    case "PrimaryTokenSelection":
+      return "Výběr primárního tokenu";
     default:
       return value || "Krok";
   }
@@ -6162,7 +6207,17 @@ function isTokenizeMobileIdentifierResponse(value) {
     && typeof value === "object"
     && typeof value.status === "string"
     && Array.isArray(value.steps)
-    && ("identifierId" in value);
+    && ("identifierId" in value)
+    && !("registrationState" in value);
+}
+
+function isCompleteIdentifierRegistrationResponse(value) {
+  return value
+    && typeof value === "object"
+    && typeof value.status === "string"
+    && Array.isArray(value.steps)
+    && ("identifierId" in value)
+    && ("registrationState" in value);
 }
 
 function isStartIdentifierRegistrationResponse(value) {

@@ -529,7 +529,7 @@
     {
       "id": "client-identifiers-tokenize-bank-card",
       "title": "Klientská data - tokenizace platební karty",
-      "description": "Zahájí registraci platební karty přes tokenizační bránu, umožní ručně dokončit bránu a následně ověří stav registrace a vznik tokenu.",
+      "description": "Zahájí registraci platební karty přes tokenizační bránu, umožní ručně dokončit bránu, ověří stav registrace a následně přiřadí primární token ke klientovi.",
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
@@ -552,6 +552,7 @@
         "V prvním kroku backend zahájí registraci a vrátí registrační ID a URL tokenizační brány.",
         "Otevřete odkaz na tokenizační bránu, dokončete registraci karty a potom spusťte krok kontroly stavu.",
         "Úspěšný výsledek druhého kroku je dokončené volání backendu, typ BPK a alespoň jeden vrácený token. Hodnota registrationState je stav tokenizační brány a může být např. res_recv_backend_mos.",
+        "Po ověření stavu spusťte kompletaci. Ta vybere primární token z brány a přiřadí ho aktuálnímu klientovi přes AssignToken.",
         "Pokud brána ještě není dokončená, vraťte se na krok kontroly stavu a spusťte ho znovu."
       ],
       "steps": [
@@ -659,9 +660,70 @@
           }
         },
         {
+          "id": "client-identifiers-bank-card-complete",
+          "title": "Dokončit tokenizaci karty",
+          "description": "Vybere primární token vrácený tokenizační bránou a přiřadí ho aktuálnímu klientovi.",
+          "requiresContext": [
+            "bankCardRegistrationId"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/identifiers/bank-card/registration/{{context.bankCardRegistrationId}}/complete"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.registrationState",
+                "notEmpty": true
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "GetTokenRegistrationState"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[2].name",
+                "equals": "PrimaryTokenSelection"
+              },
+              {
+                "path": "$.steps[2].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[3].name",
+                "equals": "AssignToken"
+              },
+              {
+                "path": "$.steps[3].status",
+                "equals": "Completed"
+              }
+            ]
+          }
+        },
+        {
           "id": "client-identifiers-after-bank-card-tokenization",
-          "title": "Ověřit identifikátory po tokenizaci karty",
-          "description": "Znovu načte seznam identifikátorů klienta, aby bylo vidět, zda se tokenizovaná karta propsala do dostupných identifikátorů.",
+          "title": "Ověřit identifikátory po kompletaci karty",
+          "description": "Znovu načte seznam identifikátorů klienta, aby bylo vidět, zda se tokenizovaná karta po kompletaci propsala do dostupných identifikátorů.",
           "request": {
             "method": "GET",
             "path": "/v1/client/identifiers"
@@ -734,6 +796,68 @@
               {
                 "path": "$.identifierType",
                 "equals": "BPK"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-identifiers-bank-card-complete-by-id",
+      "title": "Klientská data - kompletace tokenizace karty podle ID",
+      "description": "Pomocný scénář pro ruční dokončení tokenizace platební karty podle registračního ID, pokud už registrace v bráně proběhla.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "profile",
+        "client-data",
+        "client-identifiers",
+        "cards",
+        "card-tokenization",
+        "client-save"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Kompletace tokenizace karty"
+      },
+      "instructions": [
+        "Použijte registrační ID tokenizace, která už prošla tokenizační bránou.",
+        "Kompletace vybere primární token z registrace a přiřadí ho aktuálnímu klientovi.",
+        "Úspěšná kompletace vrací status = Completed a neprázdné identifierId z AssignToken."
+      ],
+      "steps": [
+        {
+          "id": "client-identifiers-bank-card-complete-manual",
+          "title": "Dokončit tokenizaci karty",
+          "description": "Přiřadí primární token z dokončené registrace aktuálnímu klientovi.",
+          "fields": [
+            {
+              "name": "registrationId",
+              "label": "Registrační ID",
+              "value": "",
+              "placeholder": "Např. 2605-87a2f728-c5aa-478b-9553-994a480316e4"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/identifiers/bank-card/registration/{{form.registrationId}}/complete"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.registrationState",
+                "notEmpty": true
               }
             ]
           }
