@@ -888,7 +888,7 @@
         "Scénář není součástí smoke runu, protože vyžaduje ruční dokončení tokenizační brány.",
         "V prvním kroku backend zahájí registraci a vrátí registrační ID a URL tokenizační brány.",
         "Otevřete odkaz na tokenizační bránu, dokončete registraci InKarty a potom spusťte krok kontroly stavu.",
-        "Úspěšný stav vrací identifierType = InKarta a alespoň jeden token. Hodnota registrationState je stav tokenizační brány a může být např. res_recv_backend_mos.",
+        "Úspěšný stav vrací identifierType = inkarta a alespoň jeden token. Hodnota registrationState je stav tokenizační brány a může být např. res_recv_backend_mos.",
         "Po ověření stavu spusťte kompletaci. Ta vybere primární token z brány a přiřadí ho aktuálnímu klientovi přes AssignToken."
       ],
       "steps": [
@@ -962,7 +962,7 @@
               },
               {
                 "path": "$.identifierType",
-                "equals": "InKarta"
+                "equals": "inkarta"
               },
               {
                 "path": "$.tokens",
@@ -1098,7 +1098,7 @@
       "instructions": [
         "Použijte registrační ID vrácené scénářem tokenizace InKarty.",
         "Scénář se hodí, pokud se chcete k rozpracované registraci vrátit později nebo ověřit stav opakovaně.",
-        "Úspěšně dokončená tokenizace vrací status = Completed, identifierType = InKarta a alespoň jeden token."
+        "Úspěšně dokončená tokenizace vrací status = Completed, identifierType = inkarta a alespoň jeden token."
       ],
       "steps": [
         {
@@ -1130,7 +1130,7 @@
               },
               {
                 "path": "$.identifierType",
-                "equals": "InKarta"
+                "equals": "inkarta"
               }
             ]
           }
