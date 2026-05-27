@@ -2244,6 +2244,10 @@ function getMobileActionTitle(step) {
     return "Stav klientských dat";
   }
 
+  if (path.includes("/v1/client/identifiers/inkarta/registration")) {
+    return path.includes("/complete") ? "Kompletace tokenizace InKarty" : "Tokenizace InKarty";
+  }
+
   if (path.includes("/v1/client/identifiers/bank-card/registration")) {
     return path.includes("/complete") ? "Kompletace tokenizace karty" : "Tokenizace platební karty";
   }
@@ -3887,21 +3891,24 @@ function makeAppMessage(body, status, level) {
   }
 
   if (isCompleteIdentifierRegistrationResponse(body)) {
+    const kind = getGatewayIdentifierKindLabel(currentStep(), body);
     return body.status === "Completed"
-      ? "Tokenizace platební karty byla dokončena a token byl přiřazen klientovi."
-      : "Kompletace tokenizace platební karty nebyla dokončena.";
+      ? `Tokenizace ${kind.genitiveLower} byla dokončena a token byl přiřazen klientovi.`
+      : `Kompletace tokenizace ${kind.genitiveLower} nebyla dokončena.`;
   }
 
   if (isStartIdentifierRegistrationResponse(body)) {
+    const kind = getGatewayIdentifierKindLabel(currentStep(), body);
     return body.status === "Completed"
-      ? "Registrace platební karty byla zahájena. Pokračujte v tokenizační bráně."
-      : "Registraci platební karty se nepodařilo zahájit.";
+      ? `Registrace ${kind.genitiveLower} byla zahájena. Pokračujte v tokenizační bráně.`
+      : `Registraci ${kind.genitiveLower} se nepodařilo zahájit.`;
   }
 
   if (isIdentifierRegistrationStateResponse(body)) {
+    const kind = getGatewayIdentifierKindLabel(currentStep(), body);
     return isCompletedIdentifierRegistrationState(body)
-      ? "Tokenizace platební karty je dokončená."
-      : `Tokenizace platební karty je ve stavu ${body.registrationState || body.status}.`;
+      ? `Tokenizace ${kind.genitiveLower} je dokončená.`
+      : `Tokenizace ${kind.genitiveLower} je ve stavu ${body.registrationState || body.status}.`;
   }
 
   if (isClientDataResponse(body) || isClientDataStep(currentStep())) {
@@ -4709,15 +4716,15 @@ function buildAppCardsHtml(body, step = currentStep()) {
   }
 
   if (isStartIdentifierRegistrationResponse(body)) {
-    return renderStartIdentifierRegistrationCardHtml(body);
+    return renderStartIdentifierRegistrationCardHtml(body, step);
   }
 
   if (isIdentifierRegistrationStateResponse(body)) {
-    return renderIdentifierRegistrationStateCardHtml(body);
+    return renderIdentifierRegistrationStateCardHtml(body, step);
   }
 
   if (isCompleteIdentifierRegistrationResponse(body)) {
-    return renderCompleteIdentifierRegistrationCardHtml(body);
+    return renderCompleteIdentifierRegistrationCardHtml(body, step);
   }
 
   if (isTokenizeMobileIdentifierResponse(body)) {
@@ -5343,17 +5350,18 @@ function renderClientIdentifiersCardHtml(body) {
   });
 }
 
-function renderStartIdentifierRegistrationCardHtml(body) {
+function renderStartIdentifierRegistrationCardHtml(body, step = currentStep()) {
   const steps = Array.isArray(body.steps) ? body.steps : [];
   const completed = body.status === "Completed";
+  const kind = getGatewayIdentifierKindLabel(step, body);
 
   return `
     <div class="app-card-list">
       <article class="app-card">
-        <strong>${escapeHtml(completed ? "Registrace karty zahájena" : "Registrace karty")}</strong>
+        <strong>${escapeHtml(completed ? `${kind.shortName} - registrace zahájena` : `Registrace ${kind.genitiveLower}`)}</strong>
         <p>${escapeHtml(completed
-          ? "Otevřete tokenizační bránu, dokončete registraci karty a potom pokračujte kontrolou stavu."
-          : "Registraci platební karty se nepodařilo připravit. Zkontrolujte kroky níže.")}</p>
+          ? `Otevřete tokenizační bránu, dokončete registraci ${kind.genitiveLower} a potom pokračujte kontrolou stavu.`
+          : `Registraci ${kind.genitiveLower} se nepodařilo připravit. Zkontrolujte kroky níže.`)}</p>
         <div class="app-card-meta">
           ${renderAppChip(getIdentifierOperationStatusLabel(body.status))}
           ${body.registrationId ? renderAppChip(`Registrace ${body.registrationId}`) : ""}
@@ -5378,18 +5386,19 @@ function renderStartIdentifierRegistrationCardHtml(body) {
   `;
 }
 
-function renderIdentifierRegistrationStateCardHtml(body) {
+function renderIdentifierRegistrationStateCardHtml(body, step = currentStep()) {
   const tokens = Array.isArray(body.tokens) ? body.tokens : [];
   const steps = Array.isArray(body.steps) ? body.steps : [];
   const completed = isCompletedIdentifierRegistrationState(body);
+  const kind = getGatewayIdentifierKindLabel(step, body);
 
   return `
     <div class="app-card-list">
       <article class="app-card">
-        <strong>${escapeHtml(completed ? "Tokenizace karty dokončena" : "Stav tokenizace karty")}</strong>
+        <strong>${escapeHtml(completed ? `${kind.shortName} - tokenizace dokončena` : `${kind.shortName} - stav tokenizace`)}</strong>
         <p>${escapeHtml(completed
-          ? "Tokenizační brána vrátila token platební karty."
-          : "Registrace karty zatím není dokončená nebo nevrátila aktivní token.")}</p>
+          ? `Tokenizační brána vrátila token ${kind.genitiveLower}.`
+          : `Registrace ${kind.genitiveLower} zatím není dokončená nebo nevrátila aktivní token.`)}</p>
         <div class="app-card-meta">
           ${renderAppChip(getIdentifierOperationStatusLabel(body.status))}
           ${body.registrationState ? renderAppChip(body.registrationState) : ""}
@@ -5431,17 +5440,18 @@ function renderIdentifierRegistrationStateCardHtml(body) {
   `;
 }
 
-function renderCompleteIdentifierRegistrationCardHtml(body) {
+function renderCompleteIdentifierRegistrationCardHtml(body, step = currentStep()) {
   const steps = Array.isArray(body.steps) ? body.steps : [];
   const completed = body.status === "Completed";
+  const kind = getGatewayIdentifierKindLabel(step, body);
 
   return `
     <div class="app-card-list">
       <article class="app-card">
-        <strong>${escapeHtml(completed ? "Karta přiřazena klientovi" : "Kompletace tokenizace karty")}</strong>
+        <strong>${escapeHtml(completed ? `${kind.shortName} přiřazena klientovi` : `Kompletace tokenizace ${kind.genitiveLower}`)}</strong>
         <p>${escapeHtml(completed
-          ? "Primární token z tokenizační brány byl předán do AssignToken a vznikl klientský identifikátor platební karty."
-          : "Kompletace tokenizace karty se nedokončila. Zkontrolujte kroky níže.")}</p>
+          ? `Primární token z tokenizační brány byl předán do AssignToken a vznikl klientský identifikátor ${kind.genitiveLower}.`
+          : `Kompletace tokenizace ${kind.genitiveLower} se nedokončila. Zkontrolujte kroky níže.`)}</p>
         <div class="app-card-meta">
           ${renderAppChip(getIdentifierOperationStatusLabel(body.status))}
           ${body.identifierId ? renderAppChip(`TokenID ${body.identifierId}`) : ""}
@@ -5514,6 +5524,25 @@ function formatCompactIdentifier(value) {
   }
 
   return `${text.slice(0, 8)}...${text.slice(-6)}`;
+}
+
+function getGatewayIdentifierKindLabel(step = currentStep(), body = null) {
+  const path = String(step?.request?.path || "").toLowerCase();
+  const identifierType = String(body?.identifierType || "").toLowerCase();
+
+  if (path.includes("/inkarta/") || identifierType === "inkarta") {
+    return {
+      shortName: "InKarta",
+      genitiveLower: "InKarty",
+      expectedIdentifierType: "InKarta"
+    };
+  }
+
+  return {
+    shortName: "Platební karta",
+    genitiveLower: "platební karty",
+    expectedIdentifierType: "BPK"
+  };
 }
 
 function getIdentifierOperationStatusLabel(value) {
@@ -6846,6 +6875,10 @@ function deriveScenarioTags(item) {
     tags.push("card-tokenization");
   }
 
+  if (includesAny(text, ["identifiers/inkarta/registration", "tokenizace inkarty", "inkarta"])) {
+    tags.push("inkarta-tokenization");
+  }
+
   if (includesAny(text, ["client/status", "stav klient", "ověřit klient", "overit klient", "ověření klient", "overeni klient"])) {
     tags.push("client-check");
   }
@@ -7059,6 +7092,8 @@ function getCategoryLabel(category) {
       return "Tokenizace telefonu";
     case "card-tokenization":
       return "Tokenizace karty";
+    case "inkarta-tokenization":
+      return "Tokenizace InKarty";
     case "client-save":
       return "Uložení";
     case "client-create":

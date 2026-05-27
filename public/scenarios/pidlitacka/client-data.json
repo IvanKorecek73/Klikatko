@@ -865,6 +865,340 @@
       ]
     },
     {
+      "id": "client-identifiers-tokenize-inkarta",
+      "title": "Klientská data - tokenizace InKarty",
+      "description": "Zahájí registraci InKarty přes tokenizační bránu, umožní ručně dokončit bránu, ověří stav registrace a následně přiřadí primární token ke klientovi.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "profile",
+        "client-data",
+        "client-identifiers",
+        "inkarta-tokenization",
+        "client-save"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Tokenizace InKarty"
+      },
+      "instructions": [
+        "Použijte účet, který má založeného aktivního klienta v Core MOS.",
+        "Scénář není součástí smoke runu, protože vyžaduje ruční dokončení tokenizační brány.",
+        "V prvním kroku backend zahájí registraci a vrátí registrační ID a URL tokenizační brány.",
+        "Otevřete odkaz na tokenizační bránu, dokončete registraci InKarty a potom spusťte krok kontroly stavu.",
+        "Úspěšný stav vrací identifierType = InKarta a alespoň jeden token. Hodnota registrationState je stav tokenizační brány a může být např. res_recv_backend_mos.",
+        "Po ověření stavu spusťte kompletaci. Ta vybere primární token z brány a přiřadí ho aktuálnímu klientovi přes AssignToken."
+      ],
+      "steps": [
+        {
+          "id": "client-identifiers-inkarta-start",
+          "title": "Zahájit tokenizaci InKarty",
+          "description": "Založí registraci InKarty v tokenizační bráně a vrátí odkaz, který je potřeba otevřít ručně.",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/identifiers/inkarta/registration"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.registrationId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.gatewayRedirectUrl",
+                "notEmpty": true
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "InitiateTokenRegistration"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              }
+            ]
+          },
+          "extract": {
+            "inKartaRegistrationId": "$.registrationId",
+            "inKartaGatewayRedirectUrl": "$.gatewayRedirectUrl"
+          }
+        },
+        {
+          "id": "client-identifiers-inkarta-state",
+          "title": "Ověřit stav tokenizace InKarty",
+          "description": "Po dokončení tokenizační brány ověří, že registrace doběhla a vrátila token InKarty.",
+          "requiresContext": [
+            "inKartaRegistrationId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers/registration/{{context.inKartaRegistrationId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.registrationState",
+                "notEmpty": true
+              },
+              {
+                "path": "$.identifierType",
+                "equals": "InKarta"
+              },
+              {
+                "path": "$.tokens",
+                "lengthAtLeast": 1
+              },
+              {
+                "path": "$.tokens[0].tokenValue",
+                "notEmpty": true
+              },
+              {
+                "path": "$.tokens[0].tokenState",
+                "notEmpty": true
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "GetTokenRegistrationState"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              }
+            ]
+          }
+        },
+        {
+          "id": "client-identifiers-inkarta-complete",
+          "title": "Dokončit tokenizaci InKarty",
+          "description": "Vybere primární token vrácený tokenizační bránou a přiřadí ho aktuálnímu klientovi.",
+          "requiresContext": [
+            "inKartaRegistrationId"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/identifiers/inkarta/registration/{{context.inKartaRegistrationId}}/complete"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.registrationState",
+                "notEmpty": true
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "GetTokenRegistrationState"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[2].name",
+                "equals": "PrimaryTokenSelection"
+              },
+              {
+                "path": "$.steps[2].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[3].name",
+                "equals": "AssignToken"
+              },
+              {
+                "path": "$.steps[3].status",
+                "equals": "Completed"
+              }
+            ]
+          }
+        },
+        {
+          "id": "client-identifiers-after-inkarta-tokenization",
+          "title": "Ověřit identifikátory po kompletaci InKarty",
+          "description": "Znovu načte seznam identifikátorů klienta, aby bylo vidět, zda se tokenizovaná InKarta po kompletaci propsala do dostupných identifikátorů.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-identifiers-inkarta-state-by-id",
+      "title": "Klientská data - stav tokenizace InKarty podle ID",
+      "description": "Pomocný scénář pro opakované ověření stavu tokenizace InKarty podle ručně zadaného registračního ID.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "profile",
+        "client-data",
+        "client-identifiers",
+        "inkarta-tokenization",
+        "client-read"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Stav tokenizace InKarty"
+      },
+      "instructions": [
+        "Použijte registrační ID vrácené scénářem tokenizace InKarty.",
+        "Scénář se hodí, pokud se chcete k rozpracované registraci vrátit později nebo ověřit stav opakovaně.",
+        "Úspěšně dokončená tokenizace vrací status = Completed, identifierType = InKarta a alespoň jeden token."
+      ],
+      "steps": [
+        {
+          "id": "client-identifiers-inkarta-state-manual",
+          "title": "Načíst stav tokenizace InKarty",
+          "description": "Načte aktuální stav tokenizační registrace InKarty podle ručně zadaného registračního ID.",
+          "fields": [
+            {
+              "name": "registrationId",
+              "label": "Registrační ID",
+              "value": "",
+              "placeholder": "Např. 2705-87a2f728-c5aa-478b-9553-994a480316e4"
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers/registration/{{form.registrationId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.registrationState",
+                "notEmpty": true
+              },
+              {
+                "path": "$.identifierType",
+                "equals": "InKarta"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-identifiers-inkarta-complete-by-id",
+      "title": "Klientská data - kompletace tokenizace InKarty podle ID",
+      "description": "Pomocný scénář pro ruční dokončení tokenizace InKarty podle registračního ID, pokud už registrace v bráně proběhla.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "profile",
+        "client-data",
+        "client-identifiers",
+        "inkarta-tokenization",
+        "client-save"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Kompletace tokenizace InKarty"
+      },
+      "instructions": [
+        "Použijte registrační ID tokenizace InKarty, která už prošla tokenizační bránou.",
+        "Kompletace vybere primární token z registrace a přiřadí ho aktuálnímu klientovi.",
+        "Úspěšná kompletace vrací status = Completed a neprázdné identifierId z AssignToken."
+      ],
+      "steps": [
+        {
+          "id": "client-identifiers-inkarta-complete-manual",
+          "title": "Dokončit tokenizaci InKarty",
+          "description": "Přiřadí primární token z dokončené registrace InKarty aktuálnímu klientovi.",
+          "fields": [
+            {
+              "name": "registrationId",
+              "label": "Registrační ID",
+              "value": "",
+              "placeholder": "Např. 2705-87a2f728-c5aa-478b-9553-994a480316e4"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/identifiers/inkarta/registration/{{form.registrationId}}/complete"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.registrationState",
+                "notEmpty": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "client-data-create-and-save",
       "title": "Klientská data - založení klienta a uložení údajů",
       "description": "Ověří celý první průchod: uživatel zatím není klientem, backend založí klientský profil a uloží jeho osobní údaje.",
