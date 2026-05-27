@@ -2248,6 +2248,10 @@ function getMobileActionTitle(step) {
     return path.includes("/complete") ? "Kompletace tokenizace InKarty" : "Tokenizace InKarty";
   }
 
+  if (path.includes("/v1/client/identifiers/opus-card/registration")) {
+    return path.includes("/complete") ? "Kompletace tokenizace OpusCard" : "Tokenizace OpusCard";
+  }
+
   if (path.includes("/v1/client/identifiers/bank-card/registration")) {
     return path.includes("/complete") ? "Kompletace tokenizace karty" : "Tokenizace platební karty";
   }
@@ -5538,6 +5542,14 @@ function getGatewayIdentifierKindLabel(step = currentStep(), body = null) {
     };
   }
 
+  if (path.includes("/opus-card/") || identifierType === "opuscard" || identifierType === "opus-card") {
+    return {
+      shortName: "OpusCard",
+      genitiveLower: "OpusCard",
+      expectedIdentifierType: "OpusCard"
+    };
+  }
+
   return {
     shortName: "Platební karta",
     genitiveLower: "platební karty",
@@ -6271,7 +6283,7 @@ function isCompletedIdentifierRegistrationState(value) {
   const tokens = Array.isArray(value?.tokens) ? value.tokens : [];
 
   return value?.status === "Completed"
-    && value?.identifierType === "BPK"
+    && !isEmpty(value?.identifierType)
     && tokens.some(token => !isEmpty(token?.tokenValue));
 }
 
@@ -6879,6 +6891,10 @@ function deriveScenarioTags(item) {
     tags.push("inkarta-tokenization");
   }
 
+  if (includesAny(text, ["identifiers/opus-card/registration", "tokenizace opuscard", "opuscard", "opus-card"])) {
+    tags.push("opuscard-tokenization");
+  }
+
   if (includesAny(text, ["client/status", "stav klient", "ověřit klient", "overit klient", "ověření klient", "overeni klient"])) {
     tags.push("client-check");
   }
@@ -7094,6 +7110,8 @@ function getCategoryLabel(category) {
       return "Tokenizace karty";
     case "inkarta-tokenization":
       return "Tokenizace InKarty";
+    case "opuscard-tokenization":
+      return "Tokenizace OpusCard";
     case "client-save":
       return "Uložení";
     case "client-create":

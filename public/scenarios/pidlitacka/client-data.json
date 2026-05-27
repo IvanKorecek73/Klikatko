@@ -1199,6 +1199,340 @@
       ]
     },
     {
+      "id": "client-identifiers-tokenize-opuscard",
+      "title": "Klientská data - tokenizace OpusCard",
+      "description": "Zahájí registraci OpusCard přes tokenizační bránu, umožní ručně dokončit bránu, ověří stav registrace a následně přiřadí primární token ke klientovi.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "profile",
+        "client-data",
+        "client-identifiers",
+        "opuscard-tokenization",
+        "client-save"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Tokenizace OpusCard"
+      },
+      "instructions": [
+        "Použijte účet, který má založeného aktivního klienta v Core MOS.",
+        "Scénář není součástí smoke runu, protože vyžaduje ruční dokončení tokenizační brány.",
+        "V prvním kroku backend zahájí registraci a vrátí registrační ID a URL tokenizační brány.",
+        "Otevřete odkaz na tokenizační bránu, dokončete registraci OpusCard a potom spusťte krok kontroly stavu.",
+        "Úspěšný stav vrací typ identifikátoru OpusCard nebo jeho variantu z MOS a alespoň jeden token. Hodnota registrationState je stav tokenizační brány a může být např. res_recv_backend_mos.",
+        "Po ověření stavu spusťte kompletaci. Ta vybere primární token z brány a přiřadí ho aktuálnímu klientovi přes AssignToken."
+      ],
+      "steps": [
+        {
+          "id": "client-identifiers-opuscard-start",
+          "title": "Zahájit tokenizaci OpusCard",
+          "description": "Založí registraci OpusCard v tokenizační bráně a vrátí odkaz, který je potřeba otevřít ručně.",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/identifiers/opus-card/registration"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.registrationId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.gatewayRedirectUrl",
+                "notEmpty": true
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "InitiateTokenRegistration"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              }
+            ]
+          },
+          "extract": {
+            "opusCardRegistrationId": "$.registrationId",
+            "opusCardGatewayRedirectUrl": "$.gatewayRedirectUrl"
+          }
+        },
+        {
+          "id": "client-identifiers-opuscard-state",
+          "title": "Ověřit stav tokenizace OpusCard",
+          "description": "Po dokončení tokenizační brány ověří, že registrace doběhla a vrátila token OpusCard.",
+          "requiresContext": [
+            "opusCardRegistrationId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers/registration/{{context.opusCardRegistrationId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.registrationState",
+                "notEmpty": true
+              },
+              {
+                "path": "$.identifierType",
+                "notEmpty": true
+              },
+              {
+                "path": "$.tokens",
+                "lengthAtLeast": 1
+              },
+              {
+                "path": "$.tokens[0].tokenValue",
+                "notEmpty": true
+              },
+              {
+                "path": "$.tokens[0].tokenState",
+                "notEmpty": true
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "GetTokenRegistrationState"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              }
+            ]
+          }
+        },
+        {
+          "id": "client-identifiers-opuscard-complete",
+          "title": "Dokončit tokenizaci OpusCard",
+          "description": "Vybere primární token vrácený tokenizační bránou a přiřadí ho aktuálnímu klientovi.",
+          "requiresContext": [
+            "opusCardRegistrationId"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/identifiers/opus-card/registration/{{context.opusCardRegistrationId}}/complete"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.registrationState",
+                "notEmpty": true
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "GetTokenRegistrationState"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[2].name",
+                "equals": "PrimaryTokenSelection"
+              },
+              {
+                "path": "$.steps[2].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[3].name",
+                "equals": "AssignToken"
+              },
+              {
+                "path": "$.steps[3].status",
+                "equals": "Completed"
+              }
+            ]
+          }
+        },
+        {
+          "id": "client-identifiers-after-opuscard-tokenization",
+          "title": "Ověřit identifikátory po kompletaci OpusCard",
+          "description": "Znovu načte seznam identifikátorů klienta, aby bylo vidět, zda se tokenizovaná OpusCard po kompletaci propsala do dostupných identifikátorů.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-identifiers-opuscard-state-by-id",
+      "title": "Klientská data - stav tokenizace OpusCard podle ID",
+      "description": "Pomocný scénář pro opakované ověření stavu tokenizace OpusCard podle ručně zadaného registračního ID.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "profile",
+        "client-data",
+        "client-identifiers",
+        "opuscard-tokenization",
+        "client-read"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Stav tokenizace OpusCard"
+      },
+      "instructions": [
+        "Použijte registrační ID vrácené scénářem tokenizace OpusCard.",
+        "Scénář se hodí, pokud se chcete k rozpracované registraci vrátit později nebo ověřit stav opakovaně.",
+        "Úspěšně dokončená tokenizace vrací status = Completed, typ identifikátoru pro OpusCard a alespoň jeden token."
+      ],
+      "steps": [
+        {
+          "id": "client-identifiers-opuscard-state-manual",
+          "title": "Načíst stav tokenizace OpusCard",
+          "description": "Načte aktuální stav tokenizační registrace OpusCard podle ručně zadaného registračního ID.",
+          "fields": [
+            {
+              "name": "registrationId",
+              "label": "Registrační ID",
+              "value": "",
+              "placeholder": "Např. 2705-87a2f728-c5aa-478b-9553-994a480316e4"
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers/registration/{{form.registrationId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.registrationState",
+                "notEmpty": true
+              },
+              {
+                "path": "$.identifierType",
+                "notEmpty": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-identifiers-opuscard-complete-by-id",
+      "title": "Klientská data - kompletace tokenizace OpusCard podle ID",
+      "description": "Pomocný scénář pro ruční dokončení tokenizace OpusCard podle registračního ID, pokud už registrace v bráně proběhla.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "profile",
+        "client-data",
+        "client-identifiers",
+        "opuscard-tokenization",
+        "client-save"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Kompletace tokenizace OpusCard"
+      },
+      "instructions": [
+        "Použijte registrační ID tokenizace OpusCard, která už prošla tokenizační bránou.",
+        "Kompletace vybere primární token z registrace a přiřadí ho aktuálnímu klientovi.",
+        "Úspěšná kompletace vrací status = Completed a neprázdné identifierId z AssignToken."
+      ],
+      "steps": [
+        {
+          "id": "client-identifiers-opuscard-complete-manual",
+          "title": "Dokončit tokenizaci OpusCard",
+          "description": "Přiřadí primární token z dokončené registrace OpusCard aktuálnímu klientovi.",
+          "fields": [
+            {
+              "name": "registrationId",
+              "label": "Registrační ID",
+              "value": "",
+              "placeholder": "Např. 2705-87a2f728-c5aa-478b-9553-994a480316e4"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/identifiers/opus-card/registration/{{form.registrationId}}/complete"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.registrationState",
+                "notEmpty": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "client-data-create-and-save",
       "title": "Klientská data - založení klienta a uložení údajů",
       "description": "Ověří celý první průchod: uživatel zatím není klientem, backend založí klientský profil a uloží jeho osobní údaje.",
