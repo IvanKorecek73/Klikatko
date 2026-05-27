@@ -2252,6 +2252,10 @@ function getMobileActionTitle(step) {
     return path.includes("/complete") ? "Kompletace tokenizace OpusCard" : "Tokenizace OpusCard";
   }
 
+  if (path.includes("/v1/client/identifiers/litacka/registration")) {
+    return path.includes("/complete") ? "Kompletace tokenizace Lítačky" : "Tokenizace Lítačky";
+  }
+
   if (path.includes("/v1/client/identifiers/bank-card/registration")) {
     return path.includes("/complete") ? "Kompletace tokenizace karty" : "Tokenizace platební karty";
   }
@@ -5550,6 +5554,14 @@ function getGatewayIdentifierKindLabel(step = currentStep(), body = null) {
     };
   }
 
+  if (path.includes("/litacka/") || identifierType === "litacka" || identifierType === "lítačka") {
+    return {
+      shortName: "Lítačka",
+      genitiveLower: "Lítačky",
+      expectedIdentifierType: "Litacka"
+    };
+  }
+
   return {
     shortName: "Platební karta",
     genitiveLower: "platební karty",
@@ -6895,6 +6907,10 @@ function deriveScenarioTags(item) {
     tags.push("opuscard-tokenization");
   }
 
+  if (includesAny(text, ["identifiers/litacka/registration", "tokenizace lítačky", "tokenizace litacky", "litacka", "lítačka"])) {
+    tags.push("litacka-tokenization");
+  }
+
   if (includesAny(text, ["client/status", "stav klient", "ověřit klient", "overit klient", "ověření klient", "overeni klient"])) {
     tags.push("client-check");
   }
@@ -7112,6 +7128,8 @@ function getCategoryLabel(category) {
       return "Tokenizace InKarty";
     case "opuscard-tokenization":
       return "Tokenizace OpusCard";
+    case "litacka-tokenization":
+      return "Tokenizace Lítačky";
     case "client-save":
       return "Uložení";
     case "client-create":

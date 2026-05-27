@@ -1533,6 +1533,346 @@
       ]
     },
     {
+      "id": "client-identifiers-tokenize-litacka",
+      "title": "Klientská data - tokenizace Lítačky",
+      "description": "Zahájí registraci Lítačky přes tokenizační bránu, umožní ručně dokončit bránu, ověří stav registrace a následně přiřadí primární token ke klientovi.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "profile",
+        "client-data",
+        "client-identifiers",
+        "litacka-tokenization",
+        "client-save"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Tokenizace Lítačky"
+      },
+      "instructions": [
+        "Použijte účet, který má založeného aktivního klienta v Core MOS.",
+        "Scénář není součástí smoke runu, protože vyžaduje ruční dokončení tokenizační brány.",
+        "V prvním kroku backend zahájí registraci a vrátí registrační ID a URL tokenizační brány.",
+        "Otevřete odkaz na tokenizační bránu, dokončete registraci Lítačky a potom spusťte krok kontroly stavu.",
+        "U Lítačky je důležité, aby data z brány obsahovala objekt litacka, plain CLN, UID, validFrom, validTo a litackaType v hodnotách 1 až 5.",
+        "Pozor na PVP typ 5: podle současné analýzy může v Core MOS skončit jiným tokem a IsPersonalized může zůstat nevyplněné.",
+        "Úspěšný stav vrací typ identifikátoru Lítačka nebo jeho variantu z MOS a alespoň jeden token. Hodnota registrationState je stav tokenizační brány a může být např. res_recv_backend_mos.",
+        "Po ověření stavu spusťte kompletaci. Ta vybere primární token z brány a přiřadí ho aktuálnímu klientovi přes AssignToken."
+      ],
+      "steps": [
+        {
+          "id": "client-identifiers-litacka-start",
+          "title": "Zahájit tokenizaci Lítačky",
+          "description": "Založí registraci Lítačky v tokenizační bráně a vrátí odkaz, který je potřeba otevřít ručně.",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/identifiers/litacka/registration"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.registrationId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.gatewayRedirectUrl",
+                "notEmpty": true
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "InitiateTokenRegistration"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              }
+            ]
+          },
+          "extract": {
+            "litackaRegistrationId": "$.registrationId",
+            "litackaGatewayRedirectUrl": "$.gatewayRedirectUrl"
+          }
+        },
+        {
+          "id": "client-identifiers-litacka-state",
+          "title": "Ověřit stav tokenizace Lítačky",
+          "description": "Po dokončení tokenizační brány ověří, že registrace doběhla a vrátila token Lítačky.",
+          "requiresContext": [
+            "litackaRegistrationId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers/registration/{{context.litackaRegistrationId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.registrationState",
+                "notEmpty": true
+              },
+              {
+                "path": "$.identifierType",
+                "notEmpty": true
+              },
+              {
+                "path": "$.tokens",
+                "lengthAtLeast": 1
+              },
+              {
+                "path": "$.tokens[0].tokenValue",
+                "notEmpty": true
+              },
+              {
+                "path": "$.tokens[0].tokenState",
+                "notEmpty": true
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "GetTokenRegistrationState"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              }
+            ]
+          }
+        },
+        {
+          "id": "client-identifiers-litacka-complete",
+          "title": "Dokončit tokenizaci Lítačky",
+          "description": "Vybere primární token vrácený tokenizační bránou a přiřadí ho aktuálnímu klientovi.",
+          "requiresContext": [
+            "litackaRegistrationId"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/identifiers/litacka/registration/{{context.litackaRegistrationId}}/complete"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.registrationState",
+                "notEmpty": true
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "GetTokenRegistrationState"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[2].name",
+                "equals": "PrimaryTokenSelection"
+              },
+              {
+                "path": "$.steps[2].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[3].name",
+                "equals": "AssignToken"
+              },
+              {
+                "path": "$.steps[3].status",
+                "equals": "Completed"
+              }
+            ]
+          }
+        },
+        {
+          "id": "client-identifiers-after-litacka-tokenization",
+          "title": "Ověřit identifikátory po kompletaci Lítačky",
+          "description": "Znovu načte seznam identifikátorů klienta, aby bylo vidět, zda se tokenizovaná Lítačka po kompletaci propsala do dostupných identifikátorů.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-identifiers-litacka-state-by-id",
+      "title": "Klientská data - stav tokenizace Lítačky podle ID",
+      "description": "Pomocný scénář pro opakované ověření stavu tokenizace Lítačky podle ručně zadaného registračního ID.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "profile",
+        "client-data",
+        "client-identifiers",
+        "litacka-tokenization",
+        "client-read"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Stav tokenizace Lítačky"
+      },
+      "instructions": [
+        "Použijte registrační ID vrácené scénářem tokenizace Lítačky.",
+        "Scénář se hodí, pokud se chcete k rozpracované registraci vrátit později nebo ověřit stav opakovaně.",
+        "Úspěšně dokončená tokenizace vrací status = Completed, typ identifikátoru pro Lítačku a alespoň jeden token."
+      ],
+      "steps": [
+        {
+          "id": "client-identifiers-litacka-state-manual",
+          "title": "Načíst stav tokenizace Lítačky",
+          "description": "Načte aktuální stav tokenizační registrace Lítačky podle ručně zadaného registračního ID.",
+          "fields": [
+            {
+              "name": "registrationId",
+              "label": "Registrační ID",
+              "value": "",
+              "placeholder": "Např. 2705-87a2f728-c5aa-478b-9553-994a480316e4"
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers/registration/{{form.registrationId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.registrationState",
+                "notEmpty": true
+              },
+              {
+                "path": "$.identifierType",
+                "notEmpty": true
+              },
+              {
+                "path": "$.tokens",
+                "lengthAtLeast": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-identifiers-litacka-complete-by-id",
+      "title": "Klientská data - kompletace tokenizace Lítačky podle ID",
+      "description": "Pomocný scénář pro ruční dokončení tokenizace Lítačky podle registračního ID, pokud už registrace v bráně proběhla.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "profile",
+        "client-data",
+        "client-identifiers",
+        "litacka-tokenization",
+        "client-save"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Kompletace tokenizace Lítačky"
+      },
+      "instructions": [
+        "Použijte registrační ID tokenizace Lítačky, která už prošla tokenizační bránou.",
+        "Kompletace očekává dokončený stav brány a primární token. Pokud Lítačka API selže, backend může vrátit chybu i v situaci, kdy token už v Core MOS vznikl.",
+        "Pokud testujete PVP Lítačku, sledujte zejména krok AssignToken a případnou chybu s nevyplněným IsPersonalized."
+      ],
+      "steps": [
+        {
+          "id": "client-identifiers-litacka-complete-manual",
+          "title": "Dokončit tokenizaci Lítačky",
+          "description": "Přiřadí primární token z dokončené registrace Lítačky aktuálnímu klientovi.",
+          "fields": [
+            {
+              "name": "registrationId",
+              "label": "Registrační ID",
+              "value": "",
+              "placeholder": "Např. 2705-87a2f728-c5aa-478b-9553-994a480316e4"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/identifiers/litacka/registration/{{form.registrationId}}/complete"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.registrationState",
+                "notEmpty": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "client-data-create-and-save",
       "title": "Klientská data - založení klienta a uložení údajů",
       "description": "Ověří celý první průchod: uživatel zatím není klientem, backend založí klientský profil a uloží jeho osobní údaje.",
