@@ -91,6 +91,9 @@
               "language": "{{form.language}}"
             }
           },
+          "rememberSecret": {
+            "accountPassword": "{{form.password}}"
+          },
           "expected": {
             "status": 200,
             "assertions": [
@@ -128,6 +131,56 @@
               { "path": "$.finalStatus", "equals": "Activated" },
               { "path": "$.userName", "notEmpty": true }
             ]
+          }
+        },
+        {
+          "id": "account-login-new-user",
+          "title": "Přihlásit nově založeného uživatele",
+          "description": "Volitelně přihlásí právě aktivovaný účet stejným e-mailem a heslem, které byly použité při založení.",
+          "instructions": [
+            "Tento krok spusťte, pokud chcete s nově založeným uživatelem rovnou pokračovat v dalších scénářích.",
+            "Použije se e-mail a heslo z předchozích kroků. Není potřeba je znovu kopírovat do panelu Přihlášení."
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/login",
+            "body": {
+              "email": "{{context.userName}}",
+              "password": "{{secret.accountPassword}}",
+              "deviceId": "{{auth.deviceId}}",
+              "deviceName": "{{auth.deviceName}}",
+              "deviceMetadata": {
+                "platform": "{{auth.platform}}",
+                "osVersion": "{{auth.osVersion}}",
+                "appVersion": "{{auth.appVersion}}",
+                "model": "{{auth.model}}"
+              },
+              "deviceLanguage": "{{auth.deviceLanguage}}",
+              "deviceMessagingToken": "{{auth.deviceMessagingToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.accessToken", "notEmpty": true },
+              { "path": "$.refreshToken", "notEmpty": true },
+              { "path": "$.identityId", "notEmpty": true }
+            ]
+          },
+          "authSession": {
+            "message": "Nově založený uživatel je přihlášený a můžete s ním pokračovat v dalších scénářích.",
+            "formValues": {
+              "email": "{{context.userName}}",
+              "password": "{{secret.accountPassword}}",
+              "deviceId": "{{auth.deviceId}}",
+              "deviceName": "{{auth.deviceName}}",
+              "platform": "{{auth.platform}}",
+              "osVersion": "{{auth.osVersion}}",
+              "appVersion": "{{auth.appVersion}}",
+              "model": "{{auth.model}}",
+              "deviceLanguage": "{{auth.deviceLanguage}}",
+              "deviceMessagingToken": "{{auth.deviceMessagingToken}}"
+            }
           }
         }
       ]

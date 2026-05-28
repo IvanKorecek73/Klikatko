@@ -9,6 +9,7 @@ const state = {
   scenario: null,
   stepIndex: 0,
   context: {},
+  secrets: {},
   values: {},
   dirty: false,
   freeForm: false,
@@ -297,6 +298,7 @@ async function loadScenarioPack(packId) {
   state.scenario = null;
   state.stepIndex = 0;
   state.context = {};
+  state.secrets = {};
   state.values = {};
   state.dirty = false;
   state.freeForm = false;
@@ -1965,6 +1967,7 @@ function selectScenario(scenarioId, options = {}) {
   state.scenario = state.catalog.scenarios.find(scenario => scenario.id === scenarioId);
   state.stepIndex = 0;
   state.context = {};
+  state.secrets = {};
   state.values = {};
   state.dirty = false;
   state.freeForm = false;
@@ -2008,6 +2011,7 @@ function selectFreeForm(formId) {
   };
   state.stepIndex = 0;
   state.context = {};
+  state.secrets = {};
   state.values = {};
   state.dirty = true;
   state.freeForm = true;
@@ -3185,6 +3189,17 @@ async function runCurrentStep() {
 
     applyExtracts(step, body, response.status);
     applyRemember(step);
+    applyRememberSecrets(step);
+    const authSessionMessage = applyAuthSessionFromStep(step, body, result);
+
+    if (authSessionMessage) {
+      result.messages = [
+        authSessionMessage,
+        ...(result.messages || [])
+      ];
+      result.appMessage = authSessionMessage;
+    }
+
     prepareSelection(step, body, response.status);
     state.lastStepResult = result;
     state.stepResults[runningStepIndex] = result;
@@ -3298,6 +3313,50 @@ function applyRemember(step) {
   for (const [key, template] of Object.entries(step.remember)) {
     state.context[key] = resolveObject(template, state.values, step);
   }
+}
+
+function applyRememberSecrets(step) {
+  if (!step.rememberSecret) {
+    return;
+  }
+
+  for (const [key, template] of Object.entries(step.rememberSecret)) {
+    state.secrets[key] = resolveObject(template, state.values, step);
+  }
+}
+
+function applyAuthSessionFromStep(step, body, result) {
+  if (!step.authSession || result.level === "error") {
+    return "";
+  }
+
+  const authConfig = getProjectAuthConfig();
+  const loginConfig = authConfig?.login || null;
+
+  if (authConfig.type !== "login" || !loginConfig) {
+    return "";
+  }
+
+  for (const [name, template] of Object.entries(step.authSession.formValues || {})) {
+    state.authFormValues[name] = resolveTemplate(String(template), { fieldValues: state.values });
+  }
+
+  const sessionConfig = {
+    ...loginConfig,
+    response: {
+      ...(loginConfig.response || {}),
+      ...(step.authSession.response || {})
+    },
+    sessionKind: step.authSession.sessionKind || loginConfig.sessionKind
+  };
+
+  updateSessionFromAuthResponse(body, sessionConfig, "login");
+  saveAuthFormValues();
+  saveAuthSession();
+  renderAuthPanel();
+  renderModeBanner();
+
+  return step.authSession.message || "Uživatel je přihlášený a připravený pro další scénáře.";
 }
 
 function showAutoRunSummaryFromResults(results) {
@@ -6686,6 +6745,7 @@ function resolveTemplate(template, { fieldValues }) {
     .replaceAll("{{now}}", new Date().toISOString())
     .replace(/\{\{form\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => fieldValues[name] ?? "")
     .replace(/\{\{context\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => state.context[name] ?? "")
+    .replace(/\{\{secret\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => state.secrets[name] ?? "")
     .replace(/\{\{session\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => state.authSession?.[name] ?? "")
     .replace(/\{\{auth\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => state.authFormValues?.[name] ?? "");
 }
