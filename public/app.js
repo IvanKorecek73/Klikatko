@@ -1118,7 +1118,7 @@ async function performAuthRequest(kind, config) {
     }
 
     if (kind === "login" || kind === "refresh") {
-      updateSessionFromAuthResponse(body, config);
+      updateSessionFromAuthResponse(body, config, kind);
       saveAuthSession();
     }
 
@@ -1183,7 +1183,9 @@ function saveNewAuthProfileAfterSuccessfulLogin() {
       platform: state.authFormValues?.platform || "",
       osVersion: state.authFormValues?.osVersion || "",
       appVersion: state.authFormValues?.appVersion || "",
-      model: state.authFormValues?.model || ""
+      model: state.authFormValues?.model || "",
+      deviceLanguage: state.authFormValues?.deviceLanguage || "",
+      deviceMessagingToken: state.authFormValues?.deviceMessagingToken || ""
     }
   };
 
@@ -1267,7 +1269,7 @@ function buildAuthRequest(config) {
   };
 }
 
-function updateSessionFromAuthResponse(body, config) {
+function updateSessionFromAuthResponse(body, config, kind = "login") {
   const responseConfig = config.response || {};
   const accessTokenPath = responseConfig.accessTokenPath || "$.accessToken";
   const refreshTokenPath = responseConfig.refreshTokenPath || "$.refreshToken";
@@ -1276,7 +1278,7 @@ function updateSessionFromAuthResponse(body, config) {
   const displayNamePath = responseConfig.displayNamePath || "$.displayName";
   const identityIdPath = responseConfig.identityIdPath || "$.identityId";
   const deviceIdField = responseConfig.deviceIdField || "deviceId";
-  const isAnonymousSession = config.sessionKind === "anonymous" || Boolean(state.authSession?.isAnonymous);
+  const isAnonymousSession = config.sessionKind === "anonymous" || (kind === "refresh" && Boolean(state.authSession?.isAnonymous));
 
   state.authSession = {
     accessToken: getPath(body, accessTokenPath) || state.authSession?.accessToken || "",
@@ -1651,6 +1653,65 @@ async function ensureAuthorizationReady() {
     ok: info.valid,
     message: info.message
   };
+}
+
+function isMosSessionExpiredResponse(status, body) {
+  const title = String(body?.title || "").toLowerCase();
+  const detail = String(body?.detail || "").toLowerCase();
+
+  return status === 401
+    && (title.includes("mos session expired") || detail.includes("mos session"));
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function renewMosSessionIfPossible() {
+  const authConfig = getProjectAuthConfig();
+  const sessionConfig = authConfig?.sessionRenew;
+
+  if (authConfig.type !== "login" || !sessionConfig || !state.authSession?.accessToken) {
+    return {
+      ok: false,
+      message: "Backend oznámil vypršení MOS session, ale projekt nemá nastavenou její obnovu."
+    };
+  }
+
+  if (state.authSession?.isAnonymous) {
+    return {
+      ok: false,
+      message: "MOS session nelze obnovit pro anonymního uživatele. Přihlaste se běžným účtem."
+    };
+  }
+
+  const email = String(state.authFormValues?.email || state.authSession?.email || "").trim();
+  const password = String(state.authFormValues?.password || "");
+
+  if (!email || !password) {
+    return {
+      ok: false,
+      message: "MOS session vypršela. Pro její obnovu je potřeba e-mail a heslo v panelu Přihlášení."
+    };
+  }
+
+  try {
+    const body = await performAuthRequest("session", sessionConfig);
+    const status = String(body?.status || "").toUpperCase();
+
+    if (status === "LOCK_BUSY") {
+      const retryAfterMs = Number(body?.retryAfterMs || 500);
+      await delay(Math.max(100, retryAfterMs));
+      await performAuthRequest("session", sessionConfig);
+    }
+
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error)
+    };
+  }
 }
 
 function detectTargetEnvironment(baseUrl) {
@@ -3080,10 +3141,47 @@ async function runCurrentStep() {
   try {
     request = buildRequest(step);
     const startedAt = performance.now();
-    const response = await fetch(request.url, request.options);
-    const durationMs = Math.round(performance.now() - startedAt);
-    const body = await readResponseBody(response);
+    let response = await fetch(request.url, request.options);
+    let durationMs = Math.round(performance.now() - startedAt);
+    let body = await readResponseBody(response);
+    let mosSessionRenewed = false;
+
+    if (isMosSessionExpiredResponse(response.status, body)) {
+      const renewResult = await renewMosSessionIfPossible();
+
+      if (renewResult.ok) {
+        mosSessionRenewed = true;
+        addLog("warn", "MOS session renewed", {
+          reason: "MosSessionExpired",
+          originalResponse: {
+            status: response.status,
+            body
+          }
+        });
+        request = buildRequest(step);
+        response = await fetch(request.url, request.options);
+        durationMs = Math.round(performance.now() - startedAt);
+        body = await readResponseBody(response);
+      } else {
+        addLog("error", "MOS session renew failed", {
+          reason: "MosSessionExpired",
+          message: renewResult.message,
+          originalResponse: {
+            status: response.status,
+            body
+          }
+        });
+      }
+    }
+
     const result = evaluateStep(step, response.status, body);
+
+    if (mosSessionRenewed && result.level !== "error") {
+      result.messages = [
+        "MOS session byla obnovena a krok byl automaticky zopakován.",
+        ...(result.messages || [])
+      ];
+    }
 
     applyExtracts(step, body, response.status);
     applyRemember(step);

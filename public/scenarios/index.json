@@ -48,7 +48,9 @@
                 "platform": "iOS",
                 "osVersion": "17.4",
                 "appVersion": "2.0.0",
-                "model": "iPhone 15 Pro"
+                "model": "iPhone 15 Pro",
+                "deviceLanguage": "cs",
+                "deviceMessagingToken": ""
               }
             },
             {
@@ -63,7 +65,9 @@
                 "platform": "iOS",
                 "osVersion": "17.3",
                 "appVersion": "2.0.0",
-                "model": "iPhone 14"
+                "model": "iPhone 14",
+                "deviceLanguage": "cs",
+                "deviceMessagingToken": ""
               }
             },
             {
@@ -78,7 +82,9 @@
                 "platform": "Android",
                 "osVersion": "14",
                 "appVersion": "2.0.0",
-                "model": "Pixel 8"
+                "model": "Pixel 8",
+                "deviceLanguage": "cs",
+                "deviceMessagingToken": ""
               }
             },
             {
@@ -93,7 +99,9 @@
                 "platform": "Android",
                 "osVersion": "14",
                 "appVersion": "2.0.0",
-                "model": "Samsung Galaxy S24"
+                "model": "Samsung Galaxy S24",
+                "deviceLanguage": "cs",
+                "deviceMessagingToken": ""
               }
             },
             {
@@ -111,7 +119,9 @@
                 "platform": "iOS",
                 "osVersion": "17.4",
                 "appVersion": "2.0.0",
-                "model": "iPhone 15 Pro"
+                "model": "iPhone 15 Pro",
+                "deviceLanguage": "cs",
+                "deviceMessagingToken": ""
               }
             }
           ],
@@ -157,6 +167,17 @@
               "name": "model",
               "label": "Model",
               "value": "iPhone 15 Pro"
+            },
+            {
+              "name": "deviceLanguage",
+              "label": "Jazyk zařízení",
+              "value": "cs"
+            },
+            {
+              "name": "deviceMessagingToken",
+              "label": "Push token",
+              "value": "",
+              "placeholder": "Volitelné, např. FCM/APNs token"
             }
           ],
           "body": {
@@ -169,7 +190,9 @@
               "osVersion": "{{auth.osVersion}}",
               "appVersion": "{{auth.appVersion}}",
               "model": "{{auth.model}}"
-            }
+            },
+            "deviceLanguage": "{{auth.deviceLanguage}}",
+            "deviceMessagingToken": "{{auth.deviceMessagingToken}}"
           },
           "anonymous": {
             "path": "/v1/auth/anonymous",
@@ -183,7 +206,9 @@
                 "osVersion": "{{auth.osVersion}}",
                 "appVersion": "{{auth.appVersion}}",
                 "model": "{{auth.model}}"
-              }
+              },
+              "deviceLanguage": "{{auth.deviceLanguage}}",
+              "deviceMessagingToken": "{{auth.deviceMessagingToken}}"
             },
             "response": {
               "accessTokenPath": "$.accessToken",
@@ -227,6 +252,15 @@
           "body": {
             "deviceId": "{{session.deviceId}}",
             "refreshToken": "{{session.refreshToken}}"
+          }
+        },
+        "sessionRenew": {
+          "path": "/v1/auth/session",
+          "buttonText": "Obnovit MOS session",
+          "attachAccessToken": true,
+          "body": {
+            "email": "{{auth.email}}",
+            "password": "{{auth.password}}"
           }
         }
       },
