@@ -2337,6 +2337,10 @@ function getMobileActionTitle(step) {
     return method === "GET" ? "Detail klientských dat" : "Uložení klientských dat";
   }
 
+  if (path.includes("/v1/client/photo")) {
+    return "Uložení fotografie klienta";
+  }
+
   if (path.includes("/v1/parking/tickets/street-parking")) {
     if (text.includes("prodlou") || text.includes("extension") || text.includes("saved-card")) {
       return "Prodloužení parkování";
@@ -4117,6 +4121,12 @@ function makeAppMessage(body, status, level) {
     return "Osobní údaje existujícího klienta byly uloženy.";
   }
 
+  if (isSaveClientPhotoResponse(body)) {
+    return body.status === "Completed"
+      ? "Fotografie klienta byla uložena."
+      : `Uložení fotografie je ve stavu ${body.status}.`;
+  }
+
   if (body.moduleName && body.status) {
     return `Služba ${body.moduleName} je ve stavu ${body.status}.`;
   }
@@ -4908,6 +4918,10 @@ function buildAppCardsHtml(body, step = currentStep()) {
     return renderSaveClientDataCardHtml(body);
   }
 
+  if (isSaveClientPhotoResponse(body)) {
+    return renderSaveClientPhotoCardHtml(body);
+  }
+
   if (typeof body.exists === "boolean" && typeof body.isActive === "boolean") {
     return buildCardListHtml([body], item => ({
       title: "Stav účtu",
@@ -5457,6 +5471,37 @@ function renderSaveClientDataCardHtml(body) {
             ${personalData.dateOfBirth ? `<div class="app-detail-row"><span>Datum narození</span><span>${escapeHtml(formatDate(personalData.dateOfBirth))}</span></div>` : ""}
             ${personalData.registeredNumberIsic ? `<div class="app-detail-row"><span>ISIC</span><span>${escapeHtml(personalData.registeredNumberIsic)}</span></div>` : ""}
           ` : ""}
+        </div>
+      </article>
+    </div>
+  `;
+}
+
+function renderSaveClientPhotoCardHtml(body) {
+  const client = body.client || {};
+  const photo = client.photo || {};
+
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>${escapeHtml(body.status === "Completed" ? "Fotografie uložena" : "Uložení fotografie")}</strong>
+        <p>${escapeHtml(body.status === "Completed"
+          ? "Backend uložil fotografii klienta samostatným požadavkem."
+          : "Požadavek na uložení fotografie byl zpracován, ale není ve finálním stavu.")}</p>
+        <div class="app-card-meta">
+          ${renderAppChip(getClientStatusLabel(body.status))}
+          ${renderAppChip(client.isUserActive ? "uživatel aktivní" : "uživatel neaktivní")}
+          ${renderAppChip(client.hasPersonalData ? "osobní údaje uložené" : "bez osobních údajů")}
+          ${renderAppChip(photo.exists ? "fotografie evidována" : "fotografie bez potvrzení")}
+        </div>
+        <div class="app-card-details">
+          <div class="app-detail-row"><span>Výsledek</span><span>${escapeHtml(getClientStatusLabel(body.status))}</span></div>
+          <div class="app-detail-row"><span>Uživatel aktivní</span><span>${escapeHtml(formatBooleanAnswer(client.isUserActive))}</span></div>
+          <div class="app-detail-row"><span>Osobní údaje</span><span>${escapeHtml(formatBooleanAnswer(client.hasPersonalData))}</span></div>
+          ${client.status ? `<div class="app-detail-row"><span>Stav klienta</span><span>${escapeHtml(getClientStatusLabel(client.status))}</span></div>` : ""}
+          ${photo.statusName ? `<div class="app-detail-row"><span>Stav fotografie</span><span>${escapeHtml(photo.statusName)}</span></div>` : ""}
+          ${photo.approvalDate ? `<div class="app-detail-row"><span>Schváleno</span><span>${escapeHtml(formatDate(photo.approvalDate))}</span></div>` : ""}
+          ${photo.reason ? `<div class="app-detail-row"><span>Poznámka k fotografii</span><span>${escapeHtml(photo.reason)}</span></div>` : ""}
         </div>
       </article>
     </div>
@@ -6071,6 +6116,10 @@ function summarizeBody(body) {
     return [];
   }
 
+  if (isSaveClientPhotoResponse(body)) {
+    return [];
+  }
+
   if (isClientIdentifiersResponse(body)) {
     return [];
   }
@@ -6472,6 +6521,20 @@ function isSaveClientDataResponse(value) {
     && typeof value.client.exists === "boolean"
     && typeof value.client.isUserActive === "boolean"
     && typeof value.client.hasPersonalData === "boolean";
+}
+
+function isSaveClientPhotoResponse(value) {
+  return value
+    && typeof value === "object"
+    && typeof value.status === "string"
+    && Array.isArray(value.steps)
+    && value.client
+    && typeof value.client === "object"
+    && typeof value.client.exists === "boolean"
+    && typeof value.client.isUserActive === "boolean"
+    && typeof value.client.hasPersonalData === "boolean"
+    && !("created" in value)
+    && !("personalDataConsentApplied" in value);
 }
 
 function getParkingPriceSuccessful(value) {
