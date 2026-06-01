@@ -3085,6 +3085,8 @@ function formatExpected(step) {
     if (assertion.equals !== undefined) {
       const expectedValue = resolveExpectedValue(assertion.equals, step);
       parts.push(`${assertion.path} = ${JSON.stringify(expectedValue)}`);
+    } else if (assertion.regex !== undefined) {
+      parts.push(`${assertion.label || "$"} odpovídá regulárnímu výrazu`);
     } else if (assertion.notEmpty) {
       parts.push(`${assertion.path} nen\u00ed pr\u00e1zdn\u00e9`);
     } else if (assertion.lengthEquals !== undefined) {
@@ -3927,7 +3929,9 @@ function evaluateStep(step, status, body) {
   }
 
   for (const assertion of expected.assertions || []) {
-    const actual = getPath(body, assertion.path);
+    const actual = assertion.regex !== undefined
+      ? getRegexAssertionSource(body, assertion)
+      : getPath(body, assertion.path);
     const expectedValue = assertion.equals !== undefined
       ? resolveExpectedValue(assertion.equals, step)
       : undefined;
@@ -3938,6 +3942,10 @@ function evaluateStep(step, status, body) {
 
     if (assertion.notEmpty && isEmpty(actual)) {
       failures.push(`Očekáváno, že ${assertion.path} nebude prázdné.`);
+    }
+
+    if (assertion.regex !== undefined && !(new RegExp(assertion.regex, "is")).test(String(actual || ""))) {
+      failures.push(assertion.message || `Odpověď neodpovídá očekávanému tvaru: ${assertion.label || assertion.regex}.`);
     }
 
     if (assertion.lengthEquals !== undefined && (!Array.isArray(actual) || actual.length !== assertion.lengthEquals)) {
@@ -4252,7 +4260,8 @@ function applyExtracts(step, body, status) {
   }
 
   for (const [name, pattern] of Object.entries(step.extractRegex || {})) {
-    const source = typeof body === "string" ? body : JSON.stringify(body ?? "");
+    const rawSource = typeof body === "string" ? body : JSON.stringify(body ?? "");
+    const source = normalizeXmlPrefixes(rawSource);
     const match = source.match(new RegExp(pattern, "is"));
     state.context[name] = match?.[1] ?? "";
   }
@@ -4295,6 +4304,16 @@ function evaluateBodyCondition(condition, body, step) {
   return false;
 }
 
+function getRegexAssertionSource(body, assertion) {
+  const source = assertion.sourcePath
+    ? getPath(body, assertion.sourcePath)
+    : body;
+
+  return typeof source === "string"
+    ? normalizeXmlPrefixes(source)
+    : JSON.stringify(source ?? "");
+}
+
 function previousStep() {
   if (!state.scenario) {
     return;
@@ -4319,7 +4338,9 @@ function getCurrentStepResult() {
 }
 
 function canAdvanceFromCurrentStep() {
-  if (!state.scenario || !currentStep() || !getCurrentStepResult()) {
+  const result = getCurrentStepResult();
+
+  if (!state.scenario || !currentStep() || !result || result.level === "error") {
     return false;
   }
 
@@ -6101,6 +6122,7 @@ function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
       item.identifierType || item.type || null,
       item.tariffName || null,
       item.maskedPan || item.cln || null,
+      item.zoneName ? `zóna ${item.zoneName}` : null,
       item.zones ? `zóny ${item.zones}` : null,
       item.price ? `${item.price} Kč` : null,
       item.active === "true" ? "aktivní" : item.active === "false" ? "neaktivní" : null
@@ -6112,9 +6134,11 @@ function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
       { label: "OrderID", value: item.orderId },
       { label: "Název", value: item.name },
       { label: "Tarif", value: item.tariffName || item.tariffId },
+      { label: "Profil tarifu", value: item.tariffProfileName },
+      { label: "Zóna", value: item.zoneName },
       { label: "Zóny", value: item.zones },
-      { label: "Platnost od", value: item.dateTimeFrom ? formatDate(item.dateTimeFrom) : null },
-      { label: "Platnost do", value: item.dateTimeTo ? formatDate(item.dateTimeTo) : null },
+      { label: "Platnost od", value: item.dateTimeFrom || item.validFrom ? formatDate(item.dateTimeFrom || item.validFrom) : null },
+      { label: "Platnost do", value: item.dateTimeTo || item.validTill ? formatDate(item.dateTimeTo || item.validTill) : null },
       { label: "Cena", value: item.price ? `${item.price} Kč` : null },
       { label: "Stav", value: item.customStatusName || item.status },
       { label: "Typ", value: item.identifierType },

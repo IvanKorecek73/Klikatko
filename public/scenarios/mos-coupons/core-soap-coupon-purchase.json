@@ -144,17 +144,41 @@
           "expected": {
             "status": 200
           },
-          "extractRegex": {
-            "mosCouponSuggestedTariffId": "<TariffID>([^<]+)</TariffID>",
-            "mosCouponSuggestedPrice": "<Price>([^<]+)</Price>",
-            "mosCouponSuggestedZoneId": "<TariffZoneID>([^<]+)</TariffZoneID>"
+          "selection": {
+            "buttonLabel": "Použít tarif",
+            "selectedButtonLabel": "Tarif vybrán",
+            "emptyTitle": "Žádný použitelný tarif",
+            "emptyText": "MOS nevrátil žádný tarif se zónou P. Bez platné kombinace tarifu, zóny a ceny nejde pokračovat.",
+            "sourceRegex": {
+              "itemPattern": "<TariffBuy[^>]*>([\\s\\S]*?<ZoneName>P</ZoneName>[\\s\\S]*?)</TariffBuy>",
+              "fields": {
+                "tariffId": "<TariffID>([^<]+)</TariffID>",
+                "customerId": "<CustomerID>([^<]+)</CustomerID>",
+                "tariffName": "<TariffName>([^<]*)</TariffName>",
+                "tariffProfileName": "<TariffProfileName>([^<]*)</TariffProfileName>",
+                "validFrom": "<NewCouponValidFrom>([^<]+)</NewCouponValidFrom>",
+                "validTill": "<NewCouponValidTill>([^<]+)</NewCouponValidTill>",
+                "tariffZoneId": "<Zone>\\s*<TariffZoneID>([^<]+)</TariffZoneID>\\s*<ZoneName>P</ZoneName>",
+                "zoneName": "<Zone>\\s*<TariffZoneID>[^<]+</TariffZoneID>\\s*<ZoneName>(P)</ZoneName>",
+                "price": "<Zone>\\s*<TariffZoneID>[^<]+</TariffZoneID>\\s*<ZoneName>P</ZoneName>\\s*<Price>([^<]+)</Price>"
+              }
+            },
+            "store": {
+              "mosCouponSuggestedTariffId": "$.tariffId",
+              "mosCouponCustomerId": "$.customerId",
+              "mosCouponSuggestedZoneId": "$.tariffZoneId",
+              "mosCouponSuggestedZoneName": "$.zoneName",
+              "mosCouponSuggestedPrice": "$.price",
+              "mosCouponSuggestedValidFrom": "$.validFrom",
+              "mosCouponSuggestedValidTill": "$.validTill"
+            }
           }
         },
         {
           "id": "mos-coupon-add-item-to-order",
           "title": "Přidat testovací kupón do objednávky",
           "description": "Zavolá AddItemToOrder s NewCoupon a IsTest=true. Pokud OrderID není zadán, MOS vytvoří novou objednávku.",
-          "requiresContext": ["mosCouponSessionId", "mosCouponTokenId"],
+          "requiresContext": ["mosCouponSessionId", "mosCouponTokenId", "mosCouponSuggestedTariffId", "mosCouponSuggestedZoneId", "mosCouponSuggestedPrice"],
           "fields": [
             {
               "name": "customerId",
@@ -194,14 +218,14 @@
             {
               "name": "validFrom",
               "label": "ValidFrom",
-              "type": "date",
-              "value": "{{today}}"
+              "type": "text",
+              "value": "{{context.mosCouponSuggestedValidFrom}}"
             },
             {
               "name": "validTill",
               "label": "ValidTill",
-              "type": "date",
-              "value": "{{todayPlus365}}"
+              "type": "text",
+              "value": "{{context.mosCouponSuggestedValidTill}}"
             }
           ],
           "request": {
@@ -217,11 +241,23 @@
             "mosCouponPrice": "{{form.price}}"
           },
           "expected": {
-            "status": 200
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<AddItemToOrderResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "MOS objednávku nevytvořil. Zkontrolujte kombinaci tarifu, zóny a ceny v odpovědi AddItemToOrder."
+              },
+              {
+                "regex": "<OrderID>[1-9][0-9]*</OrderID>",
+                "label": "OrderID > 0",
+                "message": "MOS nevrátil platné OrderID. Další krok platby objednávky nesmí pokračovat."
+              }
+            ]
           },
           "extractRegex": {
-            "mosCouponOrderId": "<OrderID>([^<]+)</OrderID>",
-            "mosCouponCouponId": "<CouponID>([^<]+)</CouponID>"
+            "mosCouponOrderId": "<OrderID>([1-9][0-9]*)</OrderID>",
+            "mosCouponCouponId": "<CouponID>([1-9][0-9]*)</CouponID>"
           }
         },
         {
@@ -264,7 +300,14 @@
             "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <SetOrderPaid xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <OrderID>{{form.orderId}}</OrderID>\n      <PaymentType>{{form.paymentType}}</PaymentType>\n      <OrderPrice>{{form.orderPrice}}</OrderPrice>\n    </SetOrderPaid>\n  </soap:Body>\n</soap:Envelope>"
           },
           "expected": {
-            "status": 200
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<SetOrderPaidResult>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "MOS nepotvrdil zaplacení objednávky. Kupón proto nemusel vzniknout."
+              }
+            ]
           }
         },
         {
@@ -300,7 +343,19 @@
             "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetCoupons xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <LoadAllCoupons>{{form.loadAllCoupons}}</LoadAllCoupons>\n    </GetCoupons>\n  </soap:Body>\n</soap:Envelope>"
           },
           "expected": {
-            "status": 200
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<GetCouponsResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "MOS nevrátil korektní odpověď při načtení kupónů."
+              },
+              {
+                "regex": "<CouponInfoRecord",
+                "label": "alespoň jeden kupón",
+                "message": "Pro vybraný identifikátor nebyl nalezen žádný kupón. Nákup tedy ve skutečnosti nedoběhl."
+              }
+            ]
           },
           "selection": {
             "buttonLabel": "Označit kupón",
