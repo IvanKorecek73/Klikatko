@@ -6125,6 +6125,7 @@ function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
       item.zoneName ? `zóna ${item.zoneName}` : null,
       item.zones ? `zóny ${item.zones}` : null,
       item.price ? `${item.price} Kč` : null,
+      item.displayPrice ? `tarif ${item.displayPrice} Kč` : null,
       item.active === "true" ? "aktivní" : item.active === "false" ? "neaktivní" : null
     ],
     details: [
@@ -6140,6 +6141,7 @@ function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
       { label: "Platnost od", value: item.dateTimeFrom || item.validFrom ? formatDate(item.dateTimeFrom || item.validFrom) : null },
       { label: "Platnost do", value: item.dateTimeTo || item.validTill ? formatDate(item.dateTimeTo || item.validTill) : null },
       { label: "Cena", value: item.price ? `${item.price} Kč` : null },
+      { label: "Cena v tarifu", value: item.displayPrice ? `${item.displayPrice} Kč` : null },
       { label: "Stav", value: item.customStatusName || item.status },
       { label: "Typ", value: item.identifierType },
       { label: "Maskovaná hodnota", value: item.maskedPan },
@@ -6198,7 +6200,7 @@ function applySelection(index) {
   state.activeSelection.selectedIndex = index;
 
   for (const [key, selector] of Object.entries(state.activeSelection.config.store || {})) {
-    state.context[key] = selector === "$" ? item : getPath(item, selector);
+    state.context[key] = resolveSelectionStoreValue(item, selector);
   }
 
   addLog("ok", "Položka vybrána", {
@@ -6219,6 +6221,20 @@ function applySelection(index) {
       state.displayedResult.body,
       state.displayedResult.step);
   }
+}
+
+function resolveSelectionStoreValue(item, selector) {
+  if (selector && typeof selector === "object") {
+    if (Object.hasOwn(selector, "literal")) {
+      return selector.literal;
+    }
+
+    if (Object.hasOwn(selector, "path")) {
+      return getPath(item, selector.path);
+    }
+  }
+
+  return selector === "$" ? item : getPath(item, selector);
 }
 
 function renderAppChip(chip) {

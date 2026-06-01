@@ -19,7 +19,7 @@
       "instructions": [
         "V panelu Přístup vložte Core MOS ServiceKey.",
         "Ve scénáři zadejte přepážkový MOS účet a heslo. Po přihlášení se SessionID uloží do kontextu.",
-        "Krok zjištění tarifů je pomocný. Pokud se nepodaří automaticky vytáhnout TariffID nebo cenu, opište je z XML odpovědi do kroku vytvoření objednávky.",
+        "Krok zjištění tarifů nabídne použitelné tarify pro zónu P. Kvůli chování Core MOS se pro samotnou fixní zónu P do nákupu posílá cena 0.0000.",
         "Kupón se vytváří s IsTest=true, tedy jako testovací nákup vyloučený ze statistik a reportů.",
         "PaymentType ponechte 3 nebo 4. Hodnoty 1 a 2 by spouštěly platební bránu."
       ],
@@ -160,7 +160,7 @@
                 "validTill": "<NewCouponValidTill>([^<]+)</NewCouponValidTill>",
                 "tariffZoneId": "<Zone>\\s*<TariffZoneID>([^<]+)</TariffZoneID>\\s*<ZoneName>P</ZoneName>",
                 "zoneName": "<Zone>\\s*<TariffZoneID>[^<]+</TariffZoneID>\\s*<ZoneName>(P)</ZoneName>",
-                "price": "<Zone>\\s*<TariffZoneID>[^<]+</TariffZoneID>\\s*<ZoneName>P</ZoneName>\\s*<Price>([^<]+)</Price>"
+                "displayPrice": "<Zone>\\s*<TariffZoneID>[^<]+</TariffZoneID>\\s*<ZoneName>P</ZoneName>\\s*<Price>([^<]+)</Price>"
               }
             },
             "store": {
@@ -168,7 +168,10 @@
               "mosCouponCustomerId": "$.customerId",
               "mosCouponSuggestedZoneId": "$.tariffZoneId",
               "mosCouponSuggestedZoneName": "$.zoneName",
-              "mosCouponSuggestedPrice": "$.price",
+              "mosCouponSuggestedDisplayPrice": "$.displayPrice",
+              "mosCouponSuggestedPrice": {
+                "literal": "0.0000"
+              },
               "mosCouponSuggestedValidFrom": "$.validFrom",
               "mosCouponSuggestedValidTill": "$.validTill"
             }
@@ -213,7 +216,7 @@
               "type": "number",
               "value": "{{context.mosCouponSuggestedPrice}}",
               "step": 0.01,
-              "placeholder": "Musí přesně odpovídat ceně z MOS"
+              "placeholder": "Pro samotnou zónu P počítá Core MOS cenu 0"
             },
             {
               "name": "validFrom",
