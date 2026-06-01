@@ -305,6 +305,8 @@
           "selection": {
             "buttonLabel": "Označit kupón",
             "selectedButtonLabel": "Označeno",
+            "emptyTitle": "Žádné kupóny",
+            "emptyText": "Pro vybraný identifikátor MOS nevrátil žádný kupón. Zkontrolujte TokenID a případně přepněte rozsah na všechny kupóny.",
             "sourceRegex": {
               "itemPattern": "<CouponInfoRecord[^>]*>([\\s\\S]*?)</CouponInfoRecord>",
               "fields": {

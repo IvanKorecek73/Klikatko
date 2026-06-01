@@ -4633,8 +4633,19 @@ function startResultCountdownIfNeeded(message) {
 }
 
 function buildAppCardsHtml(body, step = currentStep()) {
-  if (step?.selection?.sourceRegex && state.activeSelection?.stepId === step.id && Array.isArray(state.activeSelection.items)) {
-    return renderSelectionItemsCardsHtml(step);
+  if (step?.selection?.sourceRegex) {
+    const items = state.activeSelection?.stepId === step.id && Array.isArray(state.activeSelection.items)
+      ? state.activeSelection.items
+      : parseRegexSelectionItems(body, step.selection.sourceRegex);
+
+    if (items.length > 0) {
+      return renderSelectionItemsCardsHtml(step, items);
+    }
+
+    return renderEmptyAppCardHtml(
+      step.selection.emptyTitle || "Žádné položky",
+      step.selection.emptyText || "Odpověď neobsahuje žádné položky k zobrazení."
+    );
   }
 
   if (!body || typeof body !== "object") {
@@ -6046,7 +6057,8 @@ function getSelectionItems(step, body) {
 }
 
 function parseRegexSelectionItems(body, sourceRegex) {
-  const source = typeof body === "string" ? body : JSON.stringify(body ?? "");
+  const rawSource = typeof body === "string" ? body : JSON.stringify(body ?? "");
+  const source = normalizeXmlPrefixes(rawSource);
   const itemPattern = sourceRegex.itemPattern;
 
   if (!itemPattern) {
@@ -6073,8 +6085,13 @@ function parseRegexSelectionItems(body, sourceRegex) {
   return items;
 }
 
-function renderSelectionItemsCardsHtml(step) {
-  const items = state.activeSelection?.items || [];
+function normalizeXmlPrefixes(source) {
+  return String(source || "")
+    .replace(/(<\/?)([A-Za-z_][\w.-]*):/g, "$1");
+}
+
+function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
+  const items = fallbackItems || state.activeSelection?.items || [];
   const selection = getSelectionDescriptor(step, items);
 
   return buildCardListHtml(items, item => ({
