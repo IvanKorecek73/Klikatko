@@ -219,6 +219,13 @@
               "placeholder": "Pro samotnou zónu P počítá Core MOS cenu 0"
             },
             {
+              "name": "description",
+              "label": "Popis kupónu",
+              "type": "text",
+              "value": "Test kupon - zona P",
+              "placeholder": "Description je v Core MOS povinný údaj pro vložení kupónu"
+            },
+            {
               "name": "validFrom",
               "label": "ValidFrom",
               "type": "text",
@@ -238,7 +245,7 @@
             "headers": {
               "SOAPAction": "\"globdata/AddItemToOrder\""
             },
-            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AddItemToOrder xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <OrderID xsi:nil=\"true\" />\n      <NewCoupon>\n        <CustomerID>{{form.customerId}}</CustomerID>\n        <TariffID>{{form.tariffId}}</TariffID>\n        <TariffZoneIDs>\n          <int>{{form.tariffZoneId}}</int>\n        </TariffZoneIDs>\n        <Price>{{form.price}}</Price>\n        <ValidFrom>{{form.validFrom}}</ValidFrom>\n        <ValidTill>{{form.validTill}}</ValidTill>\n        <IsTest>true</IsTest>\n      </NewCoupon>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <ExternalUserID xsi:nil=\"true\" />\n      <ExternalDeskID xsi:nil=\"true\" />\n    </AddItemToOrder>\n  </soap:Body>\n</soap:Envelope>"
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AddItemToOrder xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <OrderID xsi:nil=\"true\" />\n      <NewCoupon>\n        <CustomerID>{{form.customerId}}</CustomerID>\n        <TariffID>{{form.tariffId}}</TariffID>\n        <TariffZoneIDs>\n          <int>{{form.tariffZoneId}}</int>\n        </TariffZoneIDs>\n        <Price>{{form.price}}</Price>\n        <Description>{{form.description}}</Description>\n        <ValidFrom>{{form.validFrom}}</ValidFrom>\n        <ValidTill>{{form.validTill}}</ValidTill>\n        <IsTest>true</IsTest>\n      </NewCoupon>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <ExternalUserID xsi:nil=\"true\" />\n      <ExternalDeskID xsi:nil=\"true\" />\n    </AddItemToOrder>\n  </soap:Body>\n</soap:Envelope>"
           },
           "remember": {
             "mosCouponPrice": "{{form.price}}"
