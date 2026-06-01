@@ -71,6 +71,45 @@
           }
         },
         {
+          "id": "mos-coupon-get-tokens",
+          "title": "Načíst identifikátory",
+          "description": "Načte dostupné tokeny/identifikátory přihlášeného MOS účtu. Vybraný identifikátor se použije pro zjištění tarifů a vytvoření kupónu.",
+          "requiresContext": ["mosCouponSessionId"],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokens\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokens xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <GetOnlyAvailableTokens>true</GetOnlyAvailableTokens>\n    </GetTokens>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200
+          },
+          "selection": {
+            "buttonLabel": "Použít identifikátor",
+            "selectedButtonLabel": "Vybráno",
+            "sourceRegex": {
+              "itemPattern": "<TokenEx[^>]*>([\\s\\S]*?)</TokenEx>",
+              "fields": {
+                "tokenId": "<TokenID>([^<]+)</TokenID>",
+                "name": "<Name>([^<]*)</Name>",
+                "token": "<Token>([^<]*)</Token>",
+                "customerId": "<CustomerIDx>([^<]+)</CustomerIDx>",
+                "identifierType": "<IdentifierType>([^<]*)</IdentifierType>",
+                "maskedPan": "<MaskedPAN>([^<]*)</MaskedPAN>",
+                "cln": "<CLN>([^<]*)</CLN>",
+                "active": "<Active>([^<]+)</Active>"
+              }
+            },
+            "store": {
+              "mosCouponTokenId": "$.tokenId",
+              "mosCouponCustomerId": "$.customerId"
+            }
+          }
+        },
+        {
           "id": "mos-coupon-get-token-tariffs",
           "title": "Zjistit dostupné tarify pro token",
           "description": "Pomocné volání GetTokenTariffs pro zjištění TariffID, zón a ceny. Výsledek použijte v dalším kroku.",
@@ -80,7 +119,7 @@
               "name": "tokenId",
               "label": "TokenID",
               "type": "number",
-              "value": "",
+              "value": "{{context.mosCouponTokenId}}",
               "placeholder": "ID tokenu / identifikátoru"
             },
             {
@@ -121,8 +160,8 @@
               "name": "customerId",
               "label": "CustomerID",
               "type": "number",
-              "value": "",
-              "placeholder": "ID zákazníka"
+              "value": "{{context.mosCouponCustomerId}}",
+              "placeholder": "ID zákazníka z vybraného identifikátoru"
             },
             {
               "name": "tokenId",

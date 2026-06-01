@@ -4633,6 +4633,10 @@ function startResultCountdownIfNeeded(message) {
 }
 
 function buildAppCardsHtml(body, step = currentStep()) {
+  if (step?.selection?.sourceRegex && state.activeSelection?.stepId === step.id && Array.isArray(state.activeSelection.items)) {
+    return renderSelectionItemsCardsHtml(step);
+  }
+
   if (!body || typeof body !== "object") {
     return "";
   }
@@ -6018,8 +6022,7 @@ function prepareSelection(step, body, status) {
     return;
   }
 
-  const sourcePath = step.selection.sourcePath || "$";
-  const items = getPath(body, sourcePath);
+  const items = getSelectionItems(step, body);
 
   if (!Array.isArray(items) || items.length === 0) {
     return;
@@ -6031,6 +6034,85 @@ function prepareSelection(step, body, status) {
     items,
     selectedIndex: null
   };
+}
+
+function getSelectionItems(step, body) {
+  if (step.selection.sourceRegex) {
+    return parseRegexSelectionItems(body, step.selection.sourceRegex);
+  }
+
+  const sourcePath = step.selection.sourcePath || "$";
+  return getPath(body, sourcePath);
+}
+
+function parseRegexSelectionItems(body, sourceRegex) {
+  const source = typeof body === "string" ? body : JSON.stringify(body ?? "");
+  const itemPattern = sourceRegex.itemPattern;
+
+  if (!itemPattern) {
+    return [];
+  }
+
+  const itemRegex = new RegExp(itemPattern, "gis");
+  const fields = sourceRegex.fields || {};
+  const items = [];
+  let match;
+
+  while ((match = itemRegex.exec(source)) !== null) {
+    const itemSource = match[1] || match[0];
+    const item = {};
+
+    for (const [name, pattern] of Object.entries(fields)) {
+      const fieldMatch = itemSource.match(new RegExp(pattern, "is"));
+      item[name] = fieldMatch?.[1] ?? "";
+    }
+
+    items.push(item);
+  }
+
+  return items;
+}
+
+function renderSelectionItemsCardsHtml(step) {
+  const items = state.activeSelection?.items || [];
+  const selection = getSelectionDescriptor(step, items);
+
+  return buildCardListHtml(items, item => ({
+    title: getSelectionItemTitle(item),
+    text: getSelectionItemText(item),
+    chips: [
+      item.identifierType || item.type || null,
+      item.maskedPan || item.cln || null,
+      item.active === "true" ? "aktivní" : item.active === "false" ? "neaktivní" : null
+    ],
+    details: [
+      { label: "TokenID", value: item.tokenId },
+      { label: "CustomerID", value: item.customerId },
+      { label: "Název", value: item.name },
+      { label: "Typ", value: item.identifierType },
+      { label: "Maskovaná hodnota", value: item.maskedPan },
+      { label: "CLN", value: item.cln }
+    ]
+  }), { selection });
+}
+
+function getSelectionItemTitle(item) {
+  return item.name
+    || item.maskedPan
+    || item.cln
+    || (item.tokenId ? `Token ${item.tokenId}` : "Položka");
+}
+
+function getSelectionItemText(item) {
+  if (item.identifierType) {
+    return `Identifikátor ${item.identifierType}`;
+  }
+
+  if (item.customerId) {
+    return `Zákazník ${item.customerId}`;
+  }
+
+  return "Vybratelná položka";
 }
 
 function bindResultCardActions() {
