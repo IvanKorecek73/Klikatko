@@ -1,0 +1,228 @@
+{
+  "version": 1,
+  "name": "MOS Kupóny - Core SOAP",
+  "description": "Přímé diagnostické scénáře nad Core MOS SOAP API pro vytvoření testovacího kupónu bez PidLitacka BE.",
+  "scenarios": [
+    {
+      "id": "mos-coupon-test-purchase-soap",
+      "title": "MOS - nákup testovacího kupónu",
+      "description": "Vytvoří testovací kupón přímo přes MOSService.asmx: přihlášení, zjištění tarifů, přidání kupónu do objednávky a potvrzení platby.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["coupons", "soap", "core-mos", "test-data", "purchase"],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Přímé volání Core MOS"
+      },
+      "instructions": [
+        "V panelu Přístup vložte Core MOS ServiceKey.",
+        "Ve scénáři zadejte přepážkový MOS účet a heslo. Po přihlášení se SessionID uloží do kontextu.",
+        "Krok zjištění tarifů je pomocný. Pokud se nepodaří automaticky vytáhnout TariffID nebo cenu, opište je z XML odpovědi do kroku vytvoření objednávky.",
+        "Kupón se vytváří s IsTest=true, tedy jako testovací nákup vyloučený ze statistik a reportů.",
+        "PaymentType ponechte 3 nebo 4. Hodnoty 1 a 2 by spouštěly platební bránu."
+      ],
+      "steps": [
+        {
+          "id": "mos-coupon-authenticate-login",
+          "title": "Přihlásit se do Core MOS",
+          "description": "Zavolá AuthenticateLogin a uloží SessionID pro další SOAP volání.",
+          "fields": [
+            {
+              "name": "userName",
+              "label": "MOS uživatel",
+              "type": "text",
+              "value": "",
+              "placeholder": "Přepážkový účet"
+            },
+            {
+              "name": "password",
+              "label": "Heslo",
+              "type": "password",
+              "value": "",
+              "placeholder": "Heslo přepážkového účtu"
+            },
+            {
+              "name": "codeSms",
+              "label": "SMS kód",
+              "type": "text",
+              "value": "",
+              "placeholder": "Volitelné"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"http://tempuri.org/AuthenticateLogin\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AuthenticateLogin xmlns=\"http://tempuri.org/\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <Password>{{form.password}}</Password>\n      <CodeSMS>{{form.codeSms}}</CodeSMS>\n    </AuthenticateLogin>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$", "notEmpty": true }
+            ]
+          },
+          "extractRegex": {
+            "mosCouponSessionId": "<SessionID>([^<]+)</SessionID>"
+          }
+        },
+        {
+          "id": "mos-coupon-get-token-tariffs",
+          "title": "Zjistit dostupné tarify pro token",
+          "description": "Pomocné volání GetTokenTariffs pro zjištění TariffID, zón a ceny. Výsledek použijte v dalším kroku.",
+          "requiresContext": ["mosCouponSessionId"],
+          "fields": [
+            {
+              "name": "tokenId",
+              "label": "TokenID",
+              "type": "number",
+              "value": "",
+              "placeholder": "ID tokenu / identifikátoru"
+            },
+            {
+              "name": "startDate",
+              "label": "StartDate",
+              "type": "date",
+              "value": "{{today}}"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"http://tempuri.org/GetTokenTariffs\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokenTariffs xmlns=\"http://tempuri.org/\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <StartDate>{{form.startDate}}</StartDate>\n    </GetTokenTariffs>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "remember": {
+            "mosCouponTokenId": "{{form.tokenId}}"
+          },
+          "expected": {
+            "status": 200
+          },
+          "extractRegex": {
+            "mosCouponSuggestedTariffId": "<TariffID>([^<]+)</TariffID>",
+            "mosCouponSuggestedPrice": "<Price>([^<]+)</Price>",
+            "mosCouponSuggestedZoneId": "<TariffZoneID>([^<]+)</TariffZoneID>"
+          }
+        },
+        {
+          "id": "mos-coupon-add-item-to-order",
+          "title": "Přidat testovací kupón do objednávky",
+          "description": "Zavolá AddItemToOrder s NewCoupon a IsTest=true. Pokud OrderID není zadán, MOS vytvoří novou objednávku.",
+          "requiresContext": ["mosCouponSessionId", "mosCouponTokenId"],
+          "fields": [
+            {
+              "name": "customerId",
+              "label": "CustomerID",
+              "type": "number",
+              "value": "",
+              "placeholder": "ID zákazníka"
+            },
+            {
+              "name": "tokenId",
+              "label": "TokenID",
+              "type": "number",
+              "value": "{{context.mosCouponTokenId}}"
+            },
+            {
+              "name": "tariffId",
+              "label": "TariffID",
+              "type": "number",
+              "value": "{{context.mosCouponSuggestedTariffId}}",
+              "placeholder": "TariffID z předchozí odpovědi"
+            },
+            {
+              "name": "tariffZoneId",
+              "label": "TariffZoneID",
+              "type": "number",
+              "value": "{{context.mosCouponSuggestedZoneId}}",
+              "placeholder": "Zóna tarifu"
+            },
+            {
+              "name": "price",
+              "label": "Cena",
+              "type": "number",
+              "value": "{{context.mosCouponSuggestedPrice}}",
+              "step": 0.01,
+              "placeholder": "Musí přesně odpovídat ceně z MOS"
+            },
+            {
+              "name": "validFrom",
+              "label": "ValidFrom",
+              "type": "date",
+              "value": "{{today}}"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"http://tempuri.org/AddItemToOrder\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AddItemToOrder xmlns=\"http://tempuri.org/\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <OrderID xsi:nil=\"true\" />\n      <NewCoupon>\n        <CustomerID>{{form.customerId}}</CustomerID>\n        <TariffID>{{form.tariffId}}</TariffID>\n        <TariffZoneIDs>\n          <int>{{form.tariffZoneId}}</int>\n        </TariffZoneIDs>\n        <Price>{{form.price}}</Price>\n        <ValidFrom>{{form.validFrom}}</ValidFrom>\n        <IsTest>true</IsTest>\n      </NewCoupon>\n      <TokenID>{{form.tokenId}}</TokenID>\n    </AddItemToOrder>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "remember": {
+            "mosCouponPrice": "{{form.price}}"
+          },
+          "expected": {
+            "status": 200
+          },
+          "extractRegex": {
+            "mosCouponOrderId": "<OrderID>([^<]+)</OrderID>",
+            "mosCouponCouponId": "<CouponID>([^<]+)</CouponID>"
+          }
+        },
+        {
+          "id": "mos-coupon-set-order-paid",
+          "title": "Potvrdit platbu objednávky",
+          "description": "Zavolá SetOrderPaid s kancelářskou platbou a aktivuje testovací kupón přiřazený k tokenu.",
+          "requiresContext": ["mosCouponSessionId", "mosCouponOrderId", "mosCouponPrice"],
+          "fields": [
+            {
+              "name": "orderId",
+              "label": "OrderID",
+              "type": "number",
+              "value": "{{context.mosCouponOrderId}}"
+            },
+            {
+              "name": "paymentType",
+              "label": "PaymentType",
+              "type": "select",
+              "value": "3",
+              "options": [
+                { "value": "3", "text": "3 - karta v kanceláři" },
+                { "value": "4", "text": "4 - hotovost" }
+              ]
+            },
+            {
+              "name": "orderPrice",
+              "label": "OrderPrice",
+              "type": "number",
+              "value": "{{context.mosCouponPrice}}",
+              "step": 0.01
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"http://tempuri.org/SetOrderPaid\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <SetOrderPaid xmlns=\"http://tempuri.org/\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <OrderID>{{form.orderId}}</OrderID>\n      <PaymentType>{{form.paymentType}}</PaymentType>\n      <OrderPrice>{{form.orderPrice}}</OrderPrice>\n    </SetOrderPaid>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200
+          }
+        }
+      ]
+    }
+  ]
+}

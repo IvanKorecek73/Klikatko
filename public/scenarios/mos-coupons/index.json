@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "defaultPackId": "mos-coupons-core-soap",
+  "packs": [
+    {
+      "id": "mos-coupons-core-soap",
+      "name": "MOS Kupóny - Core SOAP",
+      "description": "Diagnostické scénáře pro vytvoření testovacího kupónu přímo přes Core MOS SOAP API.",
+      "file": "core-soap-coupon-purchase.json"
+    }
+  ]
+}

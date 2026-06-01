@@ -3681,7 +3681,7 @@ function buildRequest(step) {
       const apiKey = getCurrentApiKey();
       const headerName = authConfig.apiKeyHeader || "apiKey";
 
-      if (apiKey) {
+      if (apiKey && authConfig.apiKeyInHeader !== false) {
         headers[headerName] = apiKey;
         visibleHeaders[headerName] = "***";
       }
@@ -3698,10 +3698,10 @@ function buildRequest(step) {
   }
 
   if (step.request.body !== undefined) {
-    if (step.request.contentType === "text/plain") {
+    if (step.request.contentType && typeof step.request.body === "string") {
       body = resolveTemplate(String(step.request.body), { fieldValues: state.values });
       visibleBody = body;
-      headers["Content-Type"] = "text/plain";
+      headers["Content-Type"] = step.request.contentType;
     } else if (step.request.contentType === "multipart/form-data") {
       const multipart = buildMultipartBody(step);
       body = multipart.body;
@@ -4192,6 +4192,12 @@ function applyExtracts(step, body, status) {
 
   for (const [name, selector] of Object.entries(step.extract || {})) {
     state.context[name] = getPath(body, selector);
+  }
+
+  for (const [name, pattern] of Object.entries(step.extractRegex || {})) {
+    const source = typeof body === "string" ? body : JSON.stringify(body ?? "");
+    const match = source.match(new RegExp(pattern, "is"));
+    state.context[name] = match?.[1] ?? "";
   }
 }
 
@@ -6806,6 +6812,7 @@ function resolveTemplate(template, { fieldValues }) {
     .replaceAll("{{uuid}}", crypto.randomUUID())
     .replaceAll("{{hex64}}", randomHex(32))
     .replaceAll("{{now}}", new Date().toISOString())
+    .replaceAll("{{today}}", new Date().toISOString().slice(0, 10))
     .replace(/\{\{form\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => fieldValues[name] ?? "")
     .replace(/\{\{context\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => state.context[name] ?? "")
     .replace(/\{\{secret\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => state.secrets[name] ?? "")
