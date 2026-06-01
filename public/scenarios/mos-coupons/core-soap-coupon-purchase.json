@@ -266,6 +266,68 @@
           "expected": {
             "status": 200
           }
+        },
+        {
+          "id": "mos-coupon-get-coupons",
+          "title": "Zobrazit kupóny na identifikátoru",
+          "description": "Načte kupóny přiřazené k vybranému TokenID, aby bylo možné ověřit, že se testovací kupón po zaplacení skutečně objevil.",
+          "requiresContext": ["mosCouponSessionId", "mosCouponTokenId"],
+          "fields": [
+            {
+              "name": "tokenId",
+              "label": "TokenID",
+              "type": "number",
+              "value": "{{context.mosCouponTokenId}}"
+            },
+            {
+              "name": "loadAllCoupons",
+              "label": "Rozsah",
+              "type": "select",
+              "value": "true",
+              "options": [
+                { "value": "true", "text": "Všechny kupóny" },
+                { "value": "false", "text": "Jen aktuálně dostupné" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetCoupons\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetCoupons xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <LoadAllCoupons>{{form.loadAllCoupons}}</LoadAllCoupons>\n    </GetCoupons>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200
+          },
+          "selection": {
+            "buttonLabel": "Označit kupón",
+            "selectedButtonLabel": "Označeno",
+            "sourceRegex": {
+              "itemPattern": "<CouponInfoRecord[^>]*>([\\s\\S]*?)</CouponInfoRecord>",
+              "fields": {
+                "couponId": "<CouponID>([^<]+)</CouponID>",
+                "customerId": "<CustomerID>([^<]+)</CustomerID>",
+                "customStatusName": "<CustomStatusName>([^<]*)</CustomStatusName>",
+                "status": "<Status>([^<]+)</Status>",
+                "tariffId": "<TariffID>([^<]+)</TariffID>",
+                "tariffName": "<TariffName>([^<]*)</TariffName>",
+                "name": "<Name>([^<]*)</Name>",
+                "dateTimeFrom": "<DateTimeFrom>([^<]+)</DateTimeFrom>",
+                "dateTimeTo": "<DateTimeTo>([^<]+)</DateTimeTo>",
+                "zones": "<Zones>([^<]*)</Zones>",
+                "price": "<Price>([^<]+)</Price>",
+                "orderId": "<OrderID>([^<]+)</OrderID>",
+                "tokenId": "<TokenID>([^<]+)</TokenID>",
+                "tokenName": "<TokenName>([^<]*)</TokenName>"
+              }
+            },
+            "store": {
+              "mosCouponDisplayedCouponId": "$.couponId"
+            }
+          }
         }
       ]
     }

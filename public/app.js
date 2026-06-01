@@ -6082,13 +6082,24 @@ function renderSelectionItemsCardsHtml(step) {
     text: getSelectionItemText(item),
     chips: [
       item.identifierType || item.type || null,
+      item.tariffName || null,
       item.maskedPan || item.cln || null,
+      item.zones ? `zóny ${item.zones}` : null,
+      item.price ? `${item.price} Kč` : null,
       item.active === "true" ? "aktivní" : item.active === "false" ? "neaktivní" : null
     ],
     details: [
+      { label: "CouponID", value: item.couponId },
       { label: "TokenID", value: item.tokenId },
       { label: "CustomerID", value: item.customerId },
+      { label: "OrderID", value: item.orderId },
       { label: "Název", value: item.name },
+      { label: "Tarif", value: item.tariffName || item.tariffId },
+      { label: "Zóny", value: item.zones },
+      { label: "Platnost od", value: item.dateTimeFrom ? formatDate(item.dateTimeFrom) : null },
+      { label: "Platnost do", value: item.dateTimeTo ? formatDate(item.dateTimeTo) : null },
+      { label: "Cena", value: item.price ? `${item.price} Kč` : null },
+      { label: "Stav", value: item.customStatusName || item.status },
       { label: "Typ", value: item.identifierType },
       { label: "Maskovaná hodnota", value: item.maskedPan },
       { label: "CLN", value: item.cln }
@@ -6098,12 +6109,21 @@ function renderSelectionItemsCardsHtml(step) {
 
 function getSelectionItemTitle(item) {
   return item.name
+    || item.tariffName
     || item.maskedPan
     || item.cln
+    || (item.couponId ? `Kupón ${item.couponId}` : null)
     || (item.tokenId ? `Token ${item.tokenId}` : "Položka");
 }
 
 function getSelectionItemText(item) {
+  if (item.couponId) {
+    return [
+      item.dateTimeFrom && item.dateTimeTo ? `${formatDate(item.dateTimeFrom)} - ${formatDate(item.dateTimeTo)}` : null,
+      item.zones ? `zóny ${item.zones}` : null
+    ].filter(Boolean).join(", ") || "Kupón";
+  }
+
   if (item.identifierType) {
     return `Identifikátor ${item.identifierType}`;
   }
