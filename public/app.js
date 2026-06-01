@@ -6813,6 +6813,7 @@ function resolveTemplate(template, { fieldValues }) {
     .replaceAll("{{hex64}}", randomHex(32))
     .replaceAll("{{now}}", new Date().toISOString())
     .replaceAll("{{today}}", new Date().toISOString().slice(0, 10))
+    .replaceAll("{{todayPlus365}}", new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
     .replace(/\{\{form\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => fieldValues[name] ?? "")
     .replace(/\{\{context\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => state.context[name] ?? "")
     .replace(/\{\{secret\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => state.secrets[name] ?? "")

@@ -56,9 +56,9 @@
             "path": "/services/MOSservice.asmx",
             "contentType": "text/xml; charset=utf-8",
             "headers": {
-              "SOAPAction": "\"http://tempuri.org/AuthenticateLogin\""
+              "SOAPAction": "\"globdata/AuthenticateLogin\""
             },
-            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AuthenticateLogin xmlns=\"http://tempuri.org/\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <Password>{{form.password}}</Password>\n      <CodeSMS>{{form.codeSms}}</CodeSMS>\n    </AuthenticateLogin>\n  </soap:Body>\n</soap:Envelope>"
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AuthenticateLogin xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <Password>{{form.password}}</Password>\n      <CodeSMS>{{form.codeSms}}</CodeSMS>\n    </AuthenticateLogin>\n  </soap:Body>\n</soap:Envelope>"
           },
           "expected": {
             "status": 200,
@@ -95,9 +95,9 @@
             "path": "/services/MOSservice.asmx",
             "contentType": "text/xml; charset=utf-8",
             "headers": {
-              "SOAPAction": "\"http://tempuri.org/GetTokenTariffs\""
+              "SOAPAction": "\"globdata/GetTokenTariffs\""
             },
-            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokenTariffs xmlns=\"http://tempuri.org/\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <StartDate>{{form.startDate}}</StartDate>\n    </GetTokenTariffs>\n  </soap:Body>\n</soap:Envelope>"
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokenTariffs xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <StartDate>{{form.startDate}}</StartDate>\n    </GetTokenTariffs>\n  </soap:Body>\n</soap:Envelope>"
           },
           "remember": {
             "mosCouponTokenId": "{{form.tokenId}}"
@@ -157,6 +157,12 @@
               "label": "ValidFrom",
               "type": "date",
               "value": "{{today}}"
+            },
+            {
+              "name": "validTill",
+              "label": "ValidTill",
+              "type": "date",
+              "value": "{{todayPlus365}}"
             }
           ],
           "request": {
@@ -164,9 +170,9 @@
             "path": "/services/MOSservice.asmx",
             "contentType": "text/xml; charset=utf-8",
             "headers": {
-              "SOAPAction": "\"http://tempuri.org/AddItemToOrder\""
+              "SOAPAction": "\"globdata/AddItemToOrder\""
             },
-            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AddItemToOrder xmlns=\"http://tempuri.org/\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <OrderID xsi:nil=\"true\" />\n      <NewCoupon>\n        <CustomerID>{{form.customerId}}</CustomerID>\n        <TariffID>{{form.tariffId}}</TariffID>\n        <TariffZoneIDs>\n          <int>{{form.tariffZoneId}}</int>\n        </TariffZoneIDs>\n        <Price>{{form.price}}</Price>\n        <ValidFrom>{{form.validFrom}}</ValidFrom>\n        <IsTest>true</IsTest>\n      </NewCoupon>\n      <TokenID>{{form.tokenId}}</TokenID>\n    </AddItemToOrder>\n  </soap:Body>\n</soap:Envelope>"
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AddItemToOrder xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <OrderID xsi:nil=\"true\" />\n      <NewCoupon>\n        <CustomerID>{{form.customerId}}</CustomerID>\n        <TariffID>{{form.tariffId}}</TariffID>\n        <TariffZoneIDs>\n          <int>{{form.tariffZoneId}}</int>\n        </TariffZoneIDs>\n        <Price>{{form.price}}</Price>\n        <ValidFrom>{{form.validFrom}}</ValidFrom>\n        <ValidTill>{{form.validTill}}</ValidTill>\n        <IsTest>true</IsTest>\n      </NewCoupon>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <ExternalUserID xsi:nil=\"true\" />\n      <ExternalDeskID xsi:nil=\"true\" />\n    </AddItemToOrder>\n  </soap:Body>\n</soap:Envelope>"
           },
           "remember": {
             "mosCouponPrice": "{{form.price}}"
@@ -214,9 +220,9 @@
             "path": "/services/MOSservice.asmx",
             "contentType": "text/xml; charset=utf-8",
             "headers": {
-              "SOAPAction": "\"http://tempuri.org/SetOrderPaid\""
+              "SOAPAction": "\"globdata/SetOrderPaid\""
             },
-            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <SetOrderPaid xmlns=\"http://tempuri.org/\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <OrderID>{{form.orderId}}</OrderID>\n      <PaymentType>{{form.paymentType}}</PaymentType>\n      <OrderPrice>{{form.orderPrice}}</OrderPrice>\n    </SetOrderPaid>\n  </soap:Body>\n</soap:Envelope>"
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <SetOrderPaid xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <OrderID>{{form.orderId}}</OrderID>\n      <PaymentType>{{form.paymentType}}</PaymentType>\n      <OrderPrice>{{form.orderPrice}}</OrderPrice>\n    </SetOrderPaid>\n  </soap:Body>\n</soap:Envelope>"
           },
           "expected": {
             "status": 200
