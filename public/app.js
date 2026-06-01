@@ -36,6 +36,7 @@ const state = {
 };
 
 const NEW_AUTH_PROFILE_ID = "__new_auth_profile__";
+const LAST_SELECTION_STORAGE_KEY = "demoHarness.lastSelection.v1";
 
 const elements = {
   scenarioList: document.querySelector("#scenarioList"),
@@ -113,7 +114,12 @@ async function init() {
   state.projectIndex = await fetchJson("/scenarios/index.json");
   await loadHarnessMeta();
   populateProjectOptions();
-  await loadProject(getDefaultProjectId());
+  const lastSelection = loadLastSelection();
+  await loadProject(getRestoredProjectId(lastSelection), {
+    packId: lastSelection?.packId,
+    scenarioId: lastSelection?.scenarioId,
+    suppressLog: true
+  });
 
   elements.runStep.addEventListener("click", runCurrentStep);
   elements.previousStep.addEventListener("click", previousStep);
@@ -215,10 +221,41 @@ function getDefaultProjectId() {
     || null;
 }
 
+function loadLastSelection() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LAST_SELECTION_STORAGE_KEY) || "null");
+    return saved && typeof saved === "object" ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLastSelection(patch = {}) {
+  const next = {
+    projectId: state.currentProject?.id || null,
+    packId: state.currentPackId || null,
+    scenarioId: state.freeForm ? null : state.scenario?.id || null,
+    ...patch
+  };
+
+  localStorage.setItem(LAST_SELECTION_STORAGE_KEY, JSON.stringify(next));
+}
+
+function getRestoredProjectId(selection) {
+  const projectId = selection?.projectId;
+  const exists = (state.projectIndex?.projects || []).some(project => project.id === projectId);
+  return exists ? projectId : getDefaultProjectId();
+}
+
 function getDefaultPackId() {
   return state.packIndex?.defaultPackId
     || state.packIndex?.packs?.[0]?.id
     || null;
+}
+
+function getRestoredPackId(packId) {
+  const exists = (state.packIndex?.packs || []).some(pack => pack.id === packId);
+  return exists ? packId : getDefaultPackId();
 }
 
 function getDefaultEnvironmentId(project) {
@@ -265,7 +302,7 @@ function getAuthorizationBadgeLabel() {
   return "JWT";
 }
 
-async function loadProject(projectId) {
+async function loadProject(projectId, options = {}) {
   const project = (state.projectIndex?.projects || []).find(item => item.id === projectId);
 
   if (!project) {
@@ -282,10 +319,14 @@ async function loadProject(projectId) {
   applyProjectBaseUrl(project);
   await applyProjectEnvironment(project, getSavedEnvironmentId(project) || getDefaultEnvironmentId(project));
   loadProjectAuth(project);
-  await loadScenarioPack(getDefaultPackId());
+  await loadScenarioPack(getRestoredPackId(options.packId), {
+    scenarioId: options.scenarioId,
+    suppressLog: options.suppressLog
+  });
+  saveLastSelection();
 }
 
-async function loadScenarioPack(packId) {
+async function loadScenarioPack(packId, options = {}) {
   const pack = (state.packIndex?.packs || []).find(item => item.id === packId);
 
   if (!pack) {
@@ -337,6 +378,14 @@ async function loadScenarioPack(packId) {
     scenarios: state.catalog.scenarios.length,
     note: "Spusťte cílový backend a podle potřeby upravte API proxy."
   });
+  if (options.scenarioId && state.catalog.scenarios.some(scenario => scenario.id === options.scenarioId)) {
+    selectScenario(options.scenarioId, {
+      preserveLog: true,
+      suppressLog: options.suppressLog
+    });
+  } else {
+    saveLastSelection({ scenarioId: null });
+  }
 }
 
 function resolvePackUrl(file) {
@@ -1965,6 +2014,11 @@ function selectScenario(scenarioId, options = {}) {
   const preserveLog = options.preserveLog === true;
   const suppressLog = options.suppressLog === true;
   state.scenario = state.catalog.scenarios.find(scenario => scenario.id === scenarioId);
+
+  if (!state.scenario) {
+    return;
+  }
+
   state.stepIndex = 0;
   state.context = {};
   state.secrets = {};
@@ -1988,6 +2042,9 @@ function selectScenario(scenarioId, options = {}) {
       id: state.scenario.id,
       expectedMode: "Re\u017eim sc\u00e9n\u00e1\u0159e"
     });
+  }
+  if (options.persistSelection !== false) {
+    saveLastSelection({ scenarioId: state.scenario.id });
   }
   renderAutoRunOptions();
   clearAutoRunSummary();
@@ -3471,7 +3528,7 @@ async function runSelectedScenarios() {
       }
 
       const scenario = selectedScenarios[scenarioIndex];
-      selectScenario(scenario.id, { preserveLog: true, suppressLog: true });
+      selectScenario(scenario.id, { preserveLog: true, suppressLog: true, persistSelection: false });
       setBatchControls(true);
       const stepResults = [];
       updateSmokeResult(scenario.id, {
