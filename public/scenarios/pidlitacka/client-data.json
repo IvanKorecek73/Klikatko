@@ -368,7 +368,7 @@
     {
       "id": "client-identifiers-tokenize-phone",
       "title": "Klientská data - tokenizace telefonu",
-      "description": "Ověří celé aktuální flow MobApp tokenizace: identRegistration pouze potvrdí registraci, TokenID se očekává z AssignToken a následně se volá SetTokenIsPersonalized(false).",
+      "description": "Ověří celé aktuální flow MobApp tokenizace: identRegistration pouze potvrdí registraci, TokenID se očekává z AssignToken a následně je možné volitelně provést personalizaci identifikátoru.",
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
@@ -389,7 +389,9 @@
         "Scénář zapisuje nový MobApp identifikátor, proto není součástí smoke runu.",
         "RegId, CLN a token jsou předvyplněné náhodnými hodnotami. Při opakovaném průchodu ponechte nové vygenerované hodnoty, aby nedošlo ke kolizi s dříve uloženým tokenem.",
         "STP hlavičky a podpis řeší backend z konfigurace, v Klikátku se nezadávají.",
-        "Úspěšné flow musí projít v pořadí: identRegistration -> AssignToken -> SetTokenIsPersonalized(false). TokenID má přijít až z AssignToken.",
+        "Úspěšné flow tokenizace musí projít v pořadí: identRegistration -> AssignToken -> SetTokenIsPersonalized(false). TokenID má přijít až z AssignToken.",
+        "Nově lze navazujícím volitelným krokem nastavit telefon jako personalizovaný. Pro nákup nepřenosných kupónů je personalizace žádoucí.",
+        "Pokud v personalizačním kroku zvolíte Ne, Klikátko krok označí jako záměrně přeskočený a request neodešle.",
         "Pokud se vrátí PartiallyCompleted nebo chyba, v Mobilu a Logu zkontrolujte, zda prošla identRegistration a co přesně vrátil AssignToken.",
         "Po tokenizaci se znovu načtou identifikátory, aby bylo možné ověřit, že ukládací část propsala nový záznam."
       ],
@@ -397,7 +399,7 @@
         {
           "id": "client-identifiers-tokenize-phone-step",
           "title": "Tokenizovat telefon",
-          "description": "Odešle tokenizační požadavek. Backend má nejprve potvrdit identRegistration, potom získat TokenID z AssignToken a nakonec nastavit SetTokenIsPersonalized(false).",
+          "description": "Odešle tokenizační požadavek. Backend má nejprve potvrdit identRegistration, potom získat TokenID z AssignToken a nakonec nastavit počáteční SetTokenIsPersonalized(false).",
           "fields": [
             {
               "name": "regId",
@@ -468,6 +470,14 @@
                 "notEmpty": true
               },
               {
+                "path": "$.isPersonalized",
+                "equals": false
+              },
+              {
+                "path": "$.canBePersonalized",
+                "equals": true
+              },
+              {
                 "path": "$.steps",
                 "lengthAtLeast": 4
               },
@@ -501,6 +511,101 @@
               },
               {
                 "path": "$.steps[3].status",
+                "equals": "Completed"
+              }
+            ]
+          },
+          "extract": {
+            "mobileIdentifierId": "$.identifierId"
+          }
+        },
+        {
+          "id": "client-identifiers-tokenize-phone-personalize",
+          "title": "Personalizovat telefon pro kupóny",
+          "description": "Volitelně nastaví nově vytvořený MobApp identifikátor jako personalizovaný. To je potřeba pro scénáře s nepřenosnými kupóny.",
+          "requiresContext": [
+            "mobileIdentifierId"
+          ],
+          "fields": [
+            {
+              "name": "personalize",
+              "label": "Provést personalizaci",
+              "type": "select",
+              "value": "true",
+              "options": [
+                {
+                  "value": "true",
+                  "text": "Ano - personalizovat"
+                },
+                {
+                  "value": "false",
+                  "text": "Ne - krok přeskočit"
+                }
+              ],
+              "help": "Při volbě Ne se po spuštění kroku request neodešle a krok se označí jako záměrně přeskočený."
+            },
+            {
+              "name": "identifierId",
+              "label": "TokenID",
+              "type": "number",
+              "value": "{{context.mobileIdentifierId}}"
+            }
+          ],
+          "warningWhen": [
+            {
+              "conditions": [
+                {
+                  "formEquals": {
+                    "key": "personalize",
+                    "value": "false"
+                  }
+                }
+              ],
+              "appMessage": "Personalizace telefonu byla záměrně přeskočena.",
+              "message": "Tester zvolil Ne. Identifikátor zůstává nepersonalizovaný."
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/identifiers/mobile/{{form.identifierId}}/personalization"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.isPersonalized",
+                "equals": true
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "IdentifierResolution"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[2].name",
+                "equals": "SetTokenIsPersonalized"
+              },
+              {
+                "path": "$.steps[2].status",
                 "equals": "Completed"
               }
             ]
@@ -553,6 +658,8 @@
         "Otevřete odkaz na tokenizační bránu, dokončete registraci karty a potom spusťte krok kontroly stavu.",
         "Úspěšný výsledek druhého kroku je dokončené volání backendu, typ BPK a alespoň jeden vrácený token. Hodnota registrationState je stav tokenizační brány a může být např. res_recv_backend_mos.",
         "Po ověření stavu spusťte kompletaci. Ta vybere primární token z brány a přiřadí ho aktuálnímu klientovi přes AssignToken.",
+        "Po kompletaci lze volitelně spustit personalizaci platební karty. Pro nákup nepřenosných kupónů je personalizace žádoucí.",
+        "Pokud v personalizačním kroku zvolíte Ne, Klikátko krok označí jako záměrně přeskočený a request neodešle.",
         "Pokud brána ještě není dokončená, vraťte se na krok kontroly stavu a spusťte ho znovu."
       ],
       "steps": [
@@ -686,6 +793,14 @@
                 "notEmpty": true
               },
               {
+                "path": "$.isPersonalized",
+                "equals": false
+              },
+              {
+                "path": "$.canBePersonalized",
+                "equals": true
+              },
+              {
                 "path": "$.steps[0].name",
                 "equals": "CustomerResolution"
               },
@@ -715,6 +830,101 @@
               },
               {
                 "path": "$.steps[3].status",
+                "equals": "Completed"
+              }
+            ]
+          },
+          "extract": {
+            "bankCardIdentifierId": "$.identifierId"
+          }
+        },
+        {
+          "id": "client-identifiers-bank-card-personalize",
+          "title": "Personalizovat platební kartu pro kupóny",
+          "description": "Volitelně nastaví tokenizovanou BPK jako personalizovaný identifikátor. To je potřeba pro scénáře s nepřenosnými kupóny.",
+          "requiresContext": [
+            "bankCardIdentifierId"
+          ],
+          "fields": [
+            {
+              "name": "personalize",
+              "label": "Provést personalizaci",
+              "type": "select",
+              "value": "true",
+              "options": [
+                {
+                  "value": "true",
+                  "text": "Ano - personalizovat"
+                },
+                {
+                  "value": "false",
+                  "text": "Ne - krok přeskočit"
+                }
+              ],
+              "help": "Při volbě Ne se po spuštění kroku request neodešle a krok se označí jako záměrně přeskočený."
+            },
+            {
+              "name": "identifierId",
+              "label": "TokenID",
+              "type": "number",
+              "value": "{{context.bankCardIdentifierId}}"
+            }
+          ],
+          "warningWhen": [
+            {
+              "conditions": [
+                {
+                  "formEquals": {
+                    "key": "personalize",
+                    "value": "false"
+                  }
+                }
+              ],
+              "appMessage": "Personalizace platební karty byla záměrně přeskočena.",
+              "message": "Tester zvolil Ne. Identifikátor zůstává nepersonalizovaný."
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/identifiers/bank-card/{{form.identifierId}}/personalization"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.isPersonalized",
+                "equals": true
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "IdentifierResolution"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[2].name",
+                "equals": "SetTokenIsPersonalized"
+              },
+              {
+                "path": "$.steps[2].status",
                 "equals": "Completed"
               }
             ]
@@ -825,7 +1035,8 @@
       "instructions": [
         "Použijte registrační ID tokenizace, která už prošla tokenizační bránou.",
         "Kompletace vybere primární token z registrace a přiřadí ho aktuálnímu klientovi.",
-        "Úspěšná kompletace vrací status = Completed a neprázdné identifierId z AssignToken."
+        "Úspěšná kompletace vrací status = Completed a neprázdné identifierId z AssignToken.",
+        "Po kompletaci lze volitelně spustit personalizaci platební karty."
       ],
       "steps": [
         {
@@ -858,6 +1069,85 @@
               {
                 "path": "$.registrationState",
                 "notEmpty": true
+              },
+              {
+                "path": "$.isPersonalized",
+                "equals": false
+              },
+              {
+                "path": "$.canBePersonalized",
+                "equals": true
+              }
+            ]
+          },
+          "extract": {
+            "bankCardIdentifierId": "$.identifierId"
+          }
+        },
+        {
+          "id": "client-identifiers-bank-card-complete-manual-personalize",
+          "title": "Personalizovat platební kartu pro kupóny",
+          "description": "Volitelně nastaví tokenizovanou BPK jako personalizovaný identifikátor.",
+          "requiresContext": [
+            "bankCardIdentifierId"
+          ],
+          "fields": [
+            {
+              "name": "personalize",
+              "label": "Provést personalizaci",
+              "type": "select",
+              "value": "true",
+              "options": [
+                {
+                  "value": "true",
+                  "text": "Ano - personalizovat"
+                },
+                {
+                  "value": "false",
+                  "text": "Ne - krok přeskočit"
+                }
+              ],
+              "help": "Při volbě Ne se po spuštění kroku request neodešle a krok se označí jako záměrně přeskočený."
+            },
+            {
+              "name": "identifierId",
+              "label": "TokenID",
+              "type": "number",
+              "value": "{{context.bankCardIdentifierId}}"
+            }
+          ],
+          "warningWhen": [
+            {
+              "conditions": [
+                {
+                  "formEquals": {
+                    "key": "personalize",
+                    "value": "false"
+                  }
+                }
+              ],
+              "appMessage": "Personalizace platební karty byla záměrně přeskočena.",
+              "message": "Tester zvolil Ne. Identifikátor zůstává nepersonalizovaný."
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/identifiers/bank-card/{{form.identifierId}}/personalization"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.isPersonalized",
+                "equals": true
               }
             ]
           }

@@ -2382,6 +2382,14 @@ function getMobileActionTitle(step) {
     return path.includes("/complete") ? "Kompletace tokenizace karty" : "Tokenizace platební karty";
   }
 
+  if (path.includes("/v1/client/identifiers/mobile/") && path.includes("/personalization")) {
+    return "Personalizace telefonu";
+  }
+
+  if (path.includes("/v1/client/identifiers/bank-card/") && path.includes("/personalization")) {
+    return "Personalizace platební karty";
+  }
+
   if (path.includes("/v1/client/identifiers/registration/")) {
     return "Stav tokenizace karty";
   }
@@ -2482,6 +2490,14 @@ function getMobileActionSubtitle(step) {
 
   if (path.includes("/v1/client/status")) {
     return "Stav klientského profilu aktuálního uživatele.";
+  }
+
+  if (path.includes("/v1/client/identifiers/mobile/") && path.includes("/personalization")) {
+    return "Volitelně označí MobApp identifikátor jako personalizovaný.";
+  }
+
+  if (path.includes("/v1/client/identifiers/bank-card/") && path.includes("/personalization")) {
+    return "Volitelně označí platební kartu jako personalizovaný identifikátor.";
   }
 
   if (path.includes("/v1/client/identifiers")) {
@@ -4116,6 +4132,12 @@ function makeAppMessage(body, status, level) {
         : `Našli jsme ${count} identifikátorů klienta.`;
   }
 
+  if (isPersonalizeIdentifierResponse(body)) {
+    return body.isPersonalized
+      ? "Identifikátor byl úspěšně personalizován."
+      : "Personalizace identifikátoru nebyla dokončena.";
+  }
+
   if (isTokenizeMobileIdentifierResponse(body)) {
     return body.status === "Completed"
       ? "Telefonní identifikátor byl úspěšně tokenizován."
@@ -4425,6 +4447,11 @@ function evaluateStepCondition(condition) {
   if (condition.contextEquals) {
     const expected = condition.contextEquals.value;
     return state.context[condition.contextEquals.key] === expected;
+  }
+
+  if (condition.formEquals) {
+    const expected = condition.formEquals.value;
+    return state.values[condition.formEquals.key] === expected;
   }
 
   return false;
@@ -4999,6 +5026,10 @@ function buildAppCardsHtml(body, step = currentStep()) {
 
   if (isCompleteIdentifierRegistrationResponse(body)) {
     return renderCompleteIdentifierRegistrationCardHtml(body, step);
+  }
+
+  if (isPersonalizeIdentifierResponse(body)) {
+    return renderPersonalizeIdentifierCardHtml(body, step);
   }
 
   if (isTokenizeMobileIdentifierResponse(body)) {
@@ -5771,6 +5802,44 @@ function renderCompleteIdentifierRegistrationCardHtml(body, step = currentStep()
           <div class="app-detail-row"><span>Výsledek</span><span>${escapeHtml(getIdentifierOperationStatusLabel(body.status))}</span></div>
           <div class="app-detail-row"><span>TokenID</span><span>${escapeHtml(body.identifierId || "-")}</span></div>
           <div class="app-detail-row"><span>Stav registrace</span><span>${escapeHtml(body.registrationState || "-")}</span></div>
+          <div class="app-detail-row"><span>Personalizovaný</span><span>${escapeHtml(body.isPersonalized === null || body.isPersonalized === undefined ? "-" : formatBooleanAnswer(body.isPersonalized))}</span></div>
+          <div class="app-detail-row"><span>Lze personalizovat</span><span>${escapeHtml(formatBooleanAnswer(body.canBePersonalized))}</span></div>
+          ${steps.map(step => `
+            <div class="app-detail-row">
+              <span>${escapeHtml(getIdentifierStepLabel(step.name))}</span>
+              <span>${escapeHtml(getIdentifierStepDetails(step, body))}</span>
+            </div>
+          `).join("")}
+        </div>
+      </article>
+    </div>
+  `;
+}
+
+function renderPersonalizeIdentifierCardHtml(body, step = currentStep()) {
+  const steps = Array.isArray(body.steps) ? body.steps : [];
+  const path = String(step?.request?.path || "").toLowerCase();
+  const label = path.includes("/bank-card/")
+    ? "Platební karta"
+    : "Telefon";
+
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>${escapeHtml(body.isPersonalized ? `${label} personalizován` : `Personalizace - ${label}`)}</strong>
+        <p>${escapeHtml(body.isPersonalized
+          ? "Identifikátor je v Core MOS označený jako personalizovaný a může sloužit pro scénáře, které vyžadují osobní nosič."
+          : "Personalizace se nedokončila. Zkontrolujte kroky níže.")}</p>
+        <div class="app-card-meta">
+          ${renderAppChip(getIdentifierOperationStatusLabel(body.status))}
+          ${body.identifierId ? renderAppChip(`TokenID ${body.identifierId}`) : ""}
+          ${renderAppChip(body.isPersonalized ? "personalizovaný" : "nepersonalizovaný")}
+          ${renderAppChip(steps.length === 1 ? "1 krok" : `${steps.length} kroků`)}
+        </div>
+        <div class="app-card-details">
+          <div class="app-detail-row"><span>Výsledek</span><span>${escapeHtml(getIdentifierOperationStatusLabel(body.status))}</span></div>
+          <div class="app-detail-row"><span>TokenID</span><span>${escapeHtml(body.identifierId || "-")}</span></div>
+          <div class="app-detail-row"><span>Personalizovaný</span><span>${escapeHtml(formatBooleanAnswer(body.isPersonalized))}</span></div>
           ${steps.map(step => `
             <div class="app-detail-row">
               <span>${escapeHtml(getIdentifierStepLabel(step.name))}</span>
@@ -5798,7 +5867,14 @@ function renderTokenizeMobileIdentifierCardHtml(body) {
         <div class="app-card-meta">
           ${renderAppChip(statusLabel)}
           ${body.identifierId ? renderAppChip(`TokenID ${body.identifierId}`) : ""}
+          ${body.isPersonalized === null || body.isPersonalized === undefined ? "" : renderAppChip(body.isPersonalized ? "personalizovaný" : "nepersonalizovaný")}
+          ${renderAppChip(body.canBePersonalized ? "lze personalizovat" : "nelze personalizovat")}
           ${renderAppChip(steps.length === 1 ? "1 krok" : `${steps.length} kroků`)}
+        </div>
+        <div class="app-card-details">
+          <div class="app-detail-row"><span>TokenID</span><span>${escapeHtml(body.identifierId || "-")}</span></div>
+          <div class="app-detail-row"><span>Personalizovaný</span><span>${escapeHtml(body.isPersonalized === null || body.isPersonalized === undefined ? "-" : formatBooleanAnswer(body.isPersonalized))}</span></div>
+          <div class="app-detail-row"><span>Lze personalizovat</span><span>${escapeHtml(formatBooleanAnswer(body.canBePersonalized))}</span></div>
         </div>
         ${steps.length > 0 ? `
           <div class="app-card-details">
@@ -5894,7 +5970,9 @@ function getIdentifierStepLabel(value) {
     case "AssignToken":
       return "AssignToken (vrací TokenID)";
     case "SetTokenIsPersonalized":
-      return "SetTokenIsPersonalized(false)";
+      return "SetTokenIsPersonalized";
+    case "IdentifierResolution":
+      return "Načtení identifikátoru";
     case "InitiateTokenRegistration":
       return "Zahájení tokenizace";
     case "GetTokenRegistrationState":
@@ -6689,6 +6767,18 @@ function isTokenizeMobileIdentifierResponse(value) {
     && typeof value.status === "string"
     && Array.isArray(value.steps)
     && ("identifierId" in value)
+    && ("canBePersonalized" in value)
+    && !("registrationState" in value);
+}
+
+function isPersonalizeIdentifierResponse(value) {
+  return value
+    && typeof value === "object"
+    && typeof value.status === "string"
+    && Array.isArray(value.steps)
+    && ("identifierId" in value)
+    && typeof value.isPersonalized === "boolean"
+    && !("canBePersonalized" in value)
     && !("registrationState" in value);
 }
 
