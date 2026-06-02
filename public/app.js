@@ -2120,8 +2120,9 @@ function renderStep() {
   elements.nextStep.classList.toggle("ready", !elements.nextStep.disabled);
 
   if (!step) {
+    const app = getMobileAppConfig(step);
     elements.stepCounter.textContent = "";
-    elements.screenTitle.textContent = state.scenario ? "Dokončeno" : "Jízdenky";
+    elements.screenTitle.textContent = state.scenario ? (app.title || "Dokončeno") : "Jízdenky";
     elements.screenDescription.textContent = state.scenario
       ? "V\u0161echny kroky sc\u00e9n\u00e1\u0159e jsou hotov\u00e9."
       : "P\u0159ehled dostupn\u00fdch slu\u017eeb pro cestuj\u00edc\u00ed.";
@@ -2215,6 +2216,7 @@ function renderAppNav(step) {
 }
 
 function getMobileNavigation(step) {
+  const app = getMobileAppConfig(step);
   const text = step
     ? [step.id, step.title, step.request?.path].filter(Boolean).join(" ").toLowerCase()
     : "";
@@ -2223,6 +2225,13 @@ function getMobileNavigation(step) {
     return {
       items: ["Jízdenky", "Platby", "Profil"],
       activeIndex: 0
+    };
+  }
+
+  if (app.section === "coupons" || isCouponStepText(text)) {
+    return {
+      items: ["Kupóny", "Identifikátory", "MOS"],
+      activeIndex: text.includes("token") || text.includes("identifik") ? 1 : 0
     };
   }
 
@@ -2314,6 +2323,17 @@ function isAccountStepText(text) {
 
 function isParkingStepText(text) {
   return text.includes("parking") || text.includes("parkov");
+}
+
+function isCouponStepText(text) {
+  return includesAny(text, [
+    "coupon",
+    "kupón",
+    "kupon",
+    "additemtoorder",
+    "setorderpaid",
+    "movecoupon"
+  ]);
 }
 
 function getMobileActionTitle(step) {
@@ -2988,7 +3008,17 @@ function renderNoInputStepCard(step) {
 }
 
 function getMobileTitle(step) {
+  const app = getMobileAppConfig(step);
+
+  if (app.title) {
+    return app.title;
+  }
+
   const text = [step.id, step.title, step.request?.path].filter(Boolean).join(" ").toLowerCase();
+
+  if (isCouponStepText(text)) {
+    return "Kupóny";
+  }
 
   if (isParkingStepText(text)) {
     return "Parkování";
@@ -3030,7 +3060,17 @@ function getMobileTitle(step) {
 }
 
 function getMobileDescription(step) {
+  const app = getMobileAppConfig(step);
+
+  if (app.subtitle) {
+    return app.subtitle;
+  }
+
   const text = [step.id, step.title, step.request?.path].filter(Boolean).join(" ").toLowerCase();
+
+  if (isCouponStepText(text)) {
+    return "Nákup, přesun a kontrola kupónů v Core MOS.";
+  }
 
   if (isParkingStepText(text)) {
     return "Založení, prodloužení a přehled parkovacích relací.";
@@ -3077,6 +3117,10 @@ function getMobileDescription(step) {
   }
 
   return "Pokra\u010dujte v n\u00e1kupu j\u00edzdenky.";
+}
+
+function getMobileAppConfig(step) {
+  return step?.app || state.scenario?.app || {};
 }
 
 function formatExpected(step) {
@@ -5547,19 +5591,46 @@ function renderMosTokenCouponsOverviewCardHtml(body) {
             <div class="app-detail-row"><span>CustomerID</span><span>${escapeHtml(token.customerId || "-")}</span></div>
             ${token.validTo ? `<div class="app-detail-row"><span>Platný do</span><span>${escapeHtml(formatDate(token.validTo))}</span></div>` : ""}
           </div>
-          ${token.coupons.length > 0 ? `
-            <div class="app-card-details">
-              ${token.coupons.map(coupon => `
-                <div class="app-detail-row">
-                  <span>${escapeHtml(coupon.couponId ? `Kupón ${coupon.couponId}` : "Kupón")}</span>
-                  <span>${escapeHtml(getMosCouponSummary(coupon))}</span>
-                </div>
-              `).join("")}
-            </div>
-          ` : `
-            <p>Na tomto identifikátoru nejsou žádné kupóny.</p>
-          `}
+          ${renderMosCouponSubformHtml(token.coupons)}
         </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderMosCouponSubformHtml(coupons) {
+  if (!Array.isArray(coupons) || coupons.length === 0) {
+    return `
+      <div class="app-coupon-empty">
+        <strong>Žádné kupóny</strong>
+        <span>Na tomto identifikátoru nejsou žádné kupóny.</span>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="app-coupon-list">
+      <strong class="app-coupon-list-title">Přiřazené kupóny</strong>
+      ${coupons.map(coupon => `
+        <section class="app-coupon-item">
+          <div class="app-coupon-item-head">
+            <strong>${escapeHtml(coupon.tariffName || coupon.name || (coupon.couponId ? `Kupón ${coupon.couponId}` : "Kupón"))}</strong>
+            <span>${escapeHtml(coupon.customStatusName || coupon.status || "stav neznámý")}</span>
+          </div>
+          <div class="app-coupon-item-meta">
+            ${[
+              coupon.zones ? `zóny ${coupon.zones}` : null,
+              coupon.price ? `${coupon.price} Kč` : null,
+              coupon.couponId ? `ID ${coupon.couponId}` : null
+            ].filter(Boolean).map(renderAppChip).join("")}
+          </div>
+          <div class="app-coupon-item-details">
+            <div><span>Platnost od</span><span>${escapeHtml(formatDate(coupon.dateTimeFrom) || "-")}</span></div>
+            <div><span>Platnost do</span><span>${escapeHtml(formatDate(coupon.dateTimeTo) || "-")}</span></div>
+            <div><span>Tarif</span><span>${escapeHtml(coupon.tariffId || "-")}</span></div>
+            <div><span>Objednávka</span><span>${escapeHtml(coupon.orderId || "-")}</span></div>
+          </div>
+        </section>
       `).join("")}
     </div>
   `;

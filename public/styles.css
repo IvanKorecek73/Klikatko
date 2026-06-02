@@ -1489,6 +1489,83 @@ button:disabled {
   color: var(--muted);
 }
 
+.app-coupon-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid #cfe0d8;
+  border-radius: 8px;
+  background: #f4faf7;
+}
+
+.app-coupon-list-title {
+  font-size: 13px;
+  color: var(--accent-dark);
+}
+
+.app-coupon-item {
+  padding: 10px;
+  border: 1px solid #d8e7df;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.app-coupon-item-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.app-coupon-item-head span {
+  color: var(--muted);
+  text-align: right;
+}
+
+.app-coupon-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.app-coupon-item-details {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.app-coupon-item-details div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.app-coupon-item-details span:first-child {
+  color: var(--muted);
+}
+
+.app-coupon-empty {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px dashed #cfe0d8;
+  border-radius: 8px;
+  background: #f7fbf9;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.app-coupon-empty strong {
+  color: var(--ink);
+}
+
 .app-chip {
   border-radius: 999px;
   background: #e6f4f1;
