@@ -366,6 +366,140 @@
       ]
     },
     {
+      "id": "client-identifiers-personalize-existing",
+      "title": "Klientská data - personalizace existujícího identifikátoru",
+      "description": "Načte identifikátory aktuálního klienta, umožní vybrat MobApp telefon nebo platební kartu a následně vybraný identifikátor personalizuje.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "profile",
+        "client-data",
+        "client-identifiers",
+        "personalization",
+        "client-save"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Personalizace identifikátoru"
+      },
+      "instructions": [
+        "Nejprve se přihlaste v panelu Přístup.",
+        "Spusťte načtení identifikátorů a v Mobilu vyberte telefonní MobApp identifikátor nebo platební kartu.",
+        "Personalizace je podporovaná pouze pro telefon a platební kartu. Pokud vyberete jiný typ identifikátoru, další krok se záměrně přeskočí s upozorněním.",
+        "Po úspěšné personalizaci má odpověď vrátit isPersonalized = true."
+      ],
+      "steps": [
+        {
+          "id": "client-identifiers-select-for-personalization",
+          "title": "Vybrat identifikátor k personalizaci",
+          "description": "Načte identifikátory klienta a umožní vybrat jeden existující identifikátor.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 0
+              }
+            ]
+          },
+          "selection": {
+            "sourcePath": "$.identifiers",
+            "buttonLabel": "Personalizovat",
+            "selectedButtonLabel": "Vybráno k personalizaci",
+            "emptyTitle": "Žádné identifikátory",
+            "emptyText": "Aktuální klient nemá žádný identifikátor, který by bylo možné vybrat.",
+            "store": {
+              "selectedIdentifierId": "$.identifierId",
+              "selectedIdentifierName": "$.name",
+              "selectedIdentifierType": "$.type",
+              "selectedIdentifierMaskedValue": "$.maskedPan",
+              "selectedIdentifierPersonalizationResource": {
+                "identifierPersonalizationResource": "$"
+              }
+            }
+          }
+        },
+        {
+          "id": "client-identifiers-personalize-selected",
+          "title": "Personalizovat vybraný identifikátor",
+          "description": "Zavolá personalizaci vybraného telefonu nebo platební karty.",
+          "requiresContext": [
+            "selectedIdentifierId"
+          ],
+          "fields": [
+            {
+              "name": "identifierId",
+              "label": "TokenID",
+              "type": "number",
+              "value": "{{context.selectedIdentifierId}}"
+            }
+          ],
+          "warningWhen": [
+            {
+              "conditions": [
+                {
+                  "contextMissing": "selectedIdentifierPersonalizationResource"
+                }
+              ],
+              "appMessage": "Vybraný identifikátor zatím nepodporuje personalizaci.",
+              "message": "Personalizace je v této verzi dostupná pouze pro MobApp telefon a platební kartu. Vyberte jiný identifikátor."
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/identifiers/{{context.selectedIdentifierPersonalizationResource}}/{{form.identifierId}}/personalization"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.isPersonalized",
+                "equals": true
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "IdentifierResolution"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[2].name",
+                "equals": "SetTokenIsPersonalized"
+              },
+              {
+                "path": "$.steps[2].status",
+                "equals": "Completed"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "client-identifiers-tokenize-phone",
       "title": "Klientská data - tokenizace telefonu",
       "description": "Ověří celé aktuální flow MobApp tokenizace: identRegistration pouze potvrdí registraci, TokenID se očekává z AssignToken a následně je možné volitelně provést personalizaci identifikátoru.",

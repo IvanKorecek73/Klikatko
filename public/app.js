@@ -5013,7 +5013,7 @@ function buildAppCardsHtml(body, step = currentStep()) {
   }
 
   if (isClientIdentifiersResponse(body)) {
-    return renderClientIdentifiersCardHtml(body);
+    return renderClientIdentifiersCardHtml(body, step);
   }
 
   if (isStartIdentifierRegistrationResponse(body)) {
@@ -5638,7 +5638,7 @@ function renderSaveClientPhotoCardHtml(body) {
   `;
 }
 
-function renderClientIdentifiersCardHtml(body) {
+function renderClientIdentifiersCardHtml(body, step = currentStep()) {
   const identifiers = Array.isArray(body.identifiers) ? body.identifiers : [];
 
   if (identifiers.length === 0) {
@@ -5687,6 +5687,8 @@ function renderClientIdentifiersCardHtml(body) {
         { label: "Platný do", value: identifier.validTo ? formatDate(identifier.validTo) : null }
       ].filter(item => !isEmpty(item.value))
     };
+  }, {
+    selection: getSelectionDescriptor(step, identifiers)
   });
 }
 
@@ -6310,9 +6312,32 @@ function resolveSelectionStoreValue(item, selector) {
     if (Object.hasOwn(selector, "path")) {
       return getPath(item, selector.path);
     }
+
+    if (Object.hasOwn(selector, "identifierPersonalizationResource")) {
+      return getIdentifierPersonalizationResource(item);
+    }
   }
 
   return selector === "$" ? item : getPath(item, selector);
+}
+
+function getIdentifierPersonalizationResource(identifier) {
+  const text = [
+    identifier?.type,
+    identifier?.identifierType,
+    identifier?.subtype,
+    identifier?.name
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  if (text.includes("mobapp") || text.includes("mobile") || text.includes("telefon")) {
+    return "mobile";
+  }
+
+  if (text.includes("bpk") || text.includes("bank") || text.includes("payment") || text.includes("plateb")) {
+    return "bank-card";
+  }
+
+  return "";
 }
 
 function renderAppChip(chip) {
