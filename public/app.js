@@ -7441,7 +7441,13 @@ function normalizeTag(tag) {
     "neaktivni uzivatel": "inactive-account",
     "negativní": "negative",
     "negativni": "negative",
-    "validace": "validation"
+    "validace": "validation",
+    "kupóny": "coupons",
+    "kupony": "coupons",
+    "přesun": "move",
+    "presun": "move",
+    "identifikátory": "identifiers",
+    "identifikatory": "identifiers"
   };
 
   return map[normalized] || value;
@@ -7633,6 +7639,16 @@ function getCategoryLabel(category) {
       return "Platby";
     case "documents":
       return "Doklady";
+    case "coupons":
+      return "Kupóny";
+    case "soap":
+      return "SOAP";
+    case "core-mos":
+      return "Core MOS";
+    case "move":
+      return "Přesun";
+    case "identifiers":
+      return "Identifikátory";
     case "background":
       return "Scheduler a worker";
     case "negative":

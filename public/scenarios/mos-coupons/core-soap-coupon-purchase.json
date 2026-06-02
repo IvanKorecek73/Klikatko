@@ -397,6 +397,371 @@
           }
         }
       ]
+    },
+    {
+      "id": "mos-coupon-move-between-tokens-soap",
+      "title": "MOS - přesun kupónů mezi identifikátory",
+      "description": "Jednoduchý diagnostický scénář pro MoveCouponFromToken: načte identifikátory, vybere zdroj s kupóny, vybere cílový identifikátor a přesune všechny kupóny ze zdroje na cíl.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["coupons", "soap", "core-mos", "move", "identifiers"],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Přesun mezi identifikátory"
+      },
+      "instructions": [
+        "V panelu Přístup vložte Core MOS ServiceKey.",
+        "Ve scénáři zadejte přepážkový MOS účet a heslo. Po přihlášení se SessionID uloží do kontextu.",
+        "Nejprve vyberte zdrojový identifikátor, ze kterého se mají kupóny přesunout.",
+        "Scénář potom načte kupóny na zdrojovém identifikátoru. Pokud zdroj nemá žádné kupóny, krok záměrně selže a v přesunu se nepokračuje.",
+        "Poté vyberte cílový identifikátor. Zdrojový a cílový identifikátor nesmí být stejný.",
+        "MoveCouponFromToken se volá s CouponID prázdným, tedy přesouvá všechny kupóny ze zdrojového identifikátoru."
+      ],
+      "steps": [
+        {
+          "id": "mos-coupon-move-authenticate-login",
+          "title": "Přihlásit se do Core MOS",
+          "description": "Zavolá AuthenticateLogin a uloží SessionID pro další SOAP volání.",
+          "fields": [
+            {
+              "name": "userName",
+              "label": "MOS uživatel",
+              "type": "text",
+              "value": "",
+              "placeholder": "Přepážkový účet"
+            },
+            {
+              "name": "password",
+              "label": "Heslo",
+              "type": "password",
+              "value": "",
+              "placeholder": "Heslo přepážkového účtu"
+            },
+            {
+              "name": "codeSms",
+              "label": "SMS kód",
+              "type": "text",
+              "value": "",
+              "placeholder": "Volitelné"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/AuthenticateLogin\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AuthenticateLogin xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <Password>{{form.password}}</Password>\n      <CodeSMS>{{form.codeSms}}</CodeSMS>\n    </AuthenticateLogin>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<AuthenticateLoginResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "Přihlášení do Core MOS neproběhlo úspěšně."
+              }
+            ]
+          },
+          "extractRegex": {
+            "mosCouponSessionId": "<SessionID>([^<]+)</SessionID>"
+          }
+        },
+        {
+          "id": "mos-coupon-move-get-source-tokens",
+          "title": "Vybrat zdrojový identifikátor",
+          "description": "Načte dostupné tokeny/identifikátory a umožní vybrat zdroj, ze kterého se mají kupóny přesunout.",
+          "requiresContext": ["mosCouponSessionId"],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokens\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokens xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <GetOnlyAvailableTokens>true</GetOnlyAvailableTokens>\n    </GetTokens>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<GetTokensResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "MOS nevrátil korektní seznam identifikátorů."
+              }
+            ]
+          },
+          "selection": {
+            "buttonLabel": "Použít jako zdroj",
+            "selectedButtonLabel": "Zdroj vybrán",
+            "sourceRegex": {
+              "itemPattern": "<TokenEx[^>]*>([\\s\\S]*?)</TokenEx>",
+              "fields": {
+                "tokenId": "<TokenID>([^<]+)</TokenID>",
+                "name": "<Name>([^<]*)</Name>",
+                "token": "<Token>([^<]*)</Token>",
+                "customerId": "<CustomerIDx>([^<]+)</CustomerIDx>",
+                "identifierType": "<IdentifierType>([^<]*)</IdentifierType>",
+                "maskedPan": "<MaskedPAN>([^<]*)</MaskedPAN>",
+                "cln": "<CLN>([^<]*)</CLN>",
+                "active": "<Active>([^<]+)</Active>"
+              }
+            },
+            "store": {
+              "mosCouponSourceTokenId": "$.tokenId",
+              "mosCouponSourceTokenName": "$.name",
+              "mosCouponCustomerId": "$.customerId"
+            }
+          }
+        },
+        {
+          "id": "mos-coupon-move-get-source-coupons",
+          "title": "Ověřit kupóny na zdrojovém identifikátoru",
+          "description": "Načte kupóny zdrojového identifikátoru. Pokud MOS nevrátí žádný kupón, scénář má selhat, protože není co přesouvat.",
+          "requiresContext": ["mosCouponSessionId", "mosCouponSourceTokenId"],
+          "fields": [
+            {
+              "name": "tokenId",
+              "label": "Zdrojový TokenID",
+              "type": "number",
+              "value": "{{context.mosCouponSourceTokenId}}"
+            },
+            {
+              "name": "loadAllCoupons",
+              "label": "Rozsah",
+              "type": "select",
+              "value": "true",
+              "options": [
+                { "value": "true", "text": "Všechny kupóny" },
+                { "value": "false", "text": "Jen aktuálně dostupné" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetCoupons\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetCoupons xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <LoadAllCoupons>{{form.loadAllCoupons}}</LoadAllCoupons>\n    </GetCoupons>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "remember": {
+            "mosCouponSourceTokenId": "{{form.tokenId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<GetCouponsResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "MOS nevrátil korektní odpověď při načtení kupónů zdrojového identifikátoru."
+              },
+              {
+                "regex": "<CouponInfoRecord",
+                "label": "zdroj má alespoň jeden kupón",
+                "message": "Zdrojový identifikátor nemá žádný kupón. Vyberte jiný zdrojový identifikátor."
+              }
+            ]
+          },
+          "selection": {
+            "buttonLabel": "Označit kupón",
+            "selectedButtonLabel": "Označeno",
+            "emptyTitle": "Zdroj bez kupónů",
+            "emptyText": "Zdrojový identifikátor nemá žádné kupóny. Vraťte se zpět a vyberte jiný zdroj.",
+            "sourceRegex": {
+              "itemPattern": "<CouponInfoRecord[^>]*>([\\s\\S]*?)</CouponInfoRecord>",
+              "fields": {
+                "couponId": "<CouponID>([^<]+)</CouponID>",
+                "customerId": "<CustomerID>([^<]+)</CustomerID>",
+                "customStatusName": "<CustomStatusName>([^<]*)</CustomStatusName>",
+                "status": "<Status>([^<]+)</Status>",
+                "tariffId": "<TariffID>([^<]+)</TariffID>",
+                "tariffName": "<TariffName>([^<]*)</TariffName>",
+                "name": "<Name>([^<]*)</Name>",
+                "dateTimeFrom": "<DateTimeFrom>([^<]+)</DateTimeFrom>",
+                "dateTimeTo": "<DateTimeTo>([^<]+)</DateTimeTo>",
+                "zones": "<Zones>([^<]*)</Zones>",
+                "price": "<Price>([^<]+)</Price>",
+                "orderId": "<OrderID>([^<]+)</OrderID>",
+                "tokenId": "<TokenID>([^<]+)</TokenID>",
+                "tokenName": "<TokenName>([^<]*)</TokenName>"
+              }
+            },
+            "store": {
+              "mosCouponSourceCouponIdPreview": "$.couponId"
+            }
+          }
+        },
+        {
+          "id": "mos-coupon-move-get-target-tokens",
+          "title": "Vybrat cílový identifikátor",
+          "description": "Znovu načte dostupné identifikátory a umožní vybrat cíl, na který se kupóny přesunou.",
+          "requiresContext": ["mosCouponSessionId", "mosCouponSourceTokenId"],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokens\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokens xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <GetOnlyAvailableTokens>true</GetOnlyAvailableTokens>\n    </GetTokens>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<GetTokensResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "MOS nevrátil korektní seznam cílových identifikátorů."
+              }
+            ]
+          },
+          "selection": {
+            "buttonLabel": "Použít jako cíl",
+            "selectedButtonLabel": "Cíl vybrán",
+            "sourceRegex": {
+              "itemPattern": "<TokenEx[^>]*>([\\s\\S]*?)</TokenEx>",
+              "fields": {
+                "tokenId": "<TokenID>([^<]+)</TokenID>",
+                "name": "<Name>([^<]*)</Name>",
+                "token": "<Token>([^<]*)</Token>",
+                "customerId": "<CustomerIDx>([^<]+)</CustomerIDx>",
+                "identifierType": "<IdentifierType>([^<]*)</IdentifierType>",
+                "maskedPan": "<MaskedPAN>([^<]*)</MaskedPAN>",
+                "cln": "<CLN>([^<]*)</CLN>",
+                "active": "<Active>([^<]+)</Active>"
+              }
+            },
+            "store": {
+              "mosCouponTargetTokenId": "$.tokenId",
+              "mosCouponTargetTokenName": "$.name"
+            }
+          }
+        },
+        {
+          "id": "mos-coupon-move-coupons",
+          "title": "Přesunout kupóny na cílový identifikátor",
+          "description": "Zavolá MoveCouponFromToken s prázdným CouponID, tedy přesune všechny kupóny ze zdrojového tokenu na cílový token.",
+          "requiresContext": ["mosCouponSessionId", "mosCouponSourceTokenId", "mosCouponTargetTokenId"],
+          "fields": [
+            {
+              "name": "currentTokenId",
+              "label": "Zdrojový TokenID",
+              "type": "number",
+              "value": "{{context.mosCouponSourceTokenId}}"
+            },
+            {
+              "name": "newTokenId",
+              "label": "Cílový TokenID",
+              "type": "number",
+              "value": "{{context.mosCouponTargetTokenId}}"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/MoveCouponFromToken\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <MoveCouponFromToken xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <CurrentTokenID>{{form.currentTokenId}}</CurrentTokenID>\n      <NewTokenID>{{form.newTokenId}}</NewTokenID>\n      <CouponID xsi:nil=\"true\" />\n    </MoveCouponFromToken>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "remember": {
+            "mosCouponSourceTokenId": "{{form.currentTokenId}}",
+            "mosCouponTargetTokenId": "{{form.newTokenId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<MoveCouponFromTokenResult>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "MOS kupóny nepřesunul. Zkontrolujte, zda zdrojový token obsahuje kupóny a cílový token splňuje pravidla Core MOS."
+              }
+            ]
+          }
+        },
+        {
+          "id": "mos-coupon-move-verify-target-coupons",
+          "title": "Ověřit kupóny na cílovém identifikátoru",
+          "description": "Načte kupóny cílového identifikátoru po přesunu, aby bylo možné ručně ověřit výsledek.",
+          "requiresContext": ["mosCouponSessionId", "mosCouponTargetTokenId"],
+          "fields": [
+            {
+              "name": "tokenId",
+              "label": "Cílový TokenID",
+              "type": "number",
+              "value": "{{context.mosCouponTargetTokenId}}"
+            },
+            {
+              "name": "loadAllCoupons",
+              "label": "Rozsah",
+              "type": "select",
+              "value": "true",
+              "options": [
+                { "value": "true", "text": "Všechny kupóny" },
+                { "value": "false", "text": "Jen aktuálně dostupné" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetCoupons\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetCoupons xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <LoadAllCoupons>{{form.loadAllCoupons}}</LoadAllCoupons>\n    </GetCoupons>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<GetCouponsResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "MOS nevrátil korektní odpověď při ověření cílových kupónů."
+              },
+              {
+                "regex": "<CouponInfoRecord",
+                "label": "cílový token má alespoň jeden kupón",
+                "message": "Na cílovém identifikátoru nebyl nalezen žádný kupón. Přesun tedy ve skutečnosti nedoběhl."
+              }
+            ]
+          },
+          "selection": {
+            "buttonLabel": "Označit kupón",
+            "selectedButtonLabel": "Označeno",
+            "emptyTitle": "Žádné kupóny",
+            "emptyText": "Na cílovém identifikátoru MOS nevrátil žádné kupóny. Přesun pravděpodobně neproběhl.",
+            "sourceRegex": {
+              "itemPattern": "<CouponInfoRecord[^>]*>([\\s\\S]*?)</CouponInfoRecord>",
+              "fields": {
+                "couponId": "<CouponID>([^<]+)</CouponID>",
+                "customerId": "<CustomerID>([^<]+)</CustomerID>",
+                "customStatusName": "<CustomStatusName>([^<]*)</CustomStatusName>",
+                "status": "<Status>([^<]+)</Status>",
+                "tariffId": "<TariffID>([^<]+)</TariffID>",
+                "tariffName": "<TariffName>([^<]*)</TariffName>",
+                "name": "<Name>([^<]*)</Name>",
+                "dateTimeFrom": "<DateTimeFrom>([^<]+)</DateTimeFrom>",
+                "dateTimeTo": "<DateTimeTo>([^<]+)</DateTimeTo>",
+                "zones": "<Zones>([^<]*)</Zones>",
+                "price": "<Price>([^<]+)</Price>",
+                "orderId": "<OrderID>([^<]+)</OrderID>",
+                "tokenId": "<TokenID>([^<]+)</TokenID>",
+                "tokenName": "<TokenName>([^<]*)</TokenName>"
+              }
+            },
+            "store": {
+              "mosCouponMovedCouponIdPreview": "$.couponId"
+            }
+          }
+        }
+      ]
     }
   ]
 }
