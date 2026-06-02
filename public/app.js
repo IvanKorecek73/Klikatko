@@ -6202,6 +6202,7 @@ function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
       item.identifierType || item.type || null,
       item.tariffName || null,
       item.maskedPan || item.cln || null,
+      item.isPersonalized === "true" ? "personalizovaný" : item.isPersonalized === "false" ? "nepersonalizovaný" : null,
       item.zoneName ? `zóna ${item.zoneName}` : null,
       item.zones ? `zóny ${item.zones}` : null,
       item.price ? `${item.price} Kč` : null,
@@ -6225,7 +6226,8 @@ function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
       { label: "Stav", value: item.customStatusName || item.status },
       { label: "Typ", value: item.identifierType },
       { label: "Maskovaná hodnota", value: item.maskedPan },
-      { label: "CLN", value: item.cln }
+      { label: "CLN", value: item.cln },
+      { label: "Personalizovaný", value: item.isPersonalized === "true" ? "ano" : item.isPersonalized === "false" ? "ne" : null }
     ]
   }), { selection });
 }

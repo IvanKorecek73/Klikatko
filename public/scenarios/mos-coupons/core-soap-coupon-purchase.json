@@ -399,6 +399,221 @@
       ]
     },
     {
+      "id": "mos-token-personalization-soap",
+      "title": "MOS - personalizace tokenu",
+      "description": "Diagnostický scénář pro přímé volání SetTokenIsPersonalized v Core MOS: přihlášení, výběr tokenu, nastavení IsPersonalized a kontrolní načtení tokenů.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["coupons", "soap", "core-mos", "identifiers", "personalization"],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Personalizace tokenu"
+      },
+      "instructions": [
+        "V panelu Přístup vložte Core MOS ServiceKey.",
+        "Ve scénáři zadejte přepážkový MOS účet a heslo. Po přihlášení se SessionID uloží do kontextu.",
+        "Vyberte token typu BPK nebo MobApp. Podle dokumentace Core MOS je SetTokenIsPersonalized určeno právě pro tyto typy.",
+        "Pozor: nastavení personalizace je v MOSu nevratná změna. Výchozí hodnota je Ano, protože cílem je ověřit přechod na osobní identifikátor pro nepřenosné kupóny.",
+        "Pokud MOS vrátí chybu, mobil i log ukážou surovou SOAP odpověď. Ta pomůže rozlišit, zda token už personalizovaný je, zda nemá klient fotografii, nebo zda typ tokenu není podporovaný."
+      ],
+      "steps": [
+        {
+          "id": "mos-token-personalization-authenticate-login",
+          "title": "Přihlásit se do Core MOS",
+          "description": "Zavolá AuthenticateLogin a uloží SessionID pro další SOAP volání.",
+          "fields": [
+            {
+              "name": "userName",
+              "label": "MOS uživatel",
+              "type": "text",
+              "value": "",
+              "placeholder": "Přepážkový účet"
+            },
+            {
+              "name": "password",
+              "label": "Heslo",
+              "type": "password",
+              "value": "",
+              "placeholder": "Heslo přepážkového účtu"
+            },
+            {
+              "name": "codeSms",
+              "label": "SMS kód",
+              "type": "text",
+              "value": "",
+              "placeholder": "Volitelné"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/AuthenticateLogin\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AuthenticateLogin xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <Password>{{form.password}}</Password>\n      <CodeSMS>{{form.codeSms}}</CodeSMS>\n    </AuthenticateLogin>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<AuthenticateLoginResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "Přihlášení do Core MOS neproběhlo úspěšně."
+              }
+            ]
+          },
+          "extractRegex": {
+            "mosCouponSessionId": "<SessionID>([^<]+)</SessionID>"
+          }
+        },
+        {
+          "id": "mos-token-personalization-get-tokens",
+          "title": "Vybrat token k personalizaci",
+          "description": "Načte dostupné tokeny/identifikátory přihlášeného MOS účtu. Vybraný TokenID se použije pro SetTokenIsPersonalized.",
+          "requiresContext": ["mosCouponSessionId"],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokens\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokens xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <GetOnlyAvailableTokens>true</GetOnlyAvailableTokens>\n    </GetTokens>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<GetTokensResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "MOS nevrátil korektní seznam tokenů."
+              }
+            ]
+          },
+          "selection": {
+            "buttonLabel": "Personalizovat token",
+            "selectedButtonLabel": "Vybráno k personalizaci",
+            "sourceRegex": {
+              "itemPattern": "<TokenEx[^>]*>([\\s\\S]*?)</TokenEx>",
+              "fields": {
+                "tokenId": "<TokenID>([^<]+)</TokenID>",
+                "name": "<Name>([^<]*)</Name>",
+                "token": "<Token>([^<]*)</Token>",
+                "customerId": "<CustomerIDx>([^<]+)</CustomerIDx>",
+                "identifierType": "<IdentifierType>([^<]*)</IdentifierType>",
+                "maskedPan": "<MaskedPAN>([^<]*)</MaskedPAN>",
+                "cln": "<CLN>([^<]*)</CLN>",
+                "active": "<Active>([^<]+)</Active>",
+                "isPersonalized": "<IsPersonalized>([^<]*)</IsPersonalized>"
+              }
+            },
+            "store": {
+              "mosPersonalizeTokenId": "$.tokenId",
+              "mosPersonalizeIdentifierType": "$.identifierType",
+              "mosPersonalizeIsPersonalized": "$.isPersonalized"
+            }
+          }
+        },
+        {
+          "id": "mos-token-personalization-set",
+          "title": "Nastavit personalizaci tokenu",
+          "description": "Přímo zavolá MOS SetTokenIsPersonalized nad vybraným TokenID.",
+          "requiresContext": ["mosCouponSessionId", "mosPersonalizeTokenId"],
+          "fields": [
+            {
+              "name": "tokenId",
+              "label": "TokenID",
+              "type": "number",
+              "value": "{{context.mosPersonalizeTokenId}}",
+              "placeholder": "Vybraný TokenID"
+            },
+            {
+              "name": "isPersonalized",
+              "label": "Nastavit jako personalizovaný",
+              "type": "select",
+              "value": "true",
+              "options": [
+                {
+                  "value": "true",
+                  "text": "Ano - IsPersonalized=true"
+                },
+                {
+                  "value": "false",
+                  "text": "Ne - IsPersonalized=false"
+                }
+              ],
+              "help": "Pozor: MOS dokumentace uvádí, že hodnota nejde později změnit. Pro ověření osobního identifikátoru pro kupóny ponechte Ano."
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/SetTokenIsPersonalized\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <SetTokenIsPersonalized xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <IsPersonalized>{{form.isPersonalized}}</IsPersonalized>\n    </SetTokenIsPersonalized>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<SetTokenIsPersonalizedResult>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "MOS token nepřevedl do požadovaného personalizačního stavu. Zkontrolujte text chyby v odpovědi."
+              }
+            ]
+          }
+        },
+        {
+          "id": "mos-token-personalization-verify-tokens",
+          "title": "Ověřit tokeny po personalizaci",
+          "description": "Znovu načte tokeny přihlášeného účtu. V Mobilu ověřte, že vybraný TokenID má očekávané IsPersonalized.",
+          "requiresContext": ["mosCouponSessionId"],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokens\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokens xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <GetOnlyAvailableTokens>true</GetOnlyAvailableTokens>\n    </GetTokens>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<GetTokensResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "Kontrolní načtení tokenů po personalizaci neproběhlo úspěšně."
+              }
+            ]
+          },
+          "selection": {
+            "buttonLabel": "Označit token",
+            "selectedButtonLabel": "Označeno",
+            "sourceRegex": {
+              "itemPattern": "<TokenEx[^>]*>([\\s\\S]*?)</TokenEx>",
+              "fields": {
+                "tokenId": "<TokenID>([^<]+)</TokenID>",
+                "name": "<Name>([^<]*)</Name>",
+                "token": "<Token>([^<]*)</Token>",
+                "customerId": "<CustomerIDx>([^<]+)</CustomerIDx>",
+                "identifierType": "<IdentifierType>([^<]*)</IdentifierType>",
+                "maskedPan": "<MaskedPAN>([^<]*)</MaskedPAN>",
+                "cln": "<CLN>([^<]*)</CLN>",
+                "active": "<Active>([^<]+)</Active>",
+                "isPersonalized": "<IsPersonalized>([^<]*)</IsPersonalized>"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
       "id": "mos-coupon-move-between-tokens-soap",
       "title": "MOS - přesun kupónů mezi identifikátory",
       "description": "Jednoduchý diagnostický scénář pro MoveCouponFromToken: načte identifikátory, vybere zdroj s kupóny, vybere cílový identifikátor a přesune všechny kupóny ze zdroje na cíl.",
