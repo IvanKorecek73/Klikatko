@@ -6160,6 +6160,11 @@ function getSelectionItems(step, body) {
 function parseRegexSelectionItems(body, sourceRegex) {
   const rawSource = typeof body === "string" ? body : JSON.stringify(body ?? "");
   const source = normalizeXmlPrefixes(rawSource);
+
+  if (sourceRegex.parser === "mosTariffZones") {
+    return parseMosTariffZoneSelectionItems(source);
+  }
+
   const itemPattern = sourceRegex.itemPattern;
 
   if (!itemPattern) {
@@ -6184,6 +6189,50 @@ function parseRegexSelectionItems(body, sourceRegex) {
   }
 
   return items;
+}
+
+function parseMosTariffZoneSelectionItems(source) {
+  const items = [];
+  const tariffRegex = /<TariffBuy[^>]*>([\s\S]*?)<\/TariffBuy>/gi;
+  let tariffMatch;
+
+  while ((tariffMatch = tariffRegex.exec(source)) !== null) {
+    const tariffSource = tariffMatch[1] || "";
+    const tariff = {
+      tariffId: getXmlElementText(tariffSource, "TariffID"),
+      customerId: getXmlElementText(tariffSource, "CustomerID"),
+      tariffName: getXmlElementText(tariffSource, "TariffName"),
+      tariffProfileName: getXmlElementText(tariffSource, "TariffProfileName"),
+      validFrom: getXmlElementText(tariffSource, "NewCouponValidFrom"),
+      validTill: getXmlElementText(tariffSource, "NewCouponValidTill")
+    };
+
+    const zoneRegex = /<Zone[^>]*>([\s\S]*?)<\/Zone>/gi;
+    let zoneMatch;
+
+    while ((zoneMatch = zoneRegex.exec(tariffSource)) !== null) {
+      const zoneSource = zoneMatch[1] || "";
+      const zoneName = getXmlElementText(zoneSource, "ZoneName");
+      const displayPrice = getXmlElementText(zoneSource, "Price");
+      const price = zoneName === "P" ? "0.0000" : displayPrice;
+
+      items.push({
+        ...tariff,
+        name: `${tariff.tariffName || "Tarif"} - zóna ${zoneName || "?"}`,
+        tariffZoneId: getXmlElementText(zoneSource, "TariffZoneID"),
+        zoneName,
+        displayPrice,
+        price
+      });
+    }
+  }
+
+  return items;
+}
+
+function getXmlElementText(source, elementName) {
+  const match = String(source || "").match(new RegExp(`<${elementName}[^>]*>([\\s\\S]*?)<\\/${elementName}>`, "i"));
+  return match?.[1] ?? "";
 }
 
 function normalizeXmlPrefixes(source) {

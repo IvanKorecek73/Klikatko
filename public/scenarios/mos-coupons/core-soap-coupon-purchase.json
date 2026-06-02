@@ -19,7 +19,8 @@
       "instructions": [
         "V panelu Přístup vložte Core MOS ServiceKey.",
         "Ve scénáři zadejte přepážkový MOS účet a heslo. Po přihlášení se SessionID uloží do kontextu.",
-        "Krok zjištění tarifů nabídne použitelné tarify pro zónu P. Kvůli chování Core MOS se pro samotnou fixní zónu P do nákupu posílá cena 0.0000.",
+        "Krok zjištění tarifů nabídne kombinace tarif + zóna. Vybraná zóna vždy pochází ze stejného tarifu, který se posílá do AddItemToOrder.",
+        "Kvůli chování Core MOS se pro samotnou fixní zónu P do nákupu posílá cena 0.0000. U ostatních zón se použije cena vrácená v daném tarifním pásmu.",
         "Kupón se vytváří s IsTest=true, tedy jako testovací nákup vyloučený ze statistik a reportů.",
         "PaymentType ponechte 3 nebo 4. Hodnoty 1 a 2 by spouštěly platební bránu."
       ],
@@ -111,8 +112,8 @@
         },
         {
           "id": "mos-coupon-get-token-tariffs",
-          "title": "Zjistit dostupné tarify pro token",
-          "description": "Pomocné volání GetTokenTariffs pro zjištění TariffID, zón a ceny. Výsledek použijte v dalším kroku.",
+          "title": "Vybrat tarif a zónu",
+          "description": "Načte tarify a zóny pro vybraný token. V Mobilu vyberte konkrétní kombinaci tarifního pásma a zóny.",
           "requiresContext": ["mosCouponSessionId"],
           "fields": [
             {
@@ -147,21 +148,10 @@
           "selection": {
             "buttonLabel": "Použít tarif",
             "selectedButtonLabel": "Tarif vybrán",
-            "emptyTitle": "Žádný použitelný tarif",
-            "emptyText": "MOS nevrátil žádný tarif se zónou P. Bez platné kombinace tarifu, zóny a ceny nejde pokračovat.",
+            "emptyTitle": "Žádné tarifní pásmo",
+            "emptyText": "MOS nevrátil žádnou použitelnou kombinaci tarifu a zóny. Bez platné kombinace TariffID, TariffZoneID a ceny nejde pokračovat.",
             "sourceRegex": {
-              "itemPattern": "<TariffBuy[^>]*>([\\s\\S]*?<ZoneName>P</ZoneName>[\\s\\S]*?)</TariffBuy>",
-              "fields": {
-                "tariffId": "<TariffID>([^<]+)</TariffID>",
-                "customerId": "<CustomerID>([^<]+)</CustomerID>",
-                "tariffName": "<TariffName>([^<]*)</TariffName>",
-                "tariffProfileName": "<TariffProfileName>([^<]*)</TariffProfileName>",
-                "validFrom": "<NewCouponValidFrom>([^<]+)</NewCouponValidFrom>",
-                "validTill": "<NewCouponValidTill>([^<]+)</NewCouponValidTill>",
-                "tariffZoneId": "<Zone>\\s*<TariffZoneID>([^<]+)</TariffZoneID>\\s*<ZoneName>P</ZoneName>",
-                "zoneName": "<Zone>\\s*<TariffZoneID>[^<]+</TariffZoneID>\\s*<ZoneName>(P)</ZoneName>",
-                "displayPrice": "<Zone>\\s*<TariffZoneID>[^<]+</TariffZoneID>\\s*<ZoneName>P</ZoneName>\\s*<Price>([^<]+)</Price>"
-              }
+              "parser": "mosTariffZones"
             },
             "store": {
               "mosCouponSuggestedTariffId": "$.tariffId",
@@ -169,9 +159,7 @@
               "mosCouponSuggestedZoneId": "$.tariffZoneId",
               "mosCouponSuggestedZoneName": "$.zoneName",
               "mosCouponSuggestedDisplayPrice": "$.displayPrice",
-              "mosCouponSuggestedPrice": {
-                "literal": "0.0000"
-              },
+              "mosCouponSuggestedPrice": "$.price",
               "mosCouponSuggestedValidFrom": "$.validFrom",
               "mosCouponSuggestedValidTill": "$.validTill"
             }
@@ -216,7 +204,7 @@
               "type": "number",
               "value": "{{context.mosCouponSuggestedPrice}}",
               "step": 0.01,
-              "placeholder": "Pro samotnou zónu P počítá Core MOS cenu 0"
+              "placeholder": "Cena z vybrané kombinace tarif + zóna"
             },
             {
               "name": "description",
