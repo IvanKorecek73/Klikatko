@@ -387,6 +387,109 @@
       ]
     },
     {
+      "id": "mos-token-coupons-overview-soap",
+      "title": "MOS - identifikátory a jejich kupóny",
+      "description": "Přehledový diagnostický scénář: načte všechny dostupné identifikátory přihlášeného MOS účtu a u každého zobrazí přiřazené kupóny.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["coupons", "soap", "core-mos", "identifiers", "overview"],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Identifikátory a kupóny"
+      },
+      "instructions": [
+        "V panelu Přístup vložte Core MOS ServiceKey.",
+        "Ve scénáři zadejte přepážkový MOS účet a heslo. Po přihlášení se SessionID uloží do kontextu.",
+        "Druhý krok nejprve zavolá GetTokens a potom pro každý TokenID zavolá GetCoupons.",
+        "V Mobilu se zobrazí stručný přehled identifikátorů a kupónů: TokenID, typ, hodnota, personalizace a základní údaje kupónů."
+      ],
+      "steps": [
+        {
+          "id": "mos-token-coupons-overview-authenticate-login",
+          "title": "Přihlásit se do Core MOS",
+          "description": "Zavolá AuthenticateLogin a uloží SessionID pro další SOAP volání.",
+          "fields": [
+            {
+              "name": "userName",
+              "label": "MOS uživatel",
+              "type": "text",
+              "value": "",
+              "placeholder": "Přepážkový účet"
+            },
+            {
+              "name": "password",
+              "label": "Heslo",
+              "type": "password",
+              "value": "",
+              "placeholder": "Heslo přepážkového účtu"
+            },
+            {
+              "name": "codeSms",
+              "label": "SMS kód",
+              "type": "text",
+              "value": "",
+              "placeholder": "Volitelné"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/AuthenticateLogin\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AuthenticateLogin xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <Password>{{form.password}}</Password>\n      <CodeSMS>{{form.codeSms}}</CodeSMS>\n    </AuthenticateLogin>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<AuthenticateLoginResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "Přihlášení do Core MOS neproběhlo úspěšně."
+              }
+            ]
+          },
+          "extractRegex": {
+            "mosCouponSessionId": "<SessionID>([^<]+)</SessionID>"
+          }
+        },
+        {
+          "id": "mos-token-coupons-overview-load",
+          "title": "Načíst identifikátory a kupóny",
+          "description": "Zavolá GetTokens a pro každý vrácený TokenID následně GetCoupons.",
+          "requiresContext": ["mosCouponSessionId"],
+          "fields": [
+            {
+              "name": "loadAllCoupons",
+              "label": "Rozsah kupónů",
+              "type": "select",
+              "value": "true",
+              "options": [
+                { "value": "true", "text": "Všechny kupóny" },
+                { "value": "false", "text": "Jen aktuálně dostupné" }
+              ]
+            }
+          ],
+          "customAction": "mosTokenCouponsOverview",
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokens + globdata/GetCoupons\""
+            },
+            "body": "Custom krok Klikátka: nejprve GetTokens, potom GetCoupons pro každý vrácený TokenID."
+          },
+          "expected": {
+            "status": 200
+          }
+        }
+      ]
+    },
+    {
       "id": "mos-token-personalization-soap",
       "title": "MOS - personalizace tokenu",
       "description": "Diagnostický scénář pro přímé volání SetTokenIsPersonalized v Core MOS: přihlášení, výběr tokenu, nastavení IsPersonalized a kontrolní načtení tokenů.",

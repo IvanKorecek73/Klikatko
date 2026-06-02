@@ -3222,6 +3222,11 @@ async function runCurrentStep() {
   let request = null;
 
   try {
+    if (step.customAction === "mosTokenCouponsOverview") {
+      await runCustomStep(step, runningStepIndex);
+      return;
+    }
+
     request = buildRequest(step);
     const startedAt = performance.now();
     let response = await fetch(request.url, request.options);
@@ -3331,6 +3336,134 @@ async function runCurrentStep() {
       elements.previousStep.disabled = !state.scenario || findPreviousRunnableStepIndex(state.stepIndex) === null;
     }
   }
+}
+
+async function runCustomStep(step, runningStepIndex) {
+  if (step.customAction === "mosTokenCouponsOverview") {
+    const startedAt = performance.now();
+    const overview = await loadMosTokenCouponsOverview(step);
+    const durationMs = Math.round(performance.now() - startedAt);
+    const level = overview.errors.length > 0 ? "warn" : "ok";
+    const result = {
+      level,
+      appMessage: overview.errors.length > 0
+        ? "Přehled identifikátorů a kupónů je částečný."
+        : "Přehled identifikátorů a kupónů byl načten.",
+      messages: overview.errors.length > 0
+        ? ["Některé kupóny se nepodařilo načíst.", ...overview.errors]
+        : [`Načteno ${overview.tokens.length} identifikátorů a ${overview.totalCoupons} kupónů.`]
+    };
+
+    state.lastStepResult = result;
+    state.stepResults[runningStepIndex] = result;
+
+    addLog(level, `${step.title} -> MOS přehled`, {
+      request: {
+        action: step.customAction,
+        tokenRequests: overview.tokens.length,
+        loadAllCoupons: overview.loadAllCoupons
+      },
+      response: {
+        durationMs,
+        body: overview
+      },
+      expected: step.expected || null,
+      mode: state.dirty ? "exploratory" : "scenario",
+      notes: result.messages
+    });
+
+    showResult(level, result.appMessage, overview, step);
+    renderContext();
+    elements.nextStep.disabled = !canAdvanceFromCurrentStep();
+    elements.nextStep.classList.toggle("ready", !elements.nextStep.disabled);
+    return;
+  }
+
+  throw new Error(`Neznámá vlastní akce kroku: ${step.customAction}`);
+}
+
+async function loadMosTokenCouponsOverview(step) {
+  const serviceKey = getCurrentApiKey();
+  const sessionId = state.context.mosCouponSessionId;
+  const loadAllCoupons = String(state.values.loadAllCoupons ?? "true");
+
+  if (!serviceKey) {
+    throw new Error("Chybí Core MOS ServiceKey v panelu Přístup.");
+  }
+
+  if (!sessionId) {
+    throw new Error("Chybí MOS SessionID. Nejdříve spusťte krok přihlášení.");
+  }
+
+  const tokensResponse = await callMosSoap("GetTokens", `
+    <GetTokens xmlns="globdata">
+      <ServiceKey>${escapeXml(serviceKey)}</ServiceKey>
+      <SessionID>${escapeXml(sessionId)}</SessionID>
+      <GetOnlyAvailableTokens>true</GetOnlyAvailableTokens>
+    </GetTokens>`);
+
+  const tokensResultId = getXmlElementText(tokensResponse.body, "ID");
+  const tokensResultText = getXmlElementText(tokensResponse.body, "Text");
+
+  if (tokensResponse.status !== 200 || tokensResultId !== "0") {
+    throw new Error(`MOS nevrátil seznam tokenů. HTTP ${tokensResponse.status}, Result.ID ${tokensResultId || "-"}. ${tokensResultText || ""}`.trim());
+  }
+
+  const tokens = parseMosTokenItems(tokensResponse.body);
+  const errors = [];
+
+  for (const token of tokens) {
+    const couponsResponse = await callMosSoap("GetCoupons", `
+      <GetCoupons xmlns="globdata">
+        <ServiceKey>${escapeXml(serviceKey)}</ServiceKey>
+        <SessionID>${escapeXml(sessionId)}</SessionID>
+        <TokenID>${escapeXml(token.tokenId)}</TokenID>
+        <LoadAllCoupons>${escapeXml(loadAllCoupons)}</LoadAllCoupons>
+      </GetCoupons>`);
+
+    token.couponsHttpStatus = couponsResponse.status;
+    token.couponsResultId = getXmlOperationResultId(couponsResponse.body, "GetCouponsResult");
+    token.couponsResultText = getXmlOperationResultText(couponsResponse.body, "GetCouponsResult");
+    token.coupons = parseMosCouponItems(couponsResponse.body);
+
+    if (couponsResponse.status !== 200 || token.couponsResultId !== "0") {
+      errors.push(`Token ${token.tokenId}: HTTP ${couponsResponse.status}, Result.ID ${token.couponsResultId || "-"} ${token.couponsResultText || ""}`.trim());
+    }
+  }
+
+  return {
+    kind: "mosTokenCouponsOverview",
+    loadAllCoupons: loadAllCoupons === "true",
+    totalTokens: tokens.length,
+    totalCoupons: tokens.reduce((sum, token) => sum + token.coupons.length, 0),
+    tokens,
+    errors
+  };
+}
+
+async function callMosSoap(operation, bodyContent) {
+  const baseUrl = elements.baseUrl.value.replace(/\/$/, "");
+  const url = `${baseUrl}/services/MOSservice.asmx`;
+  const body = `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>${bodyContent}
+  </soap:Body>
+</soap:Envelope>`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/xml; charset=utf-8",
+      "SOAPAction": `"globdata/${operation}"`
+    },
+    body
+  });
+
+  return {
+    status: response.status,
+    contentType: response.headers.get("content-type") || "",
+    body: await readResponseBody(response)
+  };
 }
 
 async function runScenarioToSelectedStep() {
@@ -5012,6 +5145,10 @@ function buildAppCardsHtml(body, step = currentStep()) {
     return renderMosTicketInfoCardHtml(body);
   }
 
+  if (isMosTokenCouponsOverviewResponse(body)) {
+    return renderMosTokenCouponsOverviewCardHtml(body);
+  }
+
   if (isClientIdentifiersResponse(body)) {
     return renderClientIdentifiersCardHtml(body, step);
   }
@@ -5370,6 +5507,87 @@ function renderMosTicketInfoCardHtml(ticket) {
       </article>
     </div>
   `;
+}
+
+function renderMosTokenCouponsOverviewCardHtml(body) {
+  const tokens = Array.isArray(body.tokens) ? body.tokens : [];
+
+  if (tokens.length === 0) {
+    return renderEmptyAppCardHtml(
+      "Žádné identifikátory",
+      "Core MOS pro aktuální login nevrátil žádný identifikátor."
+    );
+  }
+
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>Identifikátory a kupóny</strong>
+        <p>Načteno ${escapeHtml(body.totalTokens)} identifikátorů a ${escapeHtml(body.totalCoupons)} kupónů.</p>
+        <div class="app-card-meta">
+          ${renderAppChip(body.loadAllCoupons ? "všechny kupóny" : "jen platné kupóny")}
+          ${renderAppChip(`${body.totalTokens} identifikátorů`)}
+          ${renderAppChip(`${body.totalCoupons} kupónů`)}
+        </div>
+      </article>
+      ${tokens.map(token => `
+        <article class="app-card">
+          <strong>${escapeHtml(getMosTokenTitle(token))}</strong>
+          <p>${escapeHtml(getMosTokenDescription(token))}</p>
+          <div class="app-card-meta">
+            ${renderAppChip(token.identifierType || "identifikátor")}
+            ${renderAppChip(token.isPersonalized === "true" ? "personalizovaný" : token.isPersonalized === "false" ? "nepersonalizovaný" : "personalizace neznámá")}
+            ${renderAppChip(token.active === "true" ? "aktivní" : token.active === "false" ? "neaktivní" : null)}
+            ${renderAppChip(token.coupons.length === 1 ? "1 kupón" : `${token.coupons.length} kupónů`)}
+          </div>
+          <div class="app-card-details">
+            <div class="app-detail-row"><span>TokenID</span><span>${escapeHtml(token.tokenId || "-")}</span></div>
+            <div class="app-detail-row"><span>Typ</span><span>${escapeHtml([token.identifierType, token.identifierSubtype].filter(Boolean).join(" / ") || "-")}</span></div>
+            <div class="app-detail-row"><span>Hodnota</span><span>${escapeHtml(token.maskedPan || token.cln || token.token || "-")}</span></div>
+            <div class="app-detail-row"><span>CustomerID</span><span>${escapeHtml(token.customerId || "-")}</span></div>
+            ${token.validTo ? `<div class="app-detail-row"><span>Platný do</span><span>${escapeHtml(formatDate(token.validTo))}</span></div>` : ""}
+          </div>
+          ${token.coupons.length > 0 ? `
+            <div class="app-card-details">
+              ${token.coupons.map(coupon => `
+                <div class="app-detail-row">
+                  <span>${escapeHtml(coupon.couponId ? `Kupón ${coupon.couponId}` : "Kupón")}</span>
+                  <span>${escapeHtml(getMosCouponSummary(coupon))}</span>
+                </div>
+              `).join("")}
+            </div>
+          ` : `
+            <p>Na tomto identifikátoru nejsou žádné kupóny.</p>
+          `}
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function getMosTokenTitle(token) {
+  return token.name
+    || token.maskedPan
+    || token.cln
+    || (token.tokenId ? `Token ${token.tokenId}` : "Identifikátor");
+}
+
+function getMosTokenDescription(token) {
+  return [
+    token.identifierType ? `typ ${token.identifierType}` : null,
+    token.tokenId ? `TokenID ${token.tokenId}` : null,
+    token.customerId ? `CustomerID ${token.customerId}` : null
+  ].filter(Boolean).join(", ") || "Identifikátor v Core MOS.";
+}
+
+function getMosCouponSummary(coupon) {
+  return [
+    coupon.tariffName || coupon.name || (coupon.tariffId ? `Tarif ${coupon.tariffId}` : null),
+    coupon.zones ? `zóny ${coupon.zones}` : null,
+    coupon.dateTimeFrom && coupon.dateTimeTo ? `${formatDate(coupon.dateTimeFrom)} - ${formatDate(coupon.dateTimeTo)}` : null,
+    coupon.status || coupon.customStatusName || null,
+    coupon.price ? `${coupon.price} Kč` : null
+  ].filter(Boolean).join(", ") || "Kupón bez detailu.";
 }
 
 function renderClientStatusCardHtml(body) {
@@ -6235,6 +6453,87 @@ function getXmlElementText(source, elementName) {
   return match?.[1] ?? "";
 }
 
+function escapeXml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function getXmlOperationResultId(source, resultElementName) {
+  const resultSource = getXmlElementSource(source, resultElementName);
+  return getXmlElementText(resultSource, "ID");
+}
+
+function getXmlOperationResultText(source, resultElementName) {
+  const resultSource = getXmlElementSource(source, resultElementName);
+  const resultBlock = getXmlElementSource(resultSource, "Result");
+  return getXmlElementText(resultBlock, "Text");
+}
+
+function getXmlElementSource(source, elementName) {
+  const match = String(source || "").match(new RegExp(`<${elementName}[^>]*>([\\s\\S]*?)<\\/${elementName}>`, "i"));
+  return match?.[1] ?? "";
+}
+
+function parseMosTokenItems(source) {
+  const normalized = normalizeXmlPrefixes(source);
+  const tokenRegex = /<TokenEx[^>]*>([\s\S]*?)<\/TokenEx>/gi;
+  const items = [];
+  let match;
+
+  while ((match = tokenRegex.exec(normalized)) !== null) {
+    const tokenSource = match[1] || "";
+    items.push({
+      tokenId: getXmlElementText(tokenSource, "TokenID"),
+      name: getXmlElementText(tokenSource, "Name"),
+      token: getXmlElementText(tokenSource, "Token"),
+      customerId: getXmlElementText(tokenSource, "CustomerIDx"),
+      identifierType: getXmlElementText(tokenSource, "IdentifierType"),
+      identifierSubtype: getXmlElementText(tokenSource, "IdentifierSubtype"),
+      maskedPan: getXmlElementText(tokenSource, "MaskedPAN"),
+      cln: getXmlElementText(tokenSource, "CLN"),
+      active: getXmlElementText(tokenSource, "Active"),
+      isPersonalized: getXmlElementText(tokenSource, "IsPersonalized"),
+      validTo: getXmlElementText(tokenSource, "ValidTo"),
+      blockedStatus: getXmlElementText(tokenSource, "TokenBlockedStatus")
+    });
+  }
+
+  return items;
+}
+
+function parseMosCouponItems(source) {
+  const normalized = normalizeXmlPrefixes(source);
+  const couponRegex = /<CouponInfoRecord[^>]*>([\s\S]*?)<\/CouponInfoRecord>/gi;
+  const items = [];
+  let match;
+
+  while ((match = couponRegex.exec(normalized)) !== null) {
+    const couponSource = match[1] || "";
+    items.push({
+      couponId: getXmlElementText(couponSource, "CouponID"),
+      customerId: getXmlElementText(couponSource, "CustomerID"),
+      status: getXmlElementText(couponSource, "Status"),
+      customStatusName: getXmlElementText(couponSource, "CustomStatusName"),
+      tariffId: getXmlElementText(couponSource, "TariffID"),
+      tariffName: getXmlElementText(couponSource, "TariffName"),
+      name: getXmlElementText(couponSource, "Name"),
+      dateTimeFrom: getXmlElementText(couponSource, "DateTimeFrom"),
+      dateTimeTo: getXmlElementText(couponSource, "DateTimeTo"),
+      zones: getXmlElementText(couponSource, "Zones"),
+      price: getXmlElementText(couponSource, "Price"),
+      orderId: getXmlElementText(couponSource, "OrderID"),
+      tokenId: getXmlElementText(couponSource, "TokenID"),
+      tokenName: getXmlElementText(couponSource, "TokenName")
+    });
+  }
+
+  return items;
+}
+
 function normalizeXmlPrefixes(source) {
   return String(source || "")
     .replace(/(<\/?)([A-Za-z_][\w.-]*):/g, "$1");
@@ -6512,7 +6811,7 @@ function summarizeBody(body) {
     return [];
   }
 
-  if (isMosParkingOrderResponse(body) || isMosSavedCardPaymentResponse(body) || isMosTicketInfoResponse(body)) {
+  if (isMosParkingOrderResponse(body) || isMosSavedCardPaymentResponse(body) || isMosTicketInfoResponse(body) || isMosTokenCouponsOverviewResponse(body)) {
     return [];
   }
 
@@ -6781,6 +7080,14 @@ function isMosTicketInfoResponse(value) {
     && "ticketGUID" in value
     && "paymentStatus" in value
     && ("parkingFrom" in value || "dateCreated" in value);
+}
+
+function isMosTokenCouponsOverviewResponse(value) {
+  return value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && value.kind === "mosTokenCouponsOverview"
+    && Array.isArray(value.tokens);
 }
 
 function isSavedVehiclesStep(step) {
