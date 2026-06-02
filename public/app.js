@@ -4814,6 +4814,10 @@ function startResultCountdownIfNeeded(message) {
 }
 
 function buildAppCardsHtml(body, step = currentStep()) {
+  if (isMosTokenCouponsOverviewResponse(body)) {
+    return renderMosTokenCouponsOverviewCardHtml(body);
+  }
+
   if (step?.selection?.sourceRegex) {
     const items = state.activeSelection?.stepId === step.id && Array.isArray(state.activeSelection.items)
       ? state.activeSelection.items
@@ -5143,10 +5147,6 @@ function buildAppCardsHtml(body, step = currentStep()) {
 
   if (isMosTicketInfoResponse(body)) {
     return renderMosTicketInfoCardHtml(body);
-  }
-
-  if (isMosTokenCouponsOverviewResponse(body)) {
-    return renderMosTokenCouponsOverviewCardHtml(body);
   }
 
   if (isClientIdentifiersResponse(body)) {
@@ -6449,7 +6449,7 @@ function parseMosTariffZoneSelectionItems(source) {
 }
 
 function getXmlElementText(source, elementName) {
-  const match = String(source || "").match(new RegExp(`<${elementName}[^>]*>([\\s\\S]*?)<\\/${elementName}>`, "i"));
+  const match = String(source || "").match(new RegExp(`<${elementName}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${elementName}>`, "i"));
   return match?.[1] ?? "";
 }
 
@@ -6474,7 +6474,7 @@ function getXmlOperationResultText(source, resultElementName) {
 }
 
 function getXmlElementSource(source, elementName) {
-  const match = String(source || "").match(new RegExp(`<${elementName}[^>]*>([\\s\\S]*?)<\\/${elementName}>`, "i"));
+  const match = String(source || "").match(new RegExp(`<${elementName}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${elementName}>`, "i"));
   return match?.[1] ?? "";
 }
 
