@@ -506,8 +506,8 @@
         "Scénář je změnový a má se používat pouze nad testovacím zákazníkem v PRE-CORE.",
         "V panelu Přístup vložte Core MOS ServiceKey a ve scénáři se přihlaste MOS účtem.",
         "Vyberte token zákazníka, kterému chcete přiřadit Senior nebo jiný speciální profil. CustomerID se uloží z vybraného tokenu.",
-        "Krok GetCustomerProfiles načte dostupné profily pro CompanyID 1. CompanyID není číslo profilu, ale firma/dopravní systém v MOSu; pro pražské profily ponechte 1.",
-        "Pokud GetCustomerProfiles vrátí Error_MOSAPI_ServiceKeyTokenAuthNotAllowed, není problém v CompanyID. Použitý ServiceKey nemá oprávnění pro counter operace a scénář tímto klíčem nepůjde dokončit.",
+        "Krok GetCustomerProfilesForDistributionChannel načte profily dostupné pro mobilní aplikaci: CompanyID 1, TariffTypes 0 = kupóny, DistributionChannels 1 = MobApps.",
+        "Tato metoda nemá vyžadovat counter oprávnění, takže ji lze použít i se stávajícím ServiceKey pro zjištění CustomerProfileID profilu Senior.",
         "SetCustomerProfiles odešle jeden CustomerProfileForCustomer s ValidFrom/ValidTill. Po volání scénář načte profily zákazníka a následně GetTokenTariffs pro kontrolu výsledku."
       ],
       "steps": [
@@ -645,13 +645,13 @@
         {
           "id": "mos-customer-profile-get-profiles",
           "title": "Vybrat dostupný zákaznický profil",
-          "description": "Načte dostupné profily pro CompanyID 1 a umožní vybrat Senior nebo jiný speciální profil.",
+          "description": "Načte profily dostupné pro mobilní aplikaci a umožní vybrat Senior nebo jiný speciální profil.",
           "requiresContext": ["mosCustomerProfileSessionId"],
           "fields": [
             {
               "type": "info",
-              "label": "Co znamená CompanyID",
-              "text": "CompanyID je identifikátor firmy/dopravního systému v Core MOS, ne ID zákaznického profilu. Pro tento test ponechte hodnotu 1. Pokud MOS vrátí Error_MOSAPI_ServiceKeyTokenAuthNotAllowed, použitý ServiceKey nemá oprávnění načítat nebo nastavovat zákaznické profily."
+              "label": "Co se načítá",
+              "text": "Tento krok volá GetCustomerProfilesForDistributionChannel, tedy profily dostupné pro mobilní aplikaci. CompanyID je identifikátor firmy/dopravního systému, TariffTypes=0 znamená kupóny a DistributionChannels=1 znamená MobApps."
             },
             {
               "name": "companyId",
@@ -662,6 +662,24 @@
                 { "value": "1", "text": "1 - výchozí firma pro pražské profily" }
               ],
               "help": "Nejde o číslo profilu. Profil Senior se vybírá až z odpovědi tohoto kroku."
+            },
+            {
+              "name": "tariffType",
+              "label": "Typ tarifu",
+              "type": "select",
+              "value": "0",
+              "options": [
+                { "value": "0", "text": "0 - kupóny" }
+              ]
+            },
+            {
+              "name": "distributionChannel",
+              "label": "Distribuční kanál",
+              "type": "select",
+              "value": "1",
+              "options": [
+                { "value": "1", "text": "1 - mobilní aplikace" }
+              ]
             }
           ],
           "request": {
@@ -669,20 +687,22 @@
             "path": "/services/MOSservice.asmx",
             "contentType": "text/xml; charset=utf-8",
             "headers": {
-              "SOAPAction": "\"globdata/GetCustomerProfiles\""
+              "SOAPAction": "\"globdata/GetCustomerProfilesForDistributionChannel\""
             },
-            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetCustomerProfiles xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCustomerProfileSessionId}}</SessionID>\n      <CompanyID>{{form.companyId}}</CompanyID>\n    </GetCustomerProfiles>\n  </soap:Body>\n</soap:Envelope>"
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetCustomerProfilesForDistributionChannel xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCustomerProfileSessionId}}</SessionID>\n      <CompanyID>{{form.companyId}}</CompanyID>\n      <TariffTypes>\n        <int>{{form.tariffType}}</int>\n      </TariffTypes>\n      <DistributionChannels>\n        <int>{{form.distributionChannel}}</int>\n      </DistributionChannels>\n    </GetCustomerProfilesForDistributionChannel>\n  </soap:Body>\n</soap:Envelope>"
           },
           "remember": {
-            "mosCustomerProfileCompanyId": "{{form.companyId}}"
+            "mosCustomerProfileCompanyId": "{{form.companyId}}",
+            "mosCustomerProfileTariffType": "{{form.tariffType}}",
+            "mosCustomerProfileDistributionChannel": "{{form.distributionChannel}}"
           },
           "expected": {
             "status": 200,
             "assertions": [
               {
-                "regex": "<GetCustomerProfilesResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "regex": "<GetCustomerProfilesForDistributionChannelResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
                 "label": "MOS Result.ID = 0",
-                "message": "MOS nevrátil seznam zákaznických profilů. Pokud je v odpovědi Error_MOSAPI_ServiceKeyTokenAuthNotAllowed, nejde o chybu CompanyID, ale o nedostatečné oprávnění použitého ServiceKey pro counter operace."
+                "message": "MOS nevrátil seznam zákaznických profilů dostupných pro mobilní aplikaci."
               }
             ]
           },
@@ -690,7 +710,7 @@
             "buttonLabel": "Použít profil",
             "selectedButtonLabel": "Profil vybrán",
             "emptyTitle": "Žádné profily",
-            "emptyText": "MOS nevrátil žádný dostupný zákaznický profil.",
+            "emptyText": "MOS nevrátil žádný zákaznický profil dostupný pro kombinaci CompanyID=1, kupóny a mobilní aplikace.",
             "sourceRegex": {
               "itemPattern": "<CompanyCustomerProfile[^>]*>([\\s\\S]*?)</CompanyCustomerProfile>",
               "fields": {
