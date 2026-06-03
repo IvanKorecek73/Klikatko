@@ -6492,6 +6492,9 @@ function parseMosTariffZoneSelectionItems(source) {
       customerId: getXmlElementText(tariffSource, "CustomerID"),
       tariffName: getXmlElementText(tariffSource, "TariffName"),
       tariffProfileName: getXmlElementText(tariffSource, "TariffProfileName"),
+      customerProfileName: getXmlElementText(tariffSource, "CustomerProfileName"),
+      customerProfileId2: getXmlElementText(tariffSource, "CustomerProfileID2"),
+      splitDate: getXmlElementText(tariffSource, "SplitDate"),
       validFrom: getXmlElementText(tariffSource, "NewCouponValidFrom"),
       validTill: getXmlElementText(tariffSource, "NewCouponValidTill")
     };
@@ -6624,6 +6627,7 @@ function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
       item.isPersonalized === "true" ? "personalizovaný" : item.isPersonalized === "false" ? "nepersonalizovaný" : null,
       item.zoneName ? `zóna ${item.zoneName}` : null,
       item.zones ? `zóny ${item.zones}` : null,
+      item.customerProfileId2 ? "lomený tarif" : item.tariffZoneId ? "normální tarif" : null,
       item.price ? `${item.price} Kč` : null,
       item.displayPrice ? `tarif ${item.displayPrice} Kč` : null,
       item.active === "true" ? "aktivní" : item.active === "false" ? "neaktivní" : null
@@ -6636,6 +6640,9 @@ function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
       { label: "Název", value: item.name },
       { label: "Tarif", value: item.tariffName || item.tariffId },
       { label: "Profil tarifu", value: item.tariffProfileName },
+      { label: "Profil zákazníka", value: item.customerProfileName },
+      { label: "CustomerProfileID2", value: item.customerProfileId2 },
+      { label: "SplitDate", value: item.splitDate ? formatDate(item.splitDate) : null },
       { label: "Zóna", value: item.zoneName },
       { label: "Zóny", value: item.zones },
       { label: "Platnost od", value: item.dateTimeFrom || item.validFrom ? formatDate(item.dateTimeFrom || item.validFrom) : null },
@@ -6673,7 +6680,11 @@ function getSelectionItemText(item) {
   }
 
   if (item.customerId) {
-    return `Zákazník ${item.customerId}`;
+    return [
+      `Zákazník ${item.customerId}`,
+      item.customerProfileId2 ? `lomený tarif: CustomerProfileID2 ${item.customerProfileId2}` : null,
+      item.splitDate ? `SplitDate ${formatDate(item.splitDate)}` : null
+    ].filter(Boolean).join(", ");
   }
 
   return "Vybratelná položka";

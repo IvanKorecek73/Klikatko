@@ -490,6 +490,307 @@
       ]
     },
     {
+      "id": "mos-token-tariffs-normal-vs-split-soap",
+      "title": "MOS - normální vs. lomené tarify",
+      "description": "Diagnostický scénář pro porovnání odpovědi GetTokenTariffs u běžného profilu a u profilu, který vrací lomené kupóny se druhou cenovou složkou.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["coupons", "soap", "core-mos", "tariffs", "split-coupon", "diagnostics"],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Normální a lomené tarify"
+      },
+      "instructions": [
+        "Scénář vychází z mos-tariffs-normal-vs-split.http.",
+        "Nejprve se přihlaste MOS účtem s běžným občanským profilem, vyberte personalizovaný token a načtěte GetTokenTariffs.",
+        "Potom totéž proveďte s MOS účtem, který má senior nebo jiný split-enabled zákaznický profil.",
+        "Lomený tarif poznáte podle neprázdného CustomerProfileID2 a případně SplitDate. V Mobilu se tyto hodnoty zobrazují u vybraných tarifních zón.",
+        "Konkrétní senior účet není v podkladu uvedený, proto je ve druhé přihlašovací části potřeba doplnit jej ručně."
+      ],
+      "steps": [
+        {
+          "id": "mos-tariffs-normal-authenticate-login",
+          "title": "Přihlásit běžný MOS účet",
+          "description": "Zavolá AuthenticateLogin pro účet s normálními tarify a uloží SessionID pro další SOAP volání.",
+          "fields": [
+            {
+              "name": "userName",
+              "label": "MOS uživatel",
+              "type": "text",
+              "value": "zedellixolli-8241@yopmail.com",
+              "placeholder": "Účet s občanským profilem"
+            },
+            {
+              "name": "password",
+              "label": "Heslo",
+              "type": "password",
+              "value": "abc123abc123",
+              "placeholder": "Heslo MOS účtu"
+            },
+            {
+              "name": "codeSms",
+              "label": "SMS kód",
+              "type": "text",
+              "value": "",
+              "placeholder": "Volitelné"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/AuthenticateLogin\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AuthenticateLogin xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <Password>{{form.password}}</Password>\n      <CodeSMS>{{form.codeSms}}</CodeSMS>\n    </AuthenticateLogin>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<AuthenticateLoginResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "Přihlášení běžného MOS účtu neproběhlo úspěšně."
+              }
+            ]
+          },
+          "extractRegex": {
+            "mosTariffsNormalSessionId": "<SessionID>([^<]+)</SessionID>"
+          }
+        },
+        {
+          "id": "mos-tariffs-normal-get-tokens",
+          "title": "Vybrat token běžného účtu",
+          "description": "Načte dostupné tokeny běžného účtu. Pro porovnání tarifů vyberte personalizovaný token.",
+          "requiresContext": ["mosTariffsNormalSessionId"],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokens\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokens xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosTariffsNormalSessionId}}</SessionID>\n      <GetOnlyAvailableTokens>true</GetOnlyAvailableTokens>\n    </GetTokens>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200
+          },
+          "selection": {
+            "buttonLabel": "Použít token",
+            "selectedButtonLabel": "Token vybrán",
+            "emptyTitle": "Žádné tokeny",
+            "emptyText": "MOS nevrátil žádný dostupný token pro běžný účet.",
+            "sourceRegex": {
+              "itemPattern": "<TokenEx[^>]*>([\\s\\S]*?)</TokenEx>",
+              "fields": {
+                "tokenId": "<TokenID>([^<]+)</TokenID>",
+                "name": "<Name>([^<]*)</Name>",
+                "token": "<Token>([^<]*)</Token>",
+                "customerId": "<CustomerIDx>([^<]+)</CustomerIDx>",
+                "identifierType": "<IdentifierType>([^<]*)</IdentifierType>",
+                "identifierSubtype": "<IdentifierSubtype>([^<]*)</IdentifierSubtype>",
+                "maskedPan": "<MaskedPAN>([^<]*)</MaskedPAN>",
+                "cln": "<CLN>([^<]*)</CLN>",
+                "active": "<Active>([^<]+)</Active>",
+                "isPersonalized": "<IsPersonalized>([^<]+)</IsPersonalized>"
+              }
+            },
+            "store": {
+              "mosTariffsNormalTokenId": "$.tokenId",
+              "mosTariffsNormalCustomerId": "$.customerId"
+            }
+          }
+        },
+        {
+          "id": "mos-tariffs-normal-get-token-tariffs",
+          "title": "Načíst normální tarify",
+          "description": "Zavolá GetTokenTariffs pro token běžného účtu. U normálního kupónu mají být CustomerProfileID2 a SplitDate prázdné.",
+          "requiresContext": ["mosTariffsNormalSessionId", "mosTariffsNormalTokenId"],
+          "fields": [
+            {
+              "name": "tokenId",
+              "label": "TokenID",
+              "type": "number",
+              "value": "{{context.mosTariffsNormalTokenId}}"
+            },
+            {
+              "name": "startDate",
+              "label": "StartDate",
+              "type": "date",
+              "value": "{{today}}"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokenTariffs\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokenTariffs xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosTariffsNormalSessionId}}</SessionID>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <StartDate>{{form.startDate}}</StartDate>\n    </GetTokenTariffs>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200
+          },
+          "selection": {
+            "buttonLabel": "Označit tarif",
+            "selectedButtonLabel": "Tarif označen",
+            "emptyTitle": "Žádné normální tarify",
+            "emptyText": "MOS nevrátil žádnou kombinaci tarifu a zóny pro běžný účet.",
+            "sourceRegex": {
+              "parser": "mosTariffZones"
+            },
+            "store": {
+              "mosTariffsNormalSelectedTariffId": "$.tariffId",
+              "mosTariffsNormalSelectedZoneId": "$.tariffZoneId"
+            }
+          }
+        },
+        {
+          "id": "mos-tariffs-split-authenticate-login",
+          "title": "Přihlásit split / senior MOS účet",
+          "description": "Zavolá AuthenticateLogin pro účet, který má v Core MOS přiřazený senior nebo jiný split-enabled zákaznický profil.",
+          "fields": [
+            {
+              "name": "userName",
+              "label": "MOS uživatel",
+              "type": "text",
+              "value": "",
+              "placeholder": "Doplňte účet se senior/split profilem"
+            },
+            {
+              "name": "password",
+              "label": "Heslo",
+              "type": "password",
+              "value": "abc123abc123",
+              "placeholder": "Heslo MOS účtu"
+            },
+            {
+              "name": "codeSms",
+              "label": "SMS kód",
+              "type": "text",
+              "value": "",
+              "placeholder": "Volitelné"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/AuthenticateLogin\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AuthenticateLogin xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <Password>{{form.password}}</Password>\n      <CodeSMS>{{form.codeSms}}</CodeSMS>\n    </AuthenticateLogin>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<AuthenticateLoginResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "Přihlášení split/senior MOS účtu neproběhlo úspěšně."
+              }
+            ]
+          },
+          "extractRegex": {
+            "mosTariffsSplitSessionId": "<SessionID>([^<]+)</SessionID>"
+          }
+        },
+        {
+          "id": "mos-tariffs-split-get-tokens",
+          "title": "Vybrat token split účtu",
+          "description": "Načte dostupné tokeny split/senior účtu. Vyberte personalizovaný token, pro který má MOS vrátit lomené tarify.",
+          "requiresContext": ["mosTariffsSplitSessionId"],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokens\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokens xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosTariffsSplitSessionId}}</SessionID>\n      <GetOnlyAvailableTokens>true</GetOnlyAvailableTokens>\n    </GetTokens>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200
+          },
+          "selection": {
+            "buttonLabel": "Použít token",
+            "selectedButtonLabel": "Token vybrán",
+            "emptyTitle": "Žádné tokeny",
+            "emptyText": "MOS nevrátil žádný dostupný token pro split/senior účet.",
+            "sourceRegex": {
+              "itemPattern": "<TokenEx[^>]*>([\\s\\S]*?)</TokenEx>",
+              "fields": {
+                "tokenId": "<TokenID>([^<]+)</TokenID>",
+                "name": "<Name>([^<]*)</Name>",
+                "token": "<Token>([^<]*)</Token>",
+                "customerId": "<CustomerIDx>([^<]+)</CustomerIDx>",
+                "identifierType": "<IdentifierType>([^<]*)</IdentifierType>",
+                "identifierSubtype": "<IdentifierSubtype>([^<]*)</IdentifierSubtype>",
+                "maskedPan": "<MaskedPAN>([^<]*)</MaskedPAN>",
+                "cln": "<CLN>([^<]*)</CLN>",
+                "active": "<Active>([^<]+)</Active>",
+                "isPersonalized": "<IsPersonalized>([^<]+)</IsPersonalized>"
+              }
+            },
+            "store": {
+              "mosTariffsSplitTokenId": "$.tokenId",
+              "mosTariffsSplitCustomerId": "$.customerId"
+            }
+          }
+        },
+        {
+          "id": "mos-tariffs-split-get-token-tariffs",
+          "title": "Načíst lomené tarify",
+          "description": "Zavolá GetTokenTariffs pro token split/senior účtu. Lomený tarif poznáte podle CustomerProfileID2 a případně SplitDate.",
+          "requiresContext": ["mosTariffsSplitSessionId", "mosTariffsSplitTokenId"],
+          "fields": [
+            {
+              "name": "tokenId",
+              "label": "TokenID",
+              "type": "number",
+              "value": "{{context.mosTariffsSplitTokenId}}"
+            },
+            {
+              "name": "startDate",
+              "label": "StartDate",
+              "type": "date",
+              "value": "{{today}}"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokenTariffs\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokenTariffs xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosTariffsSplitSessionId}}</SessionID>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <StartDate>{{form.startDate}}</StartDate>\n    </GetTokenTariffs>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200
+          },
+          "selection": {
+            "buttonLabel": "Označit tarif",
+            "selectedButtonLabel": "Tarif označen",
+            "emptyTitle": "Žádné lomené tarify",
+            "emptyText": "MOS nevrátil žádnou kombinaci tarifu a zóny pro split/senior účet. Zkontrolujte, zda účet opravdu má split-enabled profil.",
+            "sourceRegex": {
+              "parser": "mosTariffZones"
+            },
+            "store": {
+              "mosTariffsSplitSelectedTariffId": "$.tariffId",
+              "mosTariffsSplitSelectedZoneId": "$.tariffZoneId",
+              "mosTariffsSplitCustomerProfileId2": "$.customerProfileId2",
+              "mosTariffsSplitDate": "$.splitDate"
+            }
+          }
+        }
+      ]
+    },
+    {
       "id": "mos-token-personalization-soap",
       "title": "MOS - personalizace tokenu",
       "description": "Diagnostický scénář pro přímé volání SetTokenIsPersonalized v Core MOS: přihlášení, výběr tokenu, nastavení IsPersonalized a kontrolní načtení tokenů.",
