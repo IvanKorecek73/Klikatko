@@ -506,7 +506,8 @@
         "Scénář je změnový a má se používat pouze nad testovacím zákazníkem v PRE-CORE.",
         "V panelu Přístup vložte Core MOS ServiceKey a ve scénáři se přihlaste MOS účtem.",
         "Vyberte token zákazníka, kterému chcete přiřadit Senior nebo jiný speciální profil. CustomerID se uloží z vybraného tokenu.",
-        "Krok GetCustomerProfiles načte dostupné profily pro CompanyID 1. Vyberte Senior nebo jiný profil, který má vést k lomeným tarifům.",
+        "Krok GetCustomerProfiles načte dostupné profily pro CompanyID 1. CompanyID není číslo profilu, ale firma/dopravní systém v MOSu; pro pražské profily ponechte 1.",
+        "Pokud GetCustomerProfiles vrátí Error_MOSAPI_ServiceKeyTokenAuthNotAllowed, není problém v CompanyID. Použitý ServiceKey nemá oprávnění pro counter operace a scénář tímto klíčem nepůjde dokončit.",
         "SetCustomerProfiles odešle jeden CustomerProfileForCustomer s ValidFrom/ValidTill. Po volání scénář načte profily zákazníka a následně GetTokenTariffs pro kontrolu výsledku."
       ],
       "steps": [
@@ -648,12 +649,19 @@
           "requiresContext": ["mosCustomerProfileSessionId"],
           "fields": [
             {
+              "type": "info",
+              "label": "Co znamená CompanyID",
+              "text": "CompanyID je identifikátor firmy/dopravního systému v Core MOS, ne ID zákaznického profilu. Pro tento test ponechte hodnotu 1. Pokud MOS vrátí Error_MOSAPI_ServiceKeyTokenAuthNotAllowed, použitý ServiceKey nemá oprávnění načítat nebo nastavovat zákaznické profily."
+            },
+            {
               "name": "companyId",
               "label": "CompanyID",
-              "type": "number",
-              "value": 1,
-              "min": 1,
-              "step": 1
+              "type": "select",
+              "value": "1",
+              "options": [
+                { "value": "1", "text": "1 - výchozí firma pro pražské profily" }
+              ],
+              "help": "Nejde o číslo profilu. Profil Senior se vybírá až z odpovědi tohoto kroku."
             }
           ],
           "request": {
@@ -674,7 +682,7 @@
               {
                 "regex": "<GetCustomerProfilesResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
                 "label": "MOS Result.ID = 0",
-                "message": "MOS nevrátil seznam zákaznických profilů."
+                "message": "MOS nevrátil seznam zákaznických profilů. Pokud je v odpovědi Error_MOSAPI_ServiceKeyTokenAuthNotAllowed, nejde o chybu CompanyID, ale o nedostatečné oprávnění použitého ServiceKey pro counter operace."
               }
             ]
           },
