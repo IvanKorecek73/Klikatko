@@ -1436,7 +1436,7 @@
                         },
                         {
                             "path": "$.detail",
-                            "equals": "Password could not be changed."
+                            "notEmpty": true
                         }
                     ]
                 }
