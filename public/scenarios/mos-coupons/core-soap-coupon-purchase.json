@@ -490,6 +490,382 @@
       ]
     },
     {
+      "id": "mos-customer-assign-profile-soap",
+      "title": "MOS - přiřazení zákaznického profilu",
+      "description": "Diagnostický scénář pro vytvoření zákazníka se Senior nebo jiným speciálním profilem: přihlášení, výběr zákazníka podle tokenu, výběr dostupného profilu a volání SetCustomerProfiles.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["coupons", "soap", "core-mos", "customer-profile", "split-coupon", "test-data"],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Zákaznické profily"
+      },
+      "instructions": [
+        "Scénář je změnový a má se používat pouze nad testovacím zákazníkem v PRE-CORE.",
+        "V panelu Přístup vložte Core MOS ServiceKey a ve scénáři se přihlaste MOS účtem.",
+        "Vyberte token zákazníka, kterému chcete přiřadit Senior nebo jiný speciální profil. CustomerID se uloží z vybraného tokenu.",
+        "Krok GetCustomerProfiles načte dostupné profily pro CompanyID 1. Vyberte Senior nebo jiný profil, který má vést k lomeným tarifům.",
+        "SetCustomerProfiles odešle jeden CustomerProfileForCustomer s ValidFrom/ValidTill. Po volání scénář načte profily zákazníka a následně GetTokenTariffs pro kontrolu výsledku."
+      ],
+      "steps": [
+        {
+          "id": "mos-customer-profile-authenticate-login",
+          "title": "Přihlásit se do Core MOS",
+          "description": "Zavolá AuthenticateLogin a uloží SessionID pro další SOAP volání.",
+          "fields": [
+            {
+              "name": "userName",
+              "label": "MOS uživatel",
+              "type": "text",
+              "value": "",
+              "placeholder": "Přepážkový účet"
+            },
+            {
+              "name": "password",
+              "label": "Heslo",
+              "type": "password",
+              "value": "",
+              "placeholder": "Heslo MOS účtu"
+            },
+            {
+              "name": "codeSms",
+              "label": "SMS kód",
+              "type": "text",
+              "value": "",
+              "placeholder": "Volitelné"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/AuthenticateLogin\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AuthenticateLogin xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <Password>{{form.password}}</Password>\n      <CodeSMS>{{form.codeSms}}</CodeSMS>\n    </AuthenticateLogin>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<AuthenticateLoginResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "Přihlášení do Core MOS neproběhlo úspěšně."
+              }
+            ]
+          },
+          "extractRegex": {
+            "mosCustomerProfileSessionId": "<SessionID>([^<]+)</SessionID>"
+          }
+        },
+        {
+          "id": "mos-customer-profile-get-tokens",
+          "title": "Vybrat zákazníka podle tokenu",
+          "description": "Načte dostupné tokeny a umožní vybrat zákazníka, kterému se má přiřadit profil.",
+          "requiresContext": ["mosCustomerProfileSessionId"],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokens\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokens xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCustomerProfileSessionId}}</SessionID>\n      <GetOnlyAvailableTokens>true</GetOnlyAvailableTokens>\n    </GetTokens>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200
+          },
+          "selection": {
+            "buttonLabel": "Použít zákazníka",
+            "selectedButtonLabel": "Zákazník vybrán",
+            "emptyTitle": "Žádné tokeny",
+            "emptyText": "MOS nevrátil žádný dostupný token. Bez tokenu nelze pohodlně vybrat CustomerID.",
+            "sourceRegex": {
+              "itemPattern": "<TokenEx[^>]*>([\\s\\S]*?)</TokenEx>",
+              "fields": {
+                "tokenId": "<TokenID>([^<]+)</TokenID>",
+                "name": "<Name>([^<]*)</Name>",
+                "token": "<Token>([^<]*)</Token>",
+                "customerId": "<CustomerIDx>([^<]+)</CustomerIDx>",
+                "identifierType": "<IdentifierType>([^<]*)</IdentifierType>",
+                "identifierSubtype": "<IdentifierSubtype>([^<]*)</IdentifierSubtype>",
+                "maskedPan": "<MaskedPAN>([^<]*)</MaskedPAN>",
+                "cln": "<CLN>([^<]*)</CLN>",
+                "active": "<Active>([^<]+)</Active>",
+                "isPersonalized": "<IsPersonalized>([^<]+)</IsPersonalized>"
+              }
+            },
+            "store": {
+              "mosCustomerProfileCustomerId": "$.customerId",
+              "mosCustomerProfileTokenId": "$.tokenId"
+            }
+          }
+        },
+        {
+          "id": "mos-customer-profile-current-profiles",
+          "title": "Zobrazit stávající profily zákazníka",
+          "description": "Kontrolně načte profily vybraného zákazníka před změnou.",
+          "requiresContext": ["mosCustomerProfileSessionId", "mosCustomerProfileCustomerId"],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetCustomerProfilesForCustomer\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetCustomerProfilesForCustomer xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCustomerProfileSessionId}}</SessionID>\n      <CustomerID>{{context.mosCustomerProfileCustomerId}}</CustomerID>\n    </GetCustomerProfilesForCustomer>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200
+          },
+          "selection": {
+            "buttonLabel": "Označit profil",
+            "selectedButtonLabel": "Profil označen",
+            "emptyTitle": "Žádné profily zákazníka",
+            "emptyText": "MOS nevrátil žádný stávající profil zákazníka.",
+            "sourceRegex": {
+              "itemPattern": "<CustomerProfileForCustomer[^>]*>([\\s\\S]*?)</CustomerProfileForCustomer>",
+              "fields": {
+                "customerId": "<CustomerID>([^<]+)</CustomerID>",
+                "customerProfileId": "<CustomerProfileID>([^<]+)</CustomerProfileID>",
+                "customerProfileName": "<CustomerProfileName>([^<]*)</CustomerProfileName>",
+                "companyId": "<CompanyID>([^<]+)</CompanyID>",
+                "validFrom": "<ValidFrom>([^<]+)</ValidFrom>",
+                "validTill": "<ValidTill>([^<]+)</ValidTill>"
+              }
+            },
+            "store": {
+              "mosCustomerProfileExistingProfileId": "$.customerProfileId"
+            }
+          }
+        },
+        {
+          "id": "mos-customer-profile-get-profiles",
+          "title": "Vybrat dostupný zákaznický profil",
+          "description": "Načte dostupné profily pro CompanyID 1 a umožní vybrat Senior nebo jiný speciální profil.",
+          "requiresContext": ["mosCustomerProfileSessionId"],
+          "fields": [
+            {
+              "name": "companyId",
+              "label": "CompanyID",
+              "type": "number",
+              "value": 1,
+              "min": 1,
+              "step": 1
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetCustomerProfiles\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetCustomerProfiles xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCustomerProfileSessionId}}</SessionID>\n      <CompanyID>{{form.companyId}}</CompanyID>\n    </GetCustomerProfiles>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "remember": {
+            "mosCustomerProfileCompanyId": "{{form.companyId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<GetCustomerProfilesResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "MOS nevrátil seznam zákaznických profilů."
+              }
+            ]
+          },
+          "selection": {
+            "buttonLabel": "Použít profil",
+            "selectedButtonLabel": "Profil vybrán",
+            "emptyTitle": "Žádné profily",
+            "emptyText": "MOS nevrátil žádný dostupný zákaznický profil.",
+            "sourceRegex": {
+              "itemPattern": "<CompanyCustomerProfile[^>]*>([\\s\\S]*?)</CompanyCustomerProfile>",
+              "fields": {
+                "customerProfileId": "<CustomerProfileID>([^<]+)</CustomerProfileID>",
+                "customerProfileName": "<CustomerProfileName>([^<]*)</CustomerProfileName>",
+                "companyId": "<CompanyID>([^<]+)</CompanyID>",
+                "active": "<Active>([^<]+)</Active>",
+                "isDefault": "<IsDefault>([^<]+)</IsDefault>"
+              }
+            },
+            "store": {
+              "mosCustomerProfileSelectedProfileId": "$.customerProfileId",
+              "mosCustomerProfileSelectedProfileName": "$.customerProfileName",
+              "mosCustomerProfileSelectedCompanyId": "$.companyId"
+            }
+          }
+        },
+        {
+          "id": "mos-customer-profile-set-profile",
+          "title": "Přiřadit profil zákazníkovi",
+          "description": "Zavolá SetCustomerProfiles s vybraným CustomerProfileForCustomer.",
+          "requiresContext": ["mosCustomerProfileSessionId", "mosCustomerProfileCustomerId", "mosCustomerProfileSelectedProfileId"],
+          "fields": [
+            {
+              "name": "customerId",
+              "label": "CustomerID",
+              "type": "number",
+              "value": "{{context.mosCustomerProfileCustomerId}}"
+            },
+            {
+              "name": "customerProfileId",
+              "label": "CustomerProfileID",
+              "type": "number",
+              "value": "{{context.mosCustomerProfileSelectedProfileId}}"
+            },
+            {
+              "name": "customerProfileName",
+              "label": "Název profilu",
+              "type": "text",
+              "value": "{{context.mosCustomerProfileSelectedProfileName}}"
+            },
+            {
+              "name": "companyId",
+              "label": "CompanyID",
+              "type": "number",
+              "value": "{{context.mosCustomerProfileSelectedCompanyId}}"
+            },
+            {
+              "name": "validFrom",
+              "label": "ValidFrom",
+              "type": "date",
+              "value": "{{today}}"
+            },
+            {
+              "name": "validTill",
+              "label": "ValidTill",
+              "type": "date",
+              "value": "{{todayPlus365}}"
+            },
+            {
+              "name": "isStudent",
+              "label": "IsStudent",
+              "type": "select",
+              "value": "false",
+              "options": [
+                { "value": "false", "text": "Ne" },
+                { "value": "true", "text": "Ano" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/SetCustomerProfiles\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <SetCustomerProfiles xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCustomerProfileSessionId}}</SessionID>\n      <CustomerID>{{form.customerId}}</CustomerID>\n      <NewCustomerProfiles>\n        <CustomerProfileForCustomer>\n          <CustomerID>{{form.customerId}}</CustomerID>\n          <CustomerProfileID>{{form.customerProfileId}}</CustomerProfileID>\n          <CustomerProfileName>{{form.customerProfileName}}</CustomerProfileName>\n          <CompanyID>{{form.companyId}}</CompanyID>\n          <ValidFrom>{{form.validFrom}}</ValidFrom>\n          <ValidTill>{{form.validTill}}</ValidTill>\n          <IsStudent>{{form.isStudent}}</IsStudent>\n          <CP></CP>\n        </CustomerProfileForCustomer>\n      </NewCustomerProfiles>\n    </SetCustomerProfiles>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<SetCustomerProfilesResult>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "MOS profil zákazníkovi nepřiřadil. Zkontrolujte oprávnění ServiceKey a vybraný profil."
+              }
+            ]
+          }
+        },
+        {
+          "id": "mos-customer-profile-verify-profiles",
+          "title": "Ověřit profily zákazníka po změně",
+          "description": "Znovu načte profily zákazníka a umožní vizuálně ověřit, že vybraný profil je přiřazený.",
+          "requiresContext": ["mosCustomerProfileSessionId", "mosCustomerProfileCustomerId"],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetCustomerProfilesForCustomer\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetCustomerProfilesForCustomer xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCustomerProfileSessionId}}</SessionID>\n      <CustomerID>{{context.mosCustomerProfileCustomerId}}</CustomerID>\n    </GetCustomerProfilesForCustomer>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<GetCustomerProfilesForCustomerResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "MOS nevrátil profily zákazníka po změně."
+              }
+            ]
+          },
+          "selection": {
+            "buttonLabel": "Označit profil",
+            "selectedButtonLabel": "Profil označen",
+            "sourceRegex": {
+              "itemPattern": "<CustomerProfileForCustomer[^>]*>([\\s\\S]*?)</CustomerProfileForCustomer>",
+              "fields": {
+                "customerId": "<CustomerID>([^<]+)</CustomerID>",
+                "customerProfileId": "<CustomerProfileID>([^<]+)</CustomerProfileID>",
+                "customerProfileName": "<CustomerProfileName>([^<]*)</CustomerProfileName>",
+                "companyId": "<CompanyID>([^<]+)</CompanyID>",
+                "validFrom": "<ValidFrom>([^<]+)</ValidFrom>",
+                "validTill": "<ValidTill>([^<]+)</ValidTill>",
+                "isStudent": "<IsStudent>([^<]+)</IsStudent>"
+              }
+            },
+            "store": {
+              "mosCustomerProfileVerifiedProfileId": "$.customerProfileId"
+            }
+          }
+        },
+        {
+          "id": "mos-customer-profile-verify-tariffs",
+          "title": "Ověřit tarify po přiřazení profilu",
+          "description": "Načte GetTokenTariffs pro původně vybraný token. Pokud profil vede k lomenému kupónu, v položkách se má objevit CustomerProfileID2.",
+          "requiresContext": ["mosCustomerProfileSessionId", "mosCustomerProfileTokenId"],
+          "fields": [
+            {
+              "name": "tokenId",
+              "label": "TokenID",
+              "type": "number",
+              "value": "{{context.mosCustomerProfileTokenId}}"
+            },
+            {
+              "name": "startDate",
+              "label": "StartDate",
+              "type": "date",
+              "value": "{{today}}"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokenTariffs\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokenTariffs xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCustomerProfileSessionId}}</SessionID>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <StartDate>{{form.startDate}}</StartDate>\n    </GetTokenTariffs>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200
+          },
+          "selection": {
+            "buttonLabel": "Označit tarif",
+            "selectedButtonLabel": "Tarif označen",
+            "emptyTitle": "Žádné tarify",
+            "emptyText": "MOS nevrátil žádnou kombinaci tarifu a zóny. Zkontrolujte vybraný token a platnost profilu.",
+            "sourceRegex": {
+              "parser": "mosTariffZones"
+            },
+            "store": {
+              "mosCustomerProfileTariffId": "$.tariffId",
+              "mosCustomerProfileTariffZoneId": "$.tariffZoneId",
+              "mosCustomerProfileCustomerProfileId2": "$.customerProfileId2"
+            }
+          }
+        }
+      ]
+    },
+    {
       "id": "mos-token-tariffs-normal-vs-split-soap",
       "title": "MOS - normální vs. lomené tarify",
       "description": "Diagnostický scénář pro porovnání odpovědi GetTokenTariffs u běžného profilu a u profilu, který vrací lomené kupóny se druhou cenovou složkou.",

@@ -6622,9 +6622,11 @@ function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
     text: getSelectionItemText(item),
     chips: [
       item.identifierType || item.type || null,
+      item.customerProfileName || null,
       item.tariffName || null,
       item.maskedPan || item.cln || null,
       item.isPersonalized === "true" ? "personalizovaný" : item.isPersonalized === "false" ? "nepersonalizovaný" : null,
+      item.isDefault === "true" ? "výchozí profil" : null,
       item.zoneName ? `zóna ${item.zoneName}` : null,
       item.zones ? `zóny ${item.zones}` : null,
       item.customerProfileId2 ? "lomený tarif" : item.tariffZoneId ? "normální tarif" : null,
@@ -6636,6 +6638,7 @@ function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
       { label: "CouponID", value: item.couponId },
       { label: "TokenID", value: item.tokenId },
       { label: "CustomerID", value: item.customerId },
+      { label: "CustomerProfileID", value: item.customerProfileId },
       { label: "OrderID", value: item.orderId },
       { label: "Název", value: item.name },
       { label: "Tarif", value: item.tariffName || item.tariffId },
@@ -6651,6 +6654,9 @@ function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
       { label: "Cena v tarifu", value: item.displayPrice ? `${item.displayPrice} Kč` : null },
       { label: "Stav", value: item.customStatusName || item.status },
       { label: "Typ", value: item.identifierType },
+      { label: "CompanyID", value: item.companyId },
+      { label: "Aktivní profil", value: item.active === "true" ? "ano" : item.active === "false" ? "ne" : null },
+      { label: "Výchozí profil", value: item.isDefault === "true" ? "ano" : item.isDefault === "false" ? "ne" : null },
       { label: "Maskovaná hodnota", value: item.maskedPan },
       { label: "CLN", value: item.cln },
       { label: "Personalizovaný", value: item.isPersonalized === "true" ? "ano" : item.isPersonalized === "false" ? "ne" : null }
@@ -6660,6 +6666,7 @@ function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
 
 function getSelectionItemTitle(item) {
   return item.name
+    || item.customerProfileName
     || item.tariffName
     || item.maskedPan
     || item.cln
@@ -6677,6 +6684,13 @@ function getSelectionItemText(item) {
 
   if (item.identifierType) {
     return `Identifikátor ${item.identifierType}`;
+  }
+
+  if (item.customerProfileId) {
+    return [
+      `CustomerProfileID ${item.customerProfileId}`,
+      item.companyId ? `CompanyID ${item.companyId}` : null
+    ].filter(Boolean).join(", ");
   }
 
   if (item.customerId) {
