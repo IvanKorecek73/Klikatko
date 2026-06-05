@@ -15,6 +15,12 @@
       "file": "client-data.json"
     },
     {
+      "id": "pidlitacka-coupons",
+      "name": "PidLitacka - kupóny",
+      "description": "Scénáře pro preview a provedení přesunu kupónů mezi identifikátory aktuálního klienta.",
+      "file": "coupons.json"
+    },
+    {
       "id": "pidlitacka-parking-basic",
       "name": "PidLitacka - Parkování",
       "description": "První ruční pack pro základní parkovací scénáře nad veřejným API parkování.",

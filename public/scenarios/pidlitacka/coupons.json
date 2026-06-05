@@ -1,0 +1,486 @@
+{
+  "version": 1,
+  "name": "PidLitacka - kupóny",
+  "description": "Integrační scénáře nad klientskými kupónovými endpointy PidLitacka BE. První sada pokrývá preview a provedení přesunu kupónů mezi identifikátory.",
+  "scenarios": [
+    {
+      "id": "client-coupons-move-preview-selected-target",
+      "title": "Kupóny - náhled přesunu na vybraný identifikátor",
+      "description": "Načte identifikátory aktuálního klienta, vybere cílový identifikátor a zavolá preview přesunu kupónů ze všech ostatních identifikátorů.",
+      "requiresAuth": true,
+      "smoke": true,
+      "manualInputRequired": true,
+      "tags": ["profile", "coupons", "client-identifiers", "move-preview", "client-read"],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Náhled přesunu"
+      },
+      "instructions": [
+        "Nejprve se přihlaste v panelu Přístup jako aktivní klient s identifikátory v Core MOS.",
+        "V prvním kroku vyberte cílový identifikátor, na který se mají kupóny přesunout.",
+        "Preview má vrátit cílový identifikátor, seznam zdrojových identifikátorů s kupóny, celkový počet kupónů, případná varování a diagnostické kroky.",
+        "Prázdný seznam zdrojů a couponCount = 0 je platný výsledek, pokud ostatní identifikátory nemají žádné kupóny."
+      ],
+      "steps": [
+        {
+          "id": "client-coupons-preview-select-target",
+          "title": "Vybrat cílový identifikátor",
+          "description": "Načte identifikátory klienta a uloží vybraný identifierId jako cíl přesunu.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.identifiers", "lengthAtLeast": 1 }
+            ]
+          },
+          "selection": {
+            "sourcePath": "$.identifiers",
+            "buttonLabel": "Použít jako cíl",
+            "selectedButtonLabel": "Cíl vybrán",
+            "emptyTitle": "Žádné identifikátory",
+            "emptyText": "Aktuální klient nemá žádný identifikátor. Pro preview přesunu je potřeba alespoň jeden cílový identifikátor.",
+            "store": {
+              "pidCouponTargetIdentifierId": "$.identifierId",
+              "pidCouponTargetIdentifierName": "$.name",
+              "pidCouponTargetIdentifierType": "$.type",
+              "pidCouponTargetIdentifierMaskedValue": "$.maskedPan"
+            }
+          }
+        },
+        {
+          "id": "client-coupons-move-preview",
+          "title": "Načíst náhled přesunu kupónů",
+          "description": "Zavolá GET /v1/client/coupons/move-preview pro vybraný cílový identifikátor.",
+          "requiresContext": ["pidCouponTargetIdentifierId"],
+          "fields": [
+            {
+              "name": "targetIdentifierId",
+              "label": "Cílový identifierId",
+              "type": "number",
+              "value": "{{context.pidCouponTargetIdentifierId}}"
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons/move-preview?targetIdentifierId={{form.targetIdentifierId}}"
+          },
+          "remember": {
+            "pidCouponTargetIdentifierId": "{{form.targetIdentifierId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "Completed" },
+              { "path": "$.targetIdentifier.identifierId", "notEmpty": true },
+              { "path": "$.sources", "lengthAtLeast": 0 },
+              { "path": "$.couponCount", "notEmpty": true },
+              { "path": "$.warnings", "lengthAtLeast": 0 },
+              { "path": "$.steps", "lengthAtLeast": 3 },
+              { "path": "$.steps[0].name", "equals": "CustomerResolution" },
+              { "path": "$.steps[0].status", "equals": "Completed" },
+              { "path": "$.steps[1].name", "equals": "IdentifierResolution" },
+              { "path": "$.steps[1].status", "equals": "Completed" },
+              { "path": "$.steps[2].name", "equals": "GetCoupons" },
+              { "path": "$.steps[2].status", "equals": "Completed" }
+            ]
+          },
+          "selection": {
+            "sourcePath": "$.sources",
+            "buttonLabel": "Označit zdroj",
+            "selectedButtonLabel": "Zdroj označen",
+            "emptyTitle": "Žádné zdrojové kupóny",
+            "emptyText": "Preview nevrátilo žádný zdrojový identifikátor s kupóny. To je korektní stav, pokud klient nemá co přesouvat.",
+            "store": {
+              "pidCouponPreviewSourceIdentifierId": "$.identifier.identifierId",
+              "pidCouponPreviewSourceName": "$.identifier.name"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-coupons-move-execute-selected-target",
+      "title": "Kupóny - přesun všech kupónů na vybraný identifikátor",
+      "description": "Provede plný flow přesunu: výběr cílového identifikátoru, preview, POST /move a kontrolní preview po provedení.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["profile", "coupons", "client-identifiers", "move", "client-save"],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Přesun kupónů"
+      },
+      "instructions": [
+        "Používejte jen testovacího klienta. Tento scénář skutečně volá mutační endpoint a MOS se pokusí kupóny přesunout.",
+        "Vyberte cílový identifikátor, na který mají skončit kupóny ze všech ostatních identifikátorů aktuálního klienta.",
+        "Preview před přesunem je orientační pro FE dialog. Execute používá stejnou přípravu a volá MOS best-effort pro každý zdroj.",
+        "HTTP 200 znamená, že BE request zpracoval. Business výsledek čtěte z pole status: Completed, Failed nebo PartiallyCompleted.",
+        "Po execute se spustí kontrolní preview nad stejným cílem; pokud vše prošlo, obvykle už nebude co přesouvat."
+      ],
+      "steps": [
+        {
+          "id": "client-coupons-move-select-target",
+          "title": "Vybrat cílový identifikátor",
+          "description": "Načte identifikátory klienta a uloží vybraný identifierId jako cíl přesunu.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.identifiers", "lengthAtLeast": 1 }
+            ]
+          },
+          "selection": {
+            "sourcePath": "$.identifiers",
+            "buttonLabel": "Použít jako cíl",
+            "selectedButtonLabel": "Cíl vybrán",
+            "emptyTitle": "Žádné identifikátory",
+            "emptyText": "Aktuální klient nemá žádný identifikátor. Pro přesun kupónů je potřeba alespoň jeden cílový identifikátor.",
+            "store": {
+              "pidCouponMoveTargetIdentifierId": "$.identifierId",
+              "pidCouponMoveTargetIdentifierName": "$.name",
+              "pidCouponMoveTargetIdentifierType": "$.type",
+              "pidCouponMoveTargetIdentifierMaskedValue": "$.maskedPan"
+            }
+          }
+        },
+        {
+          "id": "client-coupons-move-preview-before-execute",
+          "title": "Načíst preview před přesunem",
+          "description": "Zobrazí, ze kterých zdrojů a jaké kupóny se bude BE pokoušet přesunout.",
+          "requiresContext": ["pidCouponMoveTargetIdentifierId"],
+          "fields": [
+            {
+              "name": "targetIdentifierId",
+              "label": "Cílový identifierId",
+              "type": "number",
+              "value": "{{context.pidCouponMoveTargetIdentifierId}}"
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons/move-preview?targetIdentifierId={{form.targetIdentifierId}}"
+          },
+          "remember": {
+            "pidCouponMoveTargetIdentifierId": "{{form.targetIdentifierId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "Completed" },
+              { "path": "$.targetIdentifier.identifierId", "notEmpty": true },
+              { "path": "$.sources", "lengthAtLeast": 0 },
+              { "path": "$.couponCount", "notEmpty": true },
+              { "path": "$.warnings", "lengthAtLeast": 0 },
+              { "path": "$.steps", "lengthAtLeast": 3 }
+            ]
+          }
+        },
+        {
+          "id": "client-coupons-move-execute",
+          "title": "Provést přesun kupónů",
+          "description": "Zavolá POST /v1/client/coupons/move. Business status může být Completed, Failed nebo PartiallyCompleted podle výsledků jednotlivých zdrojů v MOS.",
+          "requiresContext": ["pidCouponMoveTargetIdentifierId"],
+          "fields": [
+            {
+              "name": "targetIdentifierId",
+              "label": "Cílový identifierId",
+              "type": "number",
+              "value": "{{context.pidCouponMoveTargetIdentifierId}}"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/coupons/move",
+            "body": {
+              "targetIdentifierId": "{{form.targetIdentifierId}}"
+            }
+          },
+          "remember": {
+            "pidCouponMoveTargetIdentifierId": "{{form.targetIdentifierId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "notEmpty": true },
+              { "path": "$.targetIdentifierId", "notEmpty": true },
+              { "path": "$.moved", "lengthAtLeast": 0 },
+              { "path": "$.failed", "lengthAtLeast": 0 },
+              { "path": "$.steps", "lengthAtLeast": 4 },
+              { "path": "$.steps[0].name", "equals": "CustomerResolution" },
+              { "path": "$.steps[0].status", "equals": "Completed" },
+              { "path": "$.steps[1].name", "equals": "IdentifierResolution" },
+              { "path": "$.steps[1].status", "equals": "Completed" },
+              { "path": "$.steps[2].name", "equals": "GetCoupons" },
+              { "path": "$.steps[2].status", "equals": "Completed" }
+            ]
+          },
+          "selection": {
+            "sourcePath": "$.failed",
+            "buttonLabel": "Označit selhání",
+            "selectedButtonLabel": "Selhání označeno",
+            "emptyTitle": "Bez selhaných zdrojů",
+            "emptyText": "Backend nevrátil žádný selhaný zdroj. Pokud je status Completed, přesun proběhl bez business chyb.",
+            "store": {
+              "pidCouponFailedSourceIdentifierId": "$.sourceIdentifierId",
+              "pidCouponFailedSourceResultId": "$.resultId",
+              "pidCouponFailedSourceResultType": "$.resultType"
+            }
+          }
+        },
+        {
+          "id": "client-coupons-move-preview-after-execute",
+          "title": "Kontrolní preview po přesunu",
+          "description": "Znovu načte preview pro stejný cílový identifikátor. Po kompletním přesunu by už typicky neměly zbývat zdroje s kupóny.",
+          "requiresContext": ["pidCouponMoveTargetIdentifierId"],
+          "fields": [
+            {
+              "name": "targetIdentifierId",
+              "label": "Cílový identifierId",
+              "type": "number",
+              "value": "{{context.pidCouponMoveTargetIdentifierId}}"
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons/move-preview?targetIdentifierId={{form.targetIdentifierId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "Completed" },
+              { "path": "$.targetIdentifier.identifierId", "notEmpty": true },
+              { "path": "$.sources", "lengthAtLeast": 0 },
+              { "path": "$.warnings", "lengthAtLeast": 0 }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-coupons-move-empty-or-no-source",
+      "title": "Kupóny - přesun bez zdrojových kupónů",
+      "description": "Okrajový scénář pro klienta nebo cílový identifikátor, u kterého preview nevrací žádný zdroj s kupóny. Execute má skončit Completed a bez moved/failed položek.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["profile", "coupons", "move", "empty-state", "client-save"],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Prázdný přesun"
+      },
+      "instructions": [
+        "Použijte testovací účet, kde ostatní identifikátory nemají žádné kupóny, případně zvolte cílový identifikátor tak, aby nebylo co přesouvat.",
+        "První krok má potvrdit couponCount = 0.",
+        "Druhý krok ověřuje, že BE nevolá MOS move operaci a vrací Completed s prázdnými poli moved a failed."
+      ],
+      "steps": [
+        {
+          "id": "client-coupons-empty-preview",
+          "title": "Preview bez kupónů k přesunu",
+          "description": "Ručně zadejte cílový identifierId pro případ, kde se neočekávají žádné zdrojové kupóny.",
+          "fields": [
+            {
+              "name": "targetIdentifierId",
+              "label": "Cílový identifierId",
+              "type": "number",
+              "value": "",
+              "placeholder": "Např. 123456"
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons/move-preview?targetIdentifierId={{form.targetIdentifierId}}"
+          },
+          "remember": {
+            "pidCouponEmptyTargetIdentifierId": "{{form.targetIdentifierId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "Completed" },
+              { "path": "$.targetIdentifier.identifierId", "notEmpty": true },
+              { "path": "$.sources", "equals": [] },
+              { "path": "$.couponCount", "equals": 0 }
+            ]
+          }
+        },
+        {
+          "id": "client-coupons-empty-move",
+          "title": "Provést prázdný přesun",
+          "description": "Execute nad stejným cílem má vrátit Completed, prázdné moved/failed a krok MoveCouponFromToken ve stavu Skipped.",
+          "requiresContext": ["pidCouponEmptyTargetIdentifierId"],
+          "fields": [
+            {
+              "name": "targetIdentifierId",
+              "label": "Cílový identifierId",
+              "type": "number",
+              "value": "{{context.pidCouponEmptyTargetIdentifierId}}"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/coupons/move",
+            "body": {
+              "targetIdentifierId": "{{form.targetIdentifierId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "Completed" },
+              { "path": "$.targetIdentifierId", "notEmpty": true },
+              { "path": "$.moved", "equals": [] },
+              { "path": "$.failed", "equals": [] },
+              { "path": "$.steps[3].name", "equals": "MoveCouponFromToken" },
+              { "path": "$.steps[3].status", "equals": "Skipped" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-coupons-move-target-not-found",
+      "title": "Kupóny - neexistující cílový identifikátor",
+      "description": "Negativní scénář ověřující řízenou chybu, pokud targetIdentifierId nepatří aktuálnímu klientovi.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": false,
+      "tags": ["profile", "coupons", "move-preview", "validation", "negative"],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Neexistující cíl"
+      },
+      "instructions": [
+        "Scénář záměrně posílá velmi vysoké targetIdentifierId.",
+        "Správný výsledek je HTTP 400 s FE-friendly chybou, nikoli raw MOS text."
+      ],
+      "steps": [
+        {
+          "id": "client-coupons-preview-target-not-found",
+          "title": "Preview s neexistujícím cílem",
+          "description": "Backend má cílový identifikátor odmítnout ještě před pokusem o přesun.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons/move-preview?targetIdentifierId=999999999"
+          },
+          "expected": {
+            "status": 400,
+            "outcome": "expectedError",
+            "assertions": [
+              { "path": "$.title", "notEmpty": true },
+              { "path": "$.detail", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "client-coupons-move-target-not-found",
+          "title": "Execute s neexistujícím cílem",
+          "description": "Stejnou řízenou chybu má vrátit i mutační endpoint.",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/coupons/move",
+            "body": {
+              "targetIdentifierId": 999999999
+            }
+          },
+          "expected": {
+            "status": 400,
+            "outcome": "expectedError",
+            "assertions": [
+              { "path": "$.title", "notEmpty": true },
+              { "path": "$.detail", "notEmpty": true }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-coupons-move-validation",
+      "title": "Kupóny - validace targetIdentifierId",
+      "description": "Negativní scénář pokrývající validační chyby pro chybějící, nulový a záporný targetIdentifierId.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": false,
+      "tags": ["profile", "coupons", "validation", "negative"],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Validace"
+      },
+      "instructions": [
+        "Scénář záměrně posílá neplatné hodnoty targetIdentifierId.",
+        "Správný výsledek je HTTP 400 z validační vrstvy nebo model bindingu."
+      ],
+      "steps": [
+        {
+          "id": "client-coupons-preview-missing-target",
+          "title": "Preview bez targetIdentifierId",
+          "description": "Chybějící query parametr se namapuje na 0 a FluentValidation ho má odmítnout.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons/move-preview"
+          },
+          "expected": {
+            "status": 400,
+            "outcome": "expectedError"
+          }
+        },
+        {
+          "id": "client-coupons-preview-zero-target",
+          "title": "Preview s targetIdentifierId = 0",
+          "description": "Nulový cílový identifikátor je neplatný.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons/move-preview?targetIdentifierId=0"
+          },
+          "expected": {
+            "status": 400,
+            "outcome": "expectedError"
+          }
+        },
+        {
+          "id": "client-coupons-move-zero-target",
+          "title": "Execute s targetIdentifierId = 0",
+          "description": "Nulový cílový identifikátor v POST body je neplatný.",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/coupons/move",
+            "body": {
+              "targetIdentifierId": 0
+            }
+          },
+          "expected": {
+            "status": 400,
+            "outcome": "expectedError"
+          }
+        },
+        {
+          "id": "client-coupons-move-negative-target",
+          "title": "Execute se záporným targetIdentifierId",
+          "description": "Záporný cílový identifikátor v POST body je neplatný.",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/coupons/move",
+            "body": {
+              "targetIdentifierId": -1
+            }
+          },
+          "expected": {
+            "status": 400,
+            "outcome": "expectedError"
+          }
+        }
+      ]
+    }
+  ]
+}
