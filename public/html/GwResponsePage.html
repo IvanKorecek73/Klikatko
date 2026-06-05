@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gateway / MOS návratová URL</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6f8;
+      --paper: #ffffff;
+      --text: #18212a;
+      --muted: #64717d;
+      --line: #d8e0e6;
+      --accent: #0f766e;
+      --accent-dark: #0b5f58;
+      --code-bg: #eef3f6;
+      --warn-bg: #fff7df;
+      --warn-line: #b7791f;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Arial, sans-serif;
+      line-height: 1.5;
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 28px 18px 44px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 12px;
+      color: var(--muted);
+    }
+
+    code,
+    pre {
+      font-family: Consolas, "Cascadia Mono", monospace;
+    }
+
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      margin-top: 16px;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    button {
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 600;
+      min-height: 34px;
+      padding: 6px 10px;
+    }
+
+    button:hover {
+      background: var(--accent-dark);
+      border-color: var(--accent-dark);
+    }
+
+    button.secondary {
+      background: #fff;
+      color: var(--accent);
+    }
+
+    button.secondary:hover {
+      background: #e9f5f3;
+      color: var(--accent-dark);
+    }
+
+    pre {
+      max-height: 260px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: var(--code-bg);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      margin: 8px 0 0;
+      padding: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid var(--line);
+      padding: 9px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    td.key {
+      width: 28%;
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    td.value {
+      width: 52%;
+      word-break: break-word;
+    }
+
+    td.actions {
+      width: 20%;
+      min-width: 142px;
+    }
+
+    .empty {
+      border-left: 4px solid var(--warn-line);
+      background: var(--warn-bg);
+      border-radius: 4px;
+      color: #3b2a0a;
+      padding: 12px 14px;
+    }
+
+    .hint {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .copy-status {
+      color: var(--accent);
+      font-size: 14px;
+      min-height: 22px;
+      padding-top: 4px;
+    }
+
+    @media (max-width: 760px) {
+      h1 {
+        font-size: 24px;
+      }
+
+      table,
+      thead,
+      tbody,
+      tr,
+      th,
+      td {
+        display: block;
+        width: 100%;
+      }
+
+      thead {
+        display: none;
+      }
+
+      tr {
+        border-bottom: 1px solid var(--line);
+        padding: 10px 0;
+      }
+
+      td {
+        border: 0;
+        padding: 4px 0;
+      }
+
+      td.key,
+      td.value,
+      td.actions {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Gateway / MOS návratová URL</h1>
+    <p>
+      Tato stránka zobrazí celou návratovou URL, query string, hash fragment a jednotlivé položky
+      v tabulce. Hodí se pro návraty z platební brány, aktivační odkazy z MOS e-mailů a obnovu nebo změnu hesla.
+    </p>
+    <p class="hint">
+      Použití jako redirect URL: <code id="recommended-url"></code>
+    </p>
+  </header>
+
+  <section class="card">
+    <h2>Celá URL</h2>
+    <pre id="full-url"></pre>
+    <div class="toolbar">
+      <button type="button" data-copy-target="full-url">Kopírovat celou URL</button>
+      <button type="button" class="secondary" data-copy-target="raw-query">Kopírovat query</button>
+      <button type="button" class="secondary" data-copy-target="raw-fragment">Kopírovat hash</button>
+    </div>
+    <div class="copy-status" id="copy-status" role="status"></div>
+  </section>
+
+  <section class="card">
+    <h2>Query string</h2>
+    <pre id="raw-query"></pre>
+  </section>
+
+  <section class="card">
+    <h2>Hash fragment</h2>
+    <pre id="raw-fragment"></pre>
+  </section>
+
+  <section class="card">
+    <h2>Položky</h2>
+    <div id="params"></div>
+  </section>
+</main>
+
+<script>
+  const fullUrlElement = document.getElementById("full-url");
+  const rawQueryElement = document.getElementById("raw-query");
+  const rawFragmentElement = document.getElementById("raw-fragment");
+  const paramsElement = document.getElementById("params");
+  const copyStatusElement = document.getElementById("copy-status");
+  const recommendedUrlElement = document.getElementById("recommended-url");
+
+  const url = new URL(window.location.href);
+  const rawQuery = url.search.startsWith("?") ? url.search.slice(1) : url.search;
+  const rawFragment = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+  const recommendedUrl = `${url.origin}${url.pathname}`;
+
+  fullUrlElement.textContent = window.location.href;
+  rawQueryElement.textContent = rawQuery || "(query string je prázdný)";
+  rawFragmentElement.textContent = rawFragment || "(hash fragment je prázdný)";
+  recommendedUrlElement.textContent = recommendedUrl;
+
+  const rows = [
+    ...readParams(rawQuery, "query"),
+    ...readParams(rawFragment, "hash")
+  ];
+
+  renderParams(rows);
+
+  document.querySelectorAll("[data-copy-target]").forEach(button => {
+    button.addEventListener("click", () => {
+      const target = document.getElementById(button.dataset.copyTarget);
+      copyText(target?.textContent || "");
+    });
+  });
+
+  function readParams(rawValue, source) {
+    if (!rawValue) {
+      return [];
+    }
+
+    const params = new URLSearchParams(rawValue);
+    const result = [];
+
+    for (const [key, value] of params.entries()) {
+      result.push({
+        source,
+        key,
+        value
+      });
+    }
+
+    return result;
+  }
+
+  function renderParams(rows) {
+    if (rows.length === 0) {
+      paramsElement.innerHTML = `
+        <div class="empty">
+          V URL nejsou žádné query ani hash parametry. Po návratu z brány nebo MOS e-mailu by se zde měly zobrazit jednotlivé hodnoty.
+        </div>
+      `;
+      return;
+    }
+
+    const tableRows = rows.map((row, index) => `
+      <tr>
+        <td class="key">${escapeHtml(row.key)} <span class="hint">(${escapeHtml(row.source)})</span></td>
+        <td class="value"><code>${escapeHtml(row.value)}</code></td>
+        <td class="actions">
+          <button type="button" class="secondary" data-copy-param="${index}">Kopírovat hodnotu</button>
+        </td>
+      </tr>
+    `).join("");
+
+    paramsElement.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Klíč</th>
+            <th>Hodnota</th>
+            <th>Akce</th>
+          </tr>
+        </thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+    `;
+
+    paramsElement.querySelectorAll("[data-copy-param]").forEach(button => {
+      button.addEventListener("click", () => {
+        copyText(rows[Number(button.dataset.copyParam)]?.value || "");
+      });
+    });
+  }
+
+  async function copyText(text) {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const input = document.createElement("textarea");
+        input.value = text;
+        input.style.position = "fixed";
+        input.style.left = "-9999px";
+        document.body.appendChild(input);
+        input.focus();
+        input.select();
+        document.execCommand("copy");
+        document.body.removeChild(input);
+      }
+
+      copyStatusElement.textContent = "Zkopírováno.";
+      window.setTimeout(() => {
+        copyStatusElement.textContent = "";
+      }, 1800);
+    } catch (error) {
+      copyStatusElement.textContent = `Kopírování selhalo: ${error.message}`;
+    }
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll("\"", "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+</script>
+</body>
+</html>

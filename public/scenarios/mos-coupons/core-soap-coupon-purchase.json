@@ -387,6 +387,451 @@
       ]
     },
     {
+      "id": "mos-coupon-mobile-card-purchase-soap",
+      "title": "MOS - nákup kupónu z mobilní aplikace",
+      "description": "Mobilní varianta nákupu kupónu přímo přes Core MOS SOAP API: přihlášení, výběr tokenu a tarifu, založení objednávky, zahájení platby kartou přes bránu, ruční zpracování návratu z brány a kontrola kupónu.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["coupons", "soap", "core-mos", "mobile-app", "payment-gateway", "purchase"],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Mobilní nákup přes platební bránu"
+      },
+      "instructions": [
+        "Tento scénář je MOBILNÍ varianta nákupu. Stávající scénář MOS - nákup testovacího kupónu je pobočkový a používá SetOrderPaid.",
+        "V panelu Přístup vložte Core MOS ServiceKey.",
+        "Ve scénáři zadejte MOS uživatele a heslo. Po přihlášení se SessionID uloží do kontextu.",
+        "Vyberte token a konkrétní tarifní zónu stejně jako u pobočkového scénáře.",
+        "AddItemToOrder zde posílá IsTest=false, protože mobilní nákup simuluje skutečný online nákup. Pro bezpečný test použijte PRE-CORE a testovací účet/token.",
+        "Mobilní platba se nepotvrzuje přes SetOrderPaid. Scénář používá InitiateOrderPayment a potom ruční ProcessPaymentGatewayResult po návratu z brány.",
+        "Varianty s uloženou kartou, Google Pay a Apple Pay vyžadují PaymentGWToken nebo wallet payload z klienta. Jsou zdokumentované v public/http/nakup-kuponu-mobil.http, ale tento Klikátko scénář pokrývá kartový redirect happy path."
+      ],
+      "steps": [
+        {
+          "id": "mos-mobile-coupon-authenticate-login",
+          "title": "Přihlásit se do Core MOS",
+          "description": "Zavolá AuthenticateLogin a uloží SessionID pro další SOAP volání.",
+          "fields": [
+            {
+              "name": "userName",
+              "label": "MOS uživatel",
+              "type": "text",
+              "value": "",
+              "placeholder": "MOS účet pro mobilní nákup"
+            },
+            {
+              "name": "password",
+              "label": "Heslo",
+              "type": "password",
+              "value": "",
+              "placeholder": "Heslo MOS účtu"
+            },
+            {
+              "name": "codeSms",
+              "label": "SMS kód",
+              "type": "text",
+              "value": "",
+              "placeholder": "Volitelné"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/AuthenticateLogin\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AuthenticateLogin xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <Password>{{form.password}}</Password>\n      <CodeSMS>{{form.codeSms}}</CodeSMS>\n    </AuthenticateLogin>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<AuthenticateLoginResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "Přihlášení do Core MOS neproběhlo úspěšně."
+              }
+            ]
+          },
+          "extractRegex": {
+            "mosMobileCouponSessionId": "<SessionID>([^<]+)</SessionID>"
+          }
+        },
+        {
+          "id": "mos-mobile-coupon-get-tokens",
+          "title": "Vybrat identifikátor",
+          "description": "Načte dostupné tokeny/identifikátory přihlášeného MOS účtu. Vybraný identifikátor se použije pro zjištění tarifů a nákup kupónu.",
+          "requiresContext": ["mosMobileCouponSessionId"],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokens\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokens xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosMobileCouponSessionId}}</SessionID>\n      <GetOnlyAvailableTokens>true</GetOnlyAvailableTokens>\n    </GetTokens>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<GetTokensResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "MOS nevrátil korektní seznam identifikátorů."
+              }
+            ]
+          },
+          "selection": {
+            "buttonLabel": "Použít pro mobilní nákup",
+            "selectedButtonLabel": "Identifikátor vybrán",
+            "sourceRegex": {
+              "itemPattern": "<TokenEx[^>]*>([\\s\\S]*?)</TokenEx>",
+              "fields": {
+                "tokenId": "<TokenID>([^<]+)</TokenID>",
+                "name": "<Name>([^<]*)</Name>",
+                "token": "<Token>([^<]*)</Token>",
+                "customerId": "<CustomerIDx>([^<]+)</CustomerIDx>",
+                "identifierType": "<IdentifierType>([^<]*)</IdentifierType>",
+                "maskedPan": "<MaskedPAN>([^<]*)</MaskedPAN>",
+                "cln": "<CLN>([^<]*)</CLN>",
+                "active": "<Active>([^<]+)</Active>",
+                "isPersonalized": "<IsPersonalized>([^<]*)</IsPersonalized>"
+              }
+            },
+            "store": {
+              "mosMobileCouponTokenId": "$.tokenId",
+              "mosMobileCouponCustomerId": "$.customerId"
+            }
+          }
+        },
+        {
+          "id": "mos-mobile-coupon-get-token-tariffs",
+          "title": "Vybrat tarif a zónu",
+          "description": "Načte tarify a zóny pro vybraný token. V Mobilu vyberte konkrétní kombinaci tarifního pásma a zóny.",
+          "requiresContext": ["mosMobileCouponSessionId", "mosMobileCouponTokenId"],
+          "fields": [
+            {
+              "name": "tokenId",
+              "label": "TokenID",
+              "type": "number",
+              "value": "{{context.mosMobileCouponTokenId}}",
+              "placeholder": "ID tokenu / identifikátoru"
+            },
+            {
+              "name": "startDate",
+              "label": "StartDate",
+              "type": "date",
+              "value": "{{today}}"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokenTariffs\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokenTariffs xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosMobileCouponSessionId}}</SessionID>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <StartDate>{{form.startDate}}</StartDate>\n    </GetTokenTariffs>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "remember": {
+            "mosMobileCouponTokenId": "{{form.tokenId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<GetTokenTariffsResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "MOS nevrátil korektní tarify pro vybraný token."
+              }
+            ]
+          },
+          "selection": {
+            "buttonLabel": "Použít tarif",
+            "selectedButtonLabel": "Tarif vybrán",
+            "emptyTitle": "Žádné tarifní pásmo",
+            "emptyText": "MOS nevrátil žádnou použitelnou kombinaci tarifu a zóny. Bez platné kombinace TariffID, TariffZoneID a ceny nejde pokračovat.",
+            "sourceRegex": {
+              "parser": "mosTariffZones"
+            },
+            "store": {
+              "mosMobileCouponSuggestedTariffId": "$.tariffId",
+              "mosMobileCouponCustomerId": "$.customerId",
+              "mosMobileCouponSuggestedZoneId": "$.tariffZoneId",
+              "mosMobileCouponSuggestedZoneName": "$.zoneName",
+              "mosMobileCouponSuggestedDisplayPrice": "$.displayPrice",
+              "mosMobileCouponSuggestedPrice": "$.price",
+              "mosMobileCouponSuggestedValidFrom": "$.validFrom",
+              "mosMobileCouponSuggestedValidTill": "$.validTill"
+            }
+          }
+        },
+        {
+          "id": "mos-mobile-coupon-add-item-to-order",
+          "title": "Přidat kupón do objednávky",
+          "description": "Zavolá AddItemToOrder s NewCoupon a IsTest=false. Pokud OrderID není zadán, MOS vytvoří novou objednávku pro online platbu.",
+          "requiresContext": ["mosMobileCouponSessionId", "mosMobileCouponTokenId", "mosMobileCouponSuggestedTariffId", "mosMobileCouponSuggestedZoneId", "mosMobileCouponSuggestedPrice"],
+          "fields": [
+            {
+              "name": "customerId",
+              "label": "CustomerID",
+              "type": "number",
+              "value": "{{context.mosMobileCouponCustomerId}}",
+              "placeholder": "ID zákazníka z vybraného identifikátoru"
+            },
+            {
+              "name": "tokenId",
+              "label": "TokenID",
+              "type": "number",
+              "value": "{{context.mosMobileCouponTokenId}}"
+            },
+            {
+              "name": "tariffId",
+              "label": "TariffID",
+              "type": "number",
+              "value": "{{context.mosMobileCouponSuggestedTariffId}}"
+            },
+            {
+              "name": "tariffZoneId",
+              "label": "TariffZoneID",
+              "type": "number",
+              "value": "{{context.mosMobileCouponSuggestedZoneId}}"
+            },
+            {
+              "name": "price",
+              "label": "Cena",
+              "type": "number",
+              "value": "{{context.mosMobileCouponSuggestedPrice}}",
+              "step": 0.01,
+              "placeholder": "Cena z vybrané kombinace tarif + zóna"
+            },
+            {
+              "name": "description",
+              "label": "Popis kupónu",
+              "type": "text",
+              "value": "Kupon zona P - mobilni nakup",
+              "placeholder": "Description je v Core MOS povinný údaj pro vložení kupónu"
+            },
+            {
+              "name": "validFrom",
+              "label": "ValidFrom",
+              "type": "text",
+              "value": "{{context.mosMobileCouponSuggestedValidFrom}}"
+            },
+            {
+              "name": "validTill",
+              "label": "ValidTill",
+              "type": "text",
+              "value": "{{context.mosMobileCouponSuggestedValidTill}}"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/AddItemToOrder\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AddItemToOrder xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosMobileCouponSessionId}}</SessionID>\n      <OrderID xsi:nil=\"true\" />\n      <NewCoupon>\n        <CustomerID>{{form.customerId}}</CustomerID>\n        <TariffID>{{form.tariffId}}</TariffID>\n        <TariffZoneIDs>\n          <int>{{form.tariffZoneId}}</int>\n        </TariffZoneIDs>\n        <Price>{{form.price}}</Price>\n        <Description>{{form.description}}</Description>\n        <ValidFrom>{{form.validFrom}}</ValidFrom>\n        <ValidTill>{{form.validTill}}</ValidTill>\n        <IsTest>false</IsTest>\n      </NewCoupon>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <ExternalUserID xsi:nil=\"true\" />\n      <ExternalDeskID xsi:nil=\"true\" />\n    </AddItemToOrder>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "remember": {
+            "mosMobileCouponPrice": "{{form.price}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<AddItemToOrderResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "MOS objednávku nevytvořil. Zkontrolujte kombinaci tarifu, zóny a ceny v odpovědi AddItemToOrder."
+              },
+              {
+                "regex": "<OrderID>[1-9][0-9]*</OrderID>",
+                "label": "OrderID > 0",
+                "message": "MOS nevrátil platné OrderID. Platební krok nesmí pokračovat."
+              },
+              {
+                "regex": "<CouponID>[1-9][0-9]*</CouponID>",
+                "label": "CouponID > 0",
+                "message": "MOS nevrátil platné CouponID. Kupón nebyl vložen do objednávky."
+              }
+            ]
+          },
+          "extractRegex": {
+            "mosMobileCouponOrderId": "<OrderID>([1-9][0-9]*)</OrderID>",
+            "mosMobileCouponCouponId": "<CouponID>([1-9][0-9]*)</CouponID>"
+          }
+        },
+        {
+          "id": "mos-mobile-coupon-initiate-card-payment",
+          "title": "Zahájit platbu kartou přes bránu",
+          "description": "Zavolá InitiateOrderPayment. MOS má vrátit PaymentGatewayRedirectURL, kterou mobil otevře pro zaplacení kartou.",
+          "requiresContext": ["mosMobileCouponSessionId", "mosMobileCouponOrderId"],
+          "fields": [
+            {
+              "name": "orderId",
+              "label": "OrderID",
+              "type": "number",
+              "value": "{{context.mosMobileCouponOrderId}}"
+            },
+            {
+              "name": "eshopRedirectUrl",
+              "label": "EshopRedirectUrl",
+              "type": "text",
+              "value": "http://localhost:5096/html/GwResponsePage.html",
+              "placeholder": "V produkci deep link nebo návratová URL mobilní aplikace"
+            },
+            {
+              "name": "language",
+              "label": "Jazyk",
+              "type": "text",
+              "value": "cs"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/InitiateOrderPayment\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <InitiateOrderPayment xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosMobileCouponSessionId}}</SessionID>\n      <OrderID>{{form.orderId}}</OrderID>\n      <EshopRedirectUrl>{{form.eshopRedirectUrl}}</EshopRedirectUrl>\n      <Language>{{form.language}}</Language>\n    </InitiateOrderPayment>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<InitiateOrderPaymentResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "MOS nezahájil platbu přes platební bránu."
+              },
+              {
+                "regex": "<PaymentGatewayRedirectURL>[^<]+</PaymentGatewayRedirectURL>",
+                "label": "PaymentGatewayRedirectURL",
+                "message": "MOS nevrátil URL platební brány."
+              }
+            ]
+          },
+          "extractRegex": {
+            "mosMobileCouponPaymentId": "<PaymentID>([^<]+)</PaymentID>",
+            "mosMobileCouponGatewayUrl": "<PaymentGatewayRedirectURL>([^<]+)</PaymentGatewayRedirectURL>"
+          }
+        },
+        {
+          "id": "mos-mobile-coupon-process-card-payment-result",
+          "title": "Zpracovat návrat z platební brány",
+          "description": "Po ručním průchodu platební bránou vložte PaymentGWData z návratu na EshopRedirectUrl. Bez skutečných dat brány tento krok nelze úspěšně dokončit.",
+          "requiresContext": ["mosMobileCouponSessionId"],
+          "fields": [
+            {
+              "name": "paymentGWData",
+              "label": "PaymentGWData",
+              "type": "textarea",
+              "value": "",
+              "placeholder": "Data předaná platební bránou při návratu na EshopRedirectUrl"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/ProcessPaymentGatewayResult\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <ProcessPaymentGatewayResult xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosMobileCouponSessionId}}</SessionID>\n      <PaymentGWData>{{form.paymentGWData}}</PaymentGWData>\n    </ProcessPaymentGatewayResult>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<ProcessPaymentGatewayResultResult>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "MOS nezpracoval výsledek platební brány. Ověřte PaymentGWData z návratu brány."
+              }
+            ]
+          }
+        },
+        {
+          "id": "mos-mobile-coupon-get-coupons",
+          "title": "Zobrazit kupóny na identifikátoru",
+          "description": "Načte kupóny přiřazené k vybranému TokenID, aby bylo možné ověřit, že mobilní online nákup doběhl.",
+          "requiresContext": ["mosMobileCouponSessionId", "mosMobileCouponTokenId"],
+          "fields": [
+            {
+              "name": "tokenId",
+              "label": "TokenID",
+              "type": "number",
+              "value": "{{context.mosMobileCouponTokenId}}"
+            },
+            {
+              "name": "loadAllCoupons",
+              "label": "Rozsah",
+              "type": "select",
+              "value": "true",
+              "options": [
+                { "value": "true", "text": "Všechny kupóny" },
+                { "value": "false", "text": "Jen aktuálně dostupné" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetCoupons\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetCoupons xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosMobileCouponSessionId}}</SessionID>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <LoadAllCoupons>{{form.loadAllCoupons}}</LoadAllCoupons>\n    </GetCoupons>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<GetCouponsResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "MOS nevrátil korektní odpověď při načtení kupónů."
+              },
+              {
+                "regex": "<CouponInfoRecord",
+                "label": "alespoň jeden kupón",
+                "message": "Pro vybraný identifikátor nebyl nalezen žádný kupón. Nákup tedy ve skutečnosti nedoběhl."
+              }
+            ]
+          },
+          "selection": {
+            "buttonLabel": "Označit kupón",
+            "selectedButtonLabel": "Označeno",
+            "emptyTitle": "Žádné kupóny",
+            "emptyText": "Pro vybraný identifikátor MOS nevrátil žádný kupón. Zkontrolujte TokenID a případně přepněte rozsah na všechny kupóny.",
+            "sourceRegex": {
+              "itemPattern": "<CouponInfoRecord[^>]*>([\\s\\S]*?)</CouponInfoRecord>",
+              "fields": {
+                "couponId": "<CouponID>([^<]+)</CouponID>",
+                "customerId": "<CustomerID>([^<]+)</CustomerID>",
+                "customStatusName": "<CustomStatusName>([^<]*)</CustomStatusName>",
+                "status": "<Status>([^<]+)</Status>",
+                "tariffId": "<TariffID>([^<]+)</TariffID>",
+                "tariffName": "<TariffName>([^<]*)</TariffName>",
+                "name": "<Name>([^<]*)</Name>",
+                "dateTimeFrom": "<DateTimeFrom>([^<]+)</DateTimeFrom>",
+                "dateTimeTo": "<DateTimeTo>([^<]+)</DateTimeTo>",
+                "zones": "<Zones>([^<]*)</Zones>",
+                "price": "<Price>([^<]+)</Price>",
+                "orderId": "<OrderID>([^<]+)</OrderID>",
+                "tokenId": "<TokenID>([^<]+)</TokenID>",
+                "tokenName": "<TokenName>([^<]*)</TokenName>"
+              }
+            },
+            "store": {
+              "mosMobileCouponDisplayedCouponId": "$.couponId"
+            }
+          }
+        }
+      ]
+    },
+    {
       "id": "mos-token-coupons-overview-soap",
       "title": "MOS - identifikátory a jejich kupóny",
       "description": "Přehledový diagnostický scénář: načte všechny dostupné identifikátory přihlášeného MOS účtu a u každého zobrazí přiřazené kupóny.",

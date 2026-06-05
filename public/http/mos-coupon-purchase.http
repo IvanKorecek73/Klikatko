@@ -1,0 +1,178 @@
+### MOS - nákup testovacího kupónu přes Core SOAP API
+#
+# Použití:
+# 1. Doplňte serviceKey, userName a password.
+# 2. Spusťte AuthenticateLogin a z odpovědi zkopírujte SessionID do @sessionId.
+# 3. Spusťte GetTokens a vyberte TokenID + CustomerID.
+# 4. Spusťte GetTokenTariffs a vyberte kombinaci TariffID + TariffZoneID + cenu + platnost.
+# 5. Spusťte AddItemToOrder. Z odpovědi zkopírujte OrderID.
+# 6. Spusťte SetOrderPaid.
+# 7. Spusťte GetCoupons a ověřte, že kupón vznikl.
+#
+# Důležité:
+# - SOAP endpoint vrací HTTP 200 i pro business chyby. Vždy kontrolujte Result/ID v těle.
+# - ServiceKey se neposílá jako HTTP hlavička, ale jako XML element v SOAP těle.
+# - SOAPAction i XML namespace používají "globdata".
+# - IsTest=true vytvoří testovací kupón vyloučený ze statistik/reportů.
+# - PaymentType používejte 3 nebo 4. Hodnoty 1 a 2 patří platební bráně.
+# - Pro samostatnou zónu P může být v PRE-CORE cena pro nákup 0.0000.
+# - Pokud AddItemToOrder vrátí Result/ID != 0 nebo OrderID = 0, nepokračujte na SetOrderPaid.
+
+@baseUrl = https://pre-core.mos.oict.cz
+@serviceKey =
+@userName =
+@password =
+@codeSms =
+
+### Hodnoty doplňované postupně z odpovědí
+@sessionId =
+@tokenId =
+@customerId =
+@tariffId =
+@tariffZoneId =
+@price = 0.0000
+@validFrom =
+@validTill =
+@description = Test kupon - zona P
+@orderId =
+@paymentType = 3
+@loadAllCoupons = true
+@startDate = 2026-06-05
+
+### 1) Přihlášení do Core MOS
+# Očekáváno: HTTP 200 a v těle AuthenticateLoginResult/Result/ID = 0.
+# Z odpovědi zkopírujte SessionID do @sessionId.
+POST {{baseUrl}}/services/MOSservice.asmx
+Content-Type: text/xml; charset=utf-8
+SOAPAction: "globdata/AuthenticateLogin"
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <AuthenticateLogin xmlns="globdata">
+      <ServiceKey>{{serviceKey}}</ServiceKey>
+      <UserName>{{userName}}</UserName>
+      <Password>{{password}}</Password>
+      <CodeSMS>{{codeSms}}</CodeSMS>
+    </AuthenticateLogin>
+  </soap:Body>
+</soap:Envelope>
+
+### 2) Načtení dostupných tokenů / identifikátorů
+# Očekáváno: HTTP 200 a GetTokensResult/Result/ID = 0.
+# Vyberte TokenEx, na který chcete kupón koupit.
+# Z vybrané položky zkopírujte TokenID do @tokenId a CustomerIDx do @customerId.
+POST {{baseUrl}}/services/MOSservice.asmx
+Content-Type: text/xml; charset=utf-8
+SOAPAction: "globdata/GetTokens"
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <GetTokens xmlns="globdata">
+      <ServiceKey>{{serviceKey}}</ServiceKey>
+      <SessionID>{{sessionId}}</SessionID>
+      <GetOnlyAvailableTokens>true</GetOnlyAvailableTokens>
+    </GetTokens>
+  </soap:Body>
+</soap:Envelope>
+
+### 3) Zjištění tarifů pro vybraný token
+# Očekáváno: HTTP 200 a GetTokenTariffsResult/Result/ID = 0.
+# Vyberte konkrétní kombinaci tarifu a zóny.
+# Pro zónu P v testovaném toku se typicky posílá @price = 0.0000.
+# Pro jiné zóny použijte cenu vrácenou MOSem pro konkrétní vybranou zónu.
+# Z odpovědi doplňte @tariffId, @tariffZoneId, @price, @validFrom a @validTill.
+POST {{baseUrl}}/services/MOSservice.asmx
+Content-Type: text/xml; charset=utf-8
+SOAPAction: "globdata/GetTokenTariffs"
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <GetTokenTariffs xmlns="globdata">
+      <ServiceKey>{{serviceKey}}</ServiceKey>
+      <SessionID>{{sessionId}}</SessionID>
+      <TokenID>{{tokenId}}</TokenID>
+      <StartDate>{{startDate}}</StartDate>
+    </GetTokenTariffs>
+  </soap:Body>
+</soap:Envelope>
+
+### 4) Přidání testovacího kupónu do objednávky
+# Očekáváno: HTTP 200, AddItemToOrderResult/Result/ID = 0 a OrderID > 0.
+# OrderID xsi:nil="true" znamená: založ novou objednávku.
+# IsTest=true znamená: testovací kupón mimo statistiky a reporty.
+# Description ponechte vyplněné. Bez něj může MOS vytvořit prázdnou objednávku a vrátit chybu.
+# Z odpovědi zkopírujte OrderID do @orderId.
+POST {{baseUrl}}/services/MOSservice.asmx
+Content-Type: text/xml; charset=utf-8
+SOAPAction: "globdata/AddItemToOrder"
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <AddItemToOrder xmlns="globdata">
+      <ServiceKey>{{serviceKey}}</ServiceKey>
+      <SessionID>{{sessionId}}</SessionID>
+      <OrderID xsi:nil="true" />
+      <NewCoupon>
+        <CustomerID>{{customerId}}</CustomerID>
+        <TariffID>{{tariffId}}</TariffID>
+        <TariffZoneIDs>
+          <int>{{tariffZoneId}}</int>
+        </TariffZoneIDs>
+        <Price>{{price}}</Price>
+        <Description>{{description}}</Description>
+        <ValidFrom>{{validFrom}}</ValidFrom>
+        <ValidTill>{{validTill}}</ValidTill>
+        <IsTest>true</IsTest>
+      </NewCoupon>
+      <TokenID>{{tokenId}}</TokenID>
+      <ExternalUserID xsi:nil="true" />
+      <ExternalDeskID xsi:nil="true" />
+    </AddItemToOrder>
+  </soap:Body>
+</soap:Envelope>
+
+### 5) Potvrzení platby objednávky
+# Očekáváno: HTTP 200 a SetOrderPaidResult/ID = 0.
+# @paymentType:
+# - 3 = karta v kanceláři
+# - 4 = hotovost
+# @price musí odpovídat ceně poslané v AddItemToOrder.
+POST {{baseUrl}}/services/MOSservice.asmx
+Content-Type: text/xml; charset=utf-8
+SOAPAction: "globdata/SetOrderPaid"
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <SetOrderPaid xmlns="globdata">
+      <ServiceKey>{{serviceKey}}</ServiceKey>
+      <SessionID>{{sessionId}}</SessionID>
+      <OrderID>{{orderId}}</OrderID>
+      <PaymentType>{{paymentType}}</PaymentType>
+      <OrderPrice>{{price}}</OrderPrice>
+    </SetOrderPaid>
+  </soap:Body>
+</soap:Envelope>
+
+### 6) Kontrola kupónů na tokenu
+# Očekáváno: HTTP 200, GetCouponsResult/Result/ID = 0 a v odpovědi CouponInfoRecord.
+# Zkontrolujte CouponID, OrderID, tarif, zóny a platnost nově vytvořeného kupónu.
+POST {{baseUrl}}/services/MOSservice.asmx
+Content-Type: text/xml; charset=utf-8
+SOAPAction: "globdata/GetCoupons"
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <GetCoupons xmlns="globdata">
+      <ServiceKey>{{serviceKey}}</ServiceKey>
+      <SessionID>{{sessionId}}</SessionID>
+      <TokenID>{{tokenId}}</TokenID>
+      <LoadAllCoupons>{{loadAllCoupons}}</LoadAllCoupons>
+    </GetCoupons>
+  </soap:Body>
+</soap:Envelope>

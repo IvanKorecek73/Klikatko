@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MOS - nákup kupónu z mobilní aplikace</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f8;
+      --paper: #ffffff;
+      --text: #182026;
+      --muted: #5f6b75;
+      --line: #d7dde2;
+      --accent: #0f766e;
+      --warn: #9a5b00;
+      --warn-bg: #fff6df;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Arial, sans-serif;
+      line-height: 1.55;
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 24px 48px;
+    }
+
+    header {
+      margin-bottom: 28px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 32px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 30px 0 12px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    ul {
+      margin: 8px 0 0;
+      padding-left: 22px;
+    }
+
+    li {
+      margin: 4px 0;
+    }
+
+    code {
+      background: #eef2f4;
+      border: 1px solid #dde5e9;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: Consolas, "Cascadia Mono", monospace;
+      font-size: 0.95em;
+    }
+
+    .lead {
+      max-width: 820px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    .section {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 18px;
+    }
+
+    .diagram {
+      overflow-x: auto;
+    }
+
+    .callout {
+      border-left: 4px solid var(--warn);
+      background: var(--warn-bg);
+      color: #3b2a0a;
+      padding: 14px 16px;
+      margin-top: 18px;
+      border-radius: 4px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+      margin-top: 12px;
+    }
+
+    .item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fbfcfd;
+    }
+
+    .item strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--accent);
+    }
+
+    @media (max-width: 720px) {
+      main {
+        padding: 24px 14px 36px;
+      }
+
+      h1 {
+        font-size: 26px;
+      }
+
+      .section {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>MOS - nákup kupónu z mobilní aplikace</h1>
+    <p class="lead">
+      Přehled business toku pro nákup kupónu z mobilní aplikace v Core MOS přes SOAP API.
+      Na rozdíl od pobočkového toku se platba provádí přes <strong>platební bránu</strong>
+      (<code>InitiateOrderPayment</code> + zpracování výsledku), nikoliv kancelářskou platbou
+      <code>SetOrderPaid</code>. Praktické requesty jsou v souboru
+      <a href="../http/nakup-kuponu-mobil.http"><code>public/http/nakup-kuponu-mobil.http</code></a>.
+    </p>
+  </header>
+
+  <section class="section">
+    <h2>Business smysl</h2>
+    <p>
+      Uživatel si v mobilní aplikaci koupí kupón na vybraný identifikátor (token). Objednávka se založí
+      přímo v Core MOS, kupón se vloží jako položka objednávky a platba proběhne online přes platební bránu.
+      Po úspěšné platbě je objednávka označena jako zaplacená a kupón je platný.
+    </p>
+    <p>
+      Klíčový rozdíl proti pobočce: <code>SetOrderPaid</code> s <code>PaymentType</code> 3/4 (karta/hotovost
+      u přepážky) se <strong>nepoužívá</strong>. Mobil platí přes bránu, takže krok platby je nahrazen
+      operacemi <code>InitiateOrderPayment*</code> a navazujícím zpracováním výsledku.
+    </p>
+  </section>
+
+  <section class="section diagram">
+    <h2>Diagram toku (pouze MOS)</h2>
+    <pre class="mermaid">
+flowchart TD
+  Start([Start: připrav ServiceKey, MOS uživatele a heslo])
+  Login["1. AuthenticateLogin<br/>Přihlášení uživatele"]
+  Session["Výstup: SessionID"]
+  Tokens["2. GetTokens<br/>Načtení tokenů zákazníka"]
+  TokenPick["Vybrat TokenID a CustomerIDx"]
+  Tariffs["3. GetTokenTariffs<br/>Tarify, zóny a ceny pro token"]
+  TariffPick["Vybrat TariffID, TariffZoneID,<br/>Price, ValidFrom, ValidTill"]
+  AddOrder["4. AddItemToOrder<br/>NewCoupon, IsTest=false"]
+  OrderCheck{"Result.ID = 0<br/>a OrderID > 0?"}
+  StopBad["Stop: nepokračovat na platbu<br/>zkontrolovat chybu MOS"]
+  PayMethod{"Platební metoda?"}
+  InitCard["5a. InitiateOrderPayment<br/>karta + EshopRedirectUrl"]
+  InitToken["5b. InitiateOrderPaymentWithTokenCustomerPresent<br/>uložená karta + 3DS"]
+  InitGoogle["5c. InitiateOrderPaymentGooglePay<br/>PaymentData"]
+  InitApple["5d. InitiateOrderPaymentApplePay<br/>PaymentData"]
+  Redirect["Brána vrátí PaymentGatewayRedirectURL<br/>uživatel zaplatí, návrat na EshopRedirectUrl"]
+  ProcessCard["6a. ProcessPaymentGatewayResult<br/>PaymentGWData"]
+  ProcessWallet["6b/6c. ProcessOrderPaymentGooglePay / ApplePay<br/>pokud PaymentInProgress"]
+  Coupons["7. GetCoupons<br/>Kontrola kupónu na tokenu"]
+  Done([Hotovo: kupón je zaplacený a platný])
+
+  Start --> Login --> Session --> Tokens --> TokenPick --> Tariffs --> TariffPick --> AddOrder --> OrderCheck
+  OrderCheck -- Ne --> StopBad
+  OrderCheck -- Ano --> PayMethod
+  PayMethod -- Karta --> InitCard --> Redirect --> ProcessCard --> Coupons
+  PayMethod -- Uložená karta --> InitToken --> ProcessWallet --> Coupons
+  PayMethod -- Google Pay --> InitGoogle --> ProcessWallet
+  PayMethod -- Apple Pay --> InitApple --> ProcessWallet
+  ProcessWallet --> Coupons --> Done
+    </pre>
+  </section>
+
+  <section class="section">
+    <h2>Kroky a hodnoty</h2>
+    <div class="grid">
+      <div class="item">
+        <strong>1. AuthenticateLogin</strong>
+        Vrací <code>SessionID</code>. Bez něj nejdou volat další session operace.
+      </div>
+      <div class="item">
+        <strong>2. GetTokens</strong>
+        Vybere se token, na který se kupón koupí. Potřebné hodnoty jsou <code>TokenID</code>
+        a <code>CustomerIDx</code>.
+      </div>
+      <div class="item">
+        <strong>3. GetTokenTariffs</strong>
+        Vrací možné tarify, zóny, ceny a platnost (<code>CouponTariff/TariffBuy</code>).
+      </div>
+      <div class="item">
+        <strong>4. AddItemToOrder</strong>
+        Založí objednávku a vloží kupón. Pro reálný nákup <code>IsTest=false</code>.
+        Vrací <code>OrderID</code> a <code>CouponID</code>.
+      </div>
+      <div class="item">
+        <strong>5. InitiateOrderPayment*</strong>
+        Zahájí platbu v bráně podle metody (karta / uložená karta / Google Pay / Apple Pay).
+        Karta vrací <code>PaymentGatewayRedirectURL</code> pro přesměrování.
+      </div>
+      <div class="item">
+        <strong>6. ProcessPaymentGatewayResult / ProcessOrderPayment*</strong>
+        Zpracuje výsledek po návratu z brány (karta) nebo dokončí peněženkovou platbu.
+        Po úspěchu je objednávka zaplacená.
+      </div>
+      <div class="item">
+        <strong>7. GetCoupons</strong>
+        Ověří, že kupón na tokenu skutečně vznikl. Kontrolovat <code>CouponID</code>, <code>OrderID</code>,
+        tarif, zóny a platnost.
+      </div>
+    </div>
+  </section>
+
+  <section class="callout">
+    <strong>Pozor:</strong>
+    Core MOS SOAP API vrací HTTP 200 i pro business chyby. V každém kroku je nutné číst
+    <code>Result/ID</code> v SOAP těle. Pokud <code>AddItemToOrder</code> nevrátí <code>Result.ID = 0</code>
+    a platné <code>OrderID</code>, nepokračujte na platbu. Pro mobil se nikdy nepoužívá
+    <code>SetOrderPaid</code> s <code>PaymentType</code> 3/4 - to je výhradně pobočková (kancelářská) platba.
+  </section>
+</main>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: "default",
+    securityLevel: "strict",
+    flowchart: {
+      htmlLabels: true,
+      curve: "basis"
+    }
+  });
+</script>
+</body>
+</html>

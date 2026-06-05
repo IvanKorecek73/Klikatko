@@ -65,7 +65,7 @@
               "name": "paymentGWReturnURL",
               "label": "Návratová URL",
               "type": "url",
-              "value": "http://127.0.0.1:5500/html/GwResponsePage.html"
+              "value": "http://localhost:5096/html/GwResponsePage.html"
             }
           ],
           "request": {
@@ -201,7 +201,7 @@
               "name": "paymentGWReturnURL",
               "label": "Návratová URL",
               "type": "url",
-              "value": "http://127.0.0.1:5500/html/GwResponsePage.html"
+              "value": "http://localhost:5096/html/GwResponsePage.html"
             }
           ],
           "request": {

@@ -1,0 +1,317 @@
+### MOS - nákup kupónu z mobilní aplikace přes Core SOAP API
+#
+# Toto je MOBILNÍ varianta nákupu kupónu - na rozdíl od pobočkového toku
+# (mos-coupon-purchase.http) NEpoužívá SetOrderPaid s kancelářskou platbou,
+# ale platí přes platební bránu pomocí InitiateOrderPayment + zpracování výsledku.
+#
+# Tento soubor pokrývá POUZE volání na MOS (Core SOAP, MOSservice.asmx).
+# Backend PidLitacka, mobilní klient ani platební brána zde nejsou - jen MOS.
+#
+# Použití:
+# 1. Doplňte serviceKey, userName a password.
+# 2. Spusťte AuthenticateLogin a z odpovědi zkopírujte SessionID do @sessionId.
+# 3. Spusťte GetTokens a vyberte TokenID + CustomerID.
+# 4. Spusťte GetTokenTariffs a vyberte TariffID + TariffZoneID + cenu + platnost.
+# 5. Spusťte AddItemToOrder. Z odpovědi zkopírujte OrderID.
+# 6. Spusťte JEDNU z platebních variant podle metody (karta / uložená karta / Google Pay / Apple Pay).
+# 7. U karty po návratu z brány spusťte ProcessPaymentGatewayResult.
+# 8. Spusťte GetCoupons a ověřte, že kupón vznikl a je zaplacený.
+#
+# Důležité:
+# - SOAP endpoint vrací HTTP 200 i pro business chyby. Vždy kontrolujte Result/ID v těle.
+# - ServiceKey se neposílá jako HTTP hlavička, ale jako XML element v SOAP těle.
+# - SOAPAction i XML namespace používají "globdata".
+# - Pro REÁLNÝ nákup z mobilu je IsTest=false. IsTest=true je jen pro testovací data mimo statistiky.
+# - Platba se NEpotvrzuje přes SetOrderPaid (PaymentType 3/4 = pobočka). Mobil platí přes bránu:
+#     InitiateOrderPayment*                        -> zahájení platby v bráně
+#     ProcessPaymentGatewayResult                  -> zpracování výsledku po návratu z brány (karta)
+# - EshopRedirectUrl je návratová URL, na kterou brána přesměruje po dokončení platby
+#   (v produkci deep link do mobilní aplikace, např. pid-litacka-coupon://complete/{paymentId}).
+# - Cena v AddItemToOrder.Price musí odpovídat ceně vrácené v GetTokenTariffs pro zvolenou zónu.
+
+@baseUrl = https://pre-core.mos.oict.cz
+@serviceKey =
+@userName =
+@password =
+@codeSms =
+
+### Hodnoty doplňované postupně z odpovědí
+@sessionId =
+@tokenId =
+@customerId =
+@tariffId =
+@tariffZoneId =
+@price = 290.0000
+@validFrom =
+@validTill =
+@description = Kupon zona P - mobilni nakup
+@orderId =
+@language = cs
+@eshopRedirectUrl = https://pre-core.mos.oict.cz/return-stub
+# Pro variantu s uloženou kartou:
+@paymentGWToken =
+# Pro Google Pay / Apple Pay (peněženkový payload z klienta):
+@walletPaymentData =
+@loadAllCoupons = true
+@startDate = 2026-06-05
+
+### 1) Přihlášení do Core MOS
+# Očekáváno: HTTP 200 a v těle AuthenticateLoginResult/Result/ID = 0.
+# Z odpovědi zkopírujte SessionID do @sessionId.
+POST {{baseUrl}}/services/MOSservice.asmx
+Content-Type: text/xml; charset=utf-8
+SOAPAction: "globdata/AuthenticateLogin"
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <AuthenticateLogin xmlns="globdata">
+      <ServiceKey>{{serviceKey}}</ServiceKey>
+      <UserName>{{userName}}</UserName>
+      <Password>{{password}}</Password>
+      <CodeSMS>{{codeSms}}</CodeSMS>
+    </AuthenticateLogin>
+  </soap:Body>
+</soap:Envelope>
+
+### 2) Načtení dostupných tokenů / identifikátorů
+# Očekáváno: HTTP 200 a GetTokensResult/Result/ID = 0.
+# Vyberte TokenEx, na který chcete kupón koupit.
+# Z vybrané položky zkopírujte TokenID do @tokenId a CustomerIDx do @customerId.
+POST {{baseUrl}}/services/MOSservice.asmx
+Content-Type: text/xml; charset=utf-8
+SOAPAction: "globdata/GetTokens"
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <GetTokens xmlns="globdata">
+      <ServiceKey>{{serviceKey}}</ServiceKey>
+      <SessionID>{{sessionId}}</SessionID>
+      <GetOnlyAvailableTokens>true</GetOnlyAvailableTokens>
+    </GetTokens>
+  </soap:Body>
+</soap:Envelope>
+
+### 3) Zjištění tarifů pro vybraný token
+# Očekáváno: HTTP 200 a GetTokenTariffsResult/Result/ID = 0.
+# V odpovědi je CouponTariff/TariffBuy se seznamem tarifů, zón (Zones/Zone) a cen.
+# Vyberte konkrétní kombinaci tarifu a zóny.
+# Z odpovědi doplňte @tariffId, @tariffZoneId, @price (cena pro zvolenou zónu),
+# @validFrom (NewCouponValidFrom) a @validTill (NewCouponValidTill).
+POST {{baseUrl}}/services/MOSservice.asmx
+Content-Type: text/xml; charset=utf-8
+SOAPAction: "globdata/GetTokenTariffs"
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <GetTokenTariffs xmlns="globdata">
+      <ServiceKey>{{serviceKey}}</ServiceKey>
+      <SessionID>{{sessionId}}</SessionID>
+      <TokenID>{{tokenId}}</TokenID>
+      <StartDate>{{startDate}}</StartDate>
+    </GetTokenTariffs>
+  </soap:Body>
+</soap:Envelope>
+
+### 4) Přidání kupónu do objednávky
+# Očekáváno: HTTP 200, AddItemToOrderResult/Result/ID = 0, OrderID > 0 a CouponID > 0.
+# OrderID xsi:nil="true" znamená: založ novou objednávku.
+# Pro reálný mobilní nákup IsTest=false. Description ponechte vyplněné.
+# Z odpovědi zkopírujte OrderID do @orderId.
+POST {{baseUrl}}/services/MOSservice.asmx
+Content-Type: text/xml; charset=utf-8
+SOAPAction: "globdata/AddItemToOrder"
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <AddItemToOrder xmlns="globdata">
+      <ServiceKey>{{serviceKey}}</ServiceKey>
+      <SessionID>{{sessionId}}</SessionID>
+      <OrderID xsi:nil="true" />
+      <NewCoupon>
+        <CustomerID>{{customerId}}</CustomerID>
+        <TariffID>{{tariffId}}</TariffID>
+        <TariffZoneIDs>
+          <int>{{tariffZoneId}}</int>
+        </TariffZoneIDs>
+        <Price>{{price}}</Price>
+        <Description>{{description}}</Description>
+        <ValidFrom>{{validFrom}}</ValidFrom>
+        <ValidTill>{{validTill}}</ValidTill>
+        <IsTest>false</IsTest>
+      </NewCoupon>
+      <TokenID>{{tokenId}}</TokenID>
+      <ExternalUserID xsi:nil="true" />
+      <ExternalDeskID xsi:nil="true" />
+    </AddItemToOrder>
+  </soap:Body>
+</soap:Envelope>
+
+###############################################################################
+# KROK 5 - PLATBA PŘES BRÁNU
+# Vyberte JEDNU z variant 5a-5d podle platební metody.
+###############################################################################
+
+### 5a) Karta - zahájení platby s přesměrováním na bránu
+# Očekáváno: HTTP 200, InitiateOrderPaymentResult/Result/ID = 0,
+#            PaymentRequestSuccessful = true, vyplněné PaymentID a PaymentGatewayRedirectURL.
+# Klient (mobil) následně otevře PaymentGatewayRedirectURL, uživatel zaplatí,
+# brána přesměruje zpět na EshopRedirectUrl a předá data platby (PaymentGWData).
+POST {{baseUrl}}/services/MOSservice.asmx
+Content-Type: text/xml; charset=utf-8
+SOAPAction: "globdata/InitiateOrderPayment"
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <InitiateOrderPayment xmlns="globdata">
+      <ServiceKey>{{serviceKey}}</ServiceKey>
+      <SessionID>{{sessionId}}</SessionID>
+      <OrderID>{{orderId}}</OrderID>
+      <EshopRedirectUrl>{{eshopRedirectUrl}}</EshopRedirectUrl>
+      <Language>{{language}}</Language>
+    </InitiateOrderPayment>
+  </soap:Body>
+</soap:Envelope>
+
+### 5b) Uložená karta (token) - platba s přítomným zákazníkem (3DS)
+# Očekáváno: HTTP 200, Result/ID = 0. Sledujte PaymentSuccessful / PaymentInProgress.
+# Pokud PaymentInProgress = true nebo je vyplněn Actions (FingerPrint/Authenticate),
+# klient provede požadované akce a periodicky (à 30 s) volá znovu, dokud není dokončeno.
+POST {{baseUrl}}/services/MOSservice.asmx
+Content-Type: text/xml; charset=utf-8
+SOAPAction: "globdata/InitiateOrderPaymentWithTokenCustomerPresent"
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <InitiateOrderPaymentWithTokenCustomerPresent xmlns="globdata">
+      <ServiceKey>{{serviceKey}}</ServiceKey>
+      <SessionID>{{sessionId}}</SessionID>
+      <OrderID>{{orderId}}</OrderID>
+      <PaymentGWToken>{{paymentGWToken}}</PaymentGWToken>
+      <Language>{{language}}</Language>
+      <EshopRedirectUrl>{{eshopRedirectUrl}}</EshopRedirectUrl>
+      <SDKUsed>true</SDKUsed>
+    </InitiateOrderPaymentWithTokenCustomerPresent>
+  </soap:Body>
+</soap:Envelope>
+
+### 5c) Google Pay - zahájení platby s peněženkovým payloadem
+# Očekáváno: HTTP 200, Result/ID = 0. Sledujte PaymentSuccessful / PaymentInProgress / Actions.
+# PaymentData = payload z Google Pay z klienta. Při PaymentInProgress dokončete přes ProcessOrderPaymentGooglePay.
+POST {{baseUrl}}/services/MOSservice.asmx
+Content-Type: text/xml; charset=utf-8
+SOAPAction: "globdata/InitiateOrderPaymentGooglePay"
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <InitiateOrderPaymentGooglePay xmlns="globdata">
+      <ServiceKey>{{serviceKey}}</ServiceKey>
+      <SessionID>{{sessionId}}</SessionID>
+      <OrderID>{{orderId}}</OrderID>
+      <PaymentData>{{walletPaymentData}}</PaymentData>
+      <EshopRedirectUrl>{{eshopRedirectUrl}}</EshopRedirectUrl>
+      <SDKUsed>true</SDKUsed>
+    </InitiateOrderPaymentGooglePay>
+  </soap:Body>
+</soap:Envelope>
+
+### 5d) Apple Pay - zahájení platby s peněženkovým payloadem
+# Očekáváno: HTTP 200, Result/ID = 0. Sledujte PaymentSuccessful / PaymentInProgress / Actions.
+# PaymentData = payload z Apple Pay z klienta. Při PaymentInProgress dokončete přes ProcessOrderPaymentApplePay.
+POST {{baseUrl}}/services/MOSservice.asmx
+Content-Type: text/xml; charset=utf-8
+SOAPAction: "globdata/InitiateOrderPaymentApplePay"
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <InitiateOrderPaymentApplePay xmlns="globdata">
+      <ServiceKey>{{serviceKey}}</ServiceKey>
+      <SessionID>{{sessionId}}</SessionID>
+      <OrderID>{{orderId}}</OrderID>
+      <PaymentData>{{walletPaymentData}}</PaymentData>
+      <EshopRedirectUrl>{{eshopRedirectUrl}}</EshopRedirectUrl>
+      <SDKUsed>true</SDKUsed>
+    </InitiateOrderPaymentApplePay>
+  </soap:Body>
+</soap:Envelope>
+
+###############################################################################
+# KROK 6 - ZPRACOVÁNÍ VÝSLEDKU PLATBY
+###############################################################################
+
+### 6a) Karta - zpracování výsledku po návratu z brány
+# Spusťte po variantě 5a, jakmile se uživatel z brány vrátí na EshopRedirectUrl.
+# PaymentGWData = data, která brána předala při návratu (vložte jako obsah elementu).
+# Očekáváno: HTTP 200, ProcessPaymentGatewayResultResult/ID = 0 -> objednávka je zaplacená.
+POST {{baseUrl}}/services/MOSservice.asmx
+Content-Type: text/xml; charset=utf-8
+SOAPAction: "globdata/ProcessPaymentGatewayResult"
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <ProcessPaymentGatewayResult xmlns="globdata">
+      <ServiceKey>{{serviceKey}}</ServiceKey>
+      <SessionID>{{sessionId}}</SessionID>
+      <PaymentGWData></PaymentGWData>
+    </ProcessPaymentGatewayResult>
+  </soap:Body>
+</soap:Envelope>
+
+### 6b) Google Pay - dokončení platby (pokud byla PaymentInProgress)
+POST {{baseUrl}}/services/MOSservice.asmx
+Content-Type: text/xml; charset=utf-8
+SOAPAction: "globdata/ProcessOrderPaymentGooglePay"
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <ProcessOrderPaymentGooglePay xmlns="globdata">
+      <ServiceKey>{{serviceKey}}</ServiceKey>
+      <SessionID>{{sessionId}}</SessionID>
+      <OrderID>{{orderId}}</OrderID>
+    </ProcessOrderPaymentGooglePay>
+  </soap:Body>
+</soap:Envelope>
+
+### 6c) Apple Pay - dokončení platby (pokud byla PaymentInProgress)
+POST {{baseUrl}}/services/MOSservice.asmx
+Content-Type: text/xml; charset=utf-8
+SOAPAction: "globdata/ProcessOrderPaymentApplePay"
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <ProcessOrderPaymentApplePay xmlns="globdata">
+      <ServiceKey>{{serviceKey}}</ServiceKey>
+      <SessionID>{{sessionId}}</SessionID>
+      <OrderID>{{orderId}}</OrderID>
+    </ProcessOrderPaymentApplePay>
+  </soap:Body>
+</soap:Envelope>
+
+### 7) Kontrola kupónů na tokenu
+# Očekáváno: HTTP 200, GetCouponsResult/Result/ID = 0 a v odpovědi CouponInfoRecord.
+# Zkontrolujte CouponID, OrderID, tarif, zóny, platnost a stav zaplacení nového kupónu.
+POST {{baseUrl}}/services/MOSservice.asmx
+Content-Type: text/xml; charset=utf-8
+SOAPAction: "globdata/GetCoupons"
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <GetCoupons xmlns="globdata">
+      <ServiceKey>{{serviceKey}}</ServiceKey>
+      <SessionID>{{sessionId}}</SessionID>
+      <TokenID>{{tokenId}}</TokenID>
+      <LoadAllCoupons>{{loadAllCoupons}}</LoadAllCoupons>
+    </GetCoupons>
+  </soap:Body>
+</soap:Envelope>

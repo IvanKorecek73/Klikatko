@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MOS - nákup testovacího kupónu</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f8;
+      --paper: #ffffff;
+      --text: #182026;
+      --muted: #5f6b75;
+      --line: #d7dde2;
+      --accent: #0f766e;
+      --warn: #9a5b00;
+      --warn-bg: #fff6df;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Arial, sans-serif;
+      line-height: 1.55;
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 24px 48px;
+    }
+
+    header {
+      margin-bottom: 28px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 32px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 30px 0 12px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    ul {
+      margin: 8px 0 0;
+      padding-left: 22px;
+    }
+
+    li {
+      margin: 4px 0;
+    }
+
+    code {
+      background: #eef2f4;
+      border: 1px solid #dde5e9;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: Consolas, "Cascadia Mono", monospace;
+      font-size: 0.95em;
+    }
+
+    .lead {
+      max-width: 820px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    .section {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 18px;
+    }
+
+    .diagram {
+      overflow-x: auto;
+    }
+
+    .callout {
+      border-left: 4px solid var(--warn);
+      background: var(--warn-bg);
+      color: #3b2a0a;
+      padding: 14px 16px;
+      margin-top: 18px;
+      border-radius: 4px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+      margin-top: 12px;
+    }
+
+    .item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fbfcfd;
+    }
+
+    .item strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--accent);
+    }
+
+    @media (max-width: 720px) {
+      main {
+        padding: 24px 14px 36px;
+      }
+
+      h1 {
+        font-size: 26px;
+      }
+
+      .section {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>MOS - nákup testovacího kupónu</h1>
+    <p class="lead">
+      Přehled business toku pro vytvoření testovacího kupónu v Core MOS přes SOAP API.
+      Praktické requesty jsou připravené v souboru
+      <a href="../http/mos-coupon-purchase.http"><code>public/http/mos-coupon-purchase.http</code></a>.
+    </p>
+  </header>
+
+  <section class="section">
+    <h2>Business smysl</h2>
+    <p>
+      Cílem je vytvořit testovací kupón bez zásahu do PidLitacka backendu. Kupón se založí
+      přímo v Core MOS, přiřadí se na vybraný token/identifikátor zákazníka a objednávka se
+      následně označí jako zaplacená kancelářskou platbou.
+    </p>
+    <p>
+      Klíčové je použití <code>IsTest=true</code> v kroku <code>AddItemToOrder</code>. Tím se kupón
+      vytvoří jako testovací a nemá vstupovat do prodejních statistik a reportů.
+    </p>
+  </section>
+
+  <section class="section diagram">
+    <h2>Diagram toku</h2>
+    <pre class="mermaid">
+flowchart TD
+  Start([Start: připrav ServiceKey, MOS uživatele a heslo])
+  Login["1. AuthenticateLogin<br/>Přihlášení přepážkového uživatele"]
+  Session["Výstup: SessionID"]
+  Tokens["2. GetTokens<br/>Načtení tokenů zákazníka"]
+  TokenPick["Vybrat TokenID a CustomerIDx"]
+  Tariffs["3. GetTokenTariffs<br/>Tarify a zóny pro vybraný token"]
+  TariffPick["Vybrat TariffID, TariffZoneID,<br/>Price, ValidFrom, ValidTill"]
+  AddOrder["4. AddItemToOrder<br/>NewCoupon + IsTest=true"]
+  OrderCheck{"Result.ID = 0<br/>a OrderID > 0?"}
+  StopBad["Stop: nepokračovat na platbu<br/>zkontrolovat chybu MOS"]
+  Paid["5. SetOrderPaid<br/>PaymentType 3 nebo 4"]
+  Coupons["6. GetCoupons<br/>Kontrola kupónů na tokenu"]
+  Done([Hotovo: testovací kupón existuje])
+
+  Start --> Login --> Session --> Tokens --> TokenPick --> Tariffs --> TariffPick --> AddOrder --> OrderCheck
+  OrderCheck -- Ne --> StopBad
+  OrderCheck -- Ano --> Paid --> Coupons --> Done
+    </pre>
+  </section>
+
+  <section class="section">
+    <h2>Kroky a hodnoty</h2>
+    <div class="grid">
+      <div class="item">
+        <strong>1. AuthenticateLogin</strong>
+        Vrací <code>SessionID</code>. Bez něj nejdou volat další session operace.
+      </div>
+      <div class="item">
+        <strong>2. GetTokens</strong>
+        Vybere se token, na který se kupón koupí. Potřebné hodnoty jsou <code>TokenID</code>
+        a <code>CustomerIDx</code>.
+      </div>
+      <div class="item">
+        <strong>3. GetTokenTariffs</strong>
+        Vrací možné tarify, zóny, ceny a platnost. Vybraná zóna musí patřit ke stejnému tarifu.
+      </div>
+      <div class="item">
+        <strong>4. AddItemToOrder</strong>
+        Vytvoří novou objednávku a vloží testovací kupón. <code>Description</code> ponechat vyplněné.
+      </div>
+      <div class="item">
+        <strong>5. SetOrderPaid</strong>
+        Aktivuje kupón potvrzením platby. Používat <code>PaymentType=3</code> nebo <code>4</code>.
+      </div>
+      <div class="item">
+        <strong>6. GetCoupons</strong>
+        Ověří, že kupón na tokenu skutečně vznikl. Kontrolovat <code>CouponID</code>, <code>OrderID</code>,
+        tarif, zóny a platnost.
+      </div>
+    </div>
+  </section>
+
+  <section class="callout">
+    <strong>Pozor:</strong>
+    Core MOS SOAP API vrací HTTP 200 i pro business chyby. V každém kroku je nutné číst
+    <code>Result/ID</code> v SOAP těle. Pokud <code>AddItemToOrder</code> nevrátí <code>Result.ID = 0</code>
+    a platné <code>OrderID</code>, nepokračujte na <code>SetOrderPaid</code>.
+  </section>
+</main>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: "default",
+    securityLevel: "strict",
+    flowchart: {
+      htmlLabels: true,
+      curve: "basis"
+    }
+  });
+</script>
+</body>
+</html>
