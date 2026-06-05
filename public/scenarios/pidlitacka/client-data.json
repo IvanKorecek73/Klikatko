@@ -366,6 +366,105 @@
       ]
     },
     {
+      "id": "client-identifiers-personalize-by-id",
+      "title": "Klientská data - personalizace podle TokenID",
+      "description": "Přímé volání PidLitacka BE personalizace pro známý MobApp telefon nebo platební kartu. Hodí se, když už máte TokenID/identifierId z MOSu nebo z předchozího testu.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "profile",
+        "client-data",
+        "client-identifiers",
+        "personalization",
+        "client-save"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Personalizace podle TokenID"
+      },
+      "instructions": [
+        "Nejprve se přihlaste v panelu Přístup jako uživatel, kterému identifikátor patří.",
+        "Vyberte typ identifikátoru. Backend podporuje personalizaci jen pro MobApp telefon a BPK platební kartu.",
+        "Zadejte TokenID/identifierId a spusťte krok. Po úspěchu má odpověď vrátit isPersonalized = true.",
+        "Pokud identifikátor nepatří aktuálnímu klientovi nebo má jiný typ, backend má vrátit řízenou chybu."
+      ],
+      "steps": [
+        {
+          "id": "client-identifiers-personalize-direct",
+          "title": "Personalizovat identifikátor",
+          "description": "Zavolá POST /v1/client/identifiers/{typ}/{identifierId}/personalization.",
+          "fields": [
+            {
+              "name": "resource",
+              "label": "Typ identifikátoru",
+              "type": "select",
+              "value": "mobile",
+              "options": [
+                {
+                  "value": "mobile",
+                  "text": "MobApp telefon"
+                },
+                {
+                  "value": "bank-card",
+                  "text": "Platební karta BPK"
+                }
+              ]
+            },
+            {
+              "name": "identifierId",
+              "label": "TokenID / identifierId",
+              "type": "number",
+              "value": "",
+              "placeholder": "Např. 123456"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/identifiers/{{form.resource}}/{{form.identifierId}}/personalization"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.isPersonalized",
+                "equals": true
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "IdentifierLookup"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[2].name",
+                "equals": "SetTokenIsPersonalized"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "client-identifiers-personalize-existing",
       "title": "Klientská data - personalizace existujícího identifikátoru",
       "description": "Načte identifikátory aktuálního klienta, umožní vybrat MobApp telefon nebo platební kartu a následně vybraný identifikátor personalizuje.",

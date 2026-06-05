@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "defaultPackId": "mos-diagnostics-core-soap",
+  "packs": [
+    {
+      "id": "mos-diagnostics-core-soap",
+      "name": "MOS Diagnostika - Core SOAP",
+      "description": "Samostatný pack pro health kontrolu a ad hoc Core MOS SOAP operace.",
+      "file": "core-soap-random.json"
+    }
+  ]
+}

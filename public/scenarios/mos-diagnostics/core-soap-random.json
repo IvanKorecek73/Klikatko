@@ -1,0 +1,280 @@
+{
+  "version": 1,
+  "name": "MOS Diagnostika - Core SOAP",
+  "description": "Ad hoc diagnostické scénáře nad Core MOS SOAP API. Slouží pro rychlé ověření dostupnosti MOSu a pro izolované testy podezřelých operací.",
+  "scenarios": [
+    {
+      "id": "mos-health-check-user-name-soap",
+      "title": "MOS health - kontrola uživatelského jména",
+      "description": "Lehká read-only kontrola Core MOS přes CheckUserName. Operace vyžaduje jen ServiceKey, nepotřebuje SessionID a pro náhodný neexistující e-mail má vrátit informační výsledek.",
+      "requiresAuth": true,
+      "smoke": true,
+      "manualInputRequired": false,
+      "tags": ["health", "soap", "core-mos", "read-only", "reference-data"],
+      "app": {
+        "section": "diagnostics",
+        "title": "MOS health",
+        "subtitle": "Core MOS SOAP"
+      },
+      "instructions": [
+        "V panelu Přístup vložte Core MOS ServiceKey.",
+        "Scénář volá CheckUserName s unikátním e-mailem podle {{uuid}}, proto nemá zakládat ani měnit data.",
+        "Očekávaný výsledek je HTTP 200 a MOS Result.ID = 12 / E-mail neexistuje. To znamená, že SOAP endpoint, ServiceKey i account část MOSu odpověděly."
+      ],
+      "steps": [
+        {
+          "id": "mos-health-check-user-name",
+          "title": "Ověřit dostupnost Core MOS",
+          "description": "Zavolá CheckUserName s unikátním e-mailem a očekává informační odpověď, že e-mail neexistuje.",
+          "fields": [
+            {
+              "name": "userName",
+              "label": "Testovací e-mail",
+              "type": "email",
+              "value": "mos-health-{{uuid}}@example.test",
+              "hidden": true
+            },
+            {
+              "name": "codeSms",
+              "label": "SMS kód",
+              "type": "text",
+              "value": "",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/CheckUserName\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <CheckUserName xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <CodeSMS>{{form.codeSms}}</CodeSMS>\n    </CheckUserName>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "regex": "<CheckUserNameResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>12</ID>"
+              },
+              {
+                "path": "$",
+                "regex": "<CheckUserNameResult>[\\s\\S]*?<Result>[\\s\\S]*?<Text>E-mail neexistuje\\.</Text>"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "mos-idol-permitted-ways-soap",
+      "title": "MOS IDOL - povolené cesty superzón",
+      "description": "Diagnostická read-only kontrola IDOL číselníků přes GetIDOLPermittedWaysForSuperZones. Pokud vrátí Result.ID = 300, ServiceKey prošel, ale selhala konkrétní MOS operace GetIDOLCustomPermittedWays.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": false,
+      "tags": ["idol", "soap", "core-mos", "read-only", "reference-data", "diagnostics"],
+      "app": {
+        "section": "diagnostics",
+        "title": "MOS IDOL",
+        "subtitle": "Číselníková data"
+      },
+      "instructions": [
+        "V panelu Přístup vložte Core MOS ServiceKey.",
+        "Tato operace není vhodná jako obecný health check, protože na PRE-CORE může vracet Result.ID = 300 / Error_MOSAPI_GetIDOLCustomPermittedWays i při platném klíči.",
+        "Použijte ji pro diagnostiku podezření, že padá IDOL číselníková část MOSu."
+      ],
+      "steps": [
+        {
+          "id": "mos-idol-get-permitted-ways",
+          "title": "Načíst povolené cesty superzón",
+          "description": "Zavolá GetIDOLPermittedWaysForSuperZones a očekává úspěšný MOS Result.ID = 0.",
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetIDOLPermittedWaysForSuperZones\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetIDOLPermittedWaysForSuperZones xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n    </GetIDOLPermittedWaysForSuperZones>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "regex": "<GetIDOLPermittedWaysForSuperZonesResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>"
+              },
+              {
+                "path": "$",
+                "regex": "<CustomPermittedWay[\\s\\S]*?>"
+              }
+            ]
+          },
+          "selection": {
+            "buttonLabel": "Uložit ukázku",
+            "selectedButtonLabel": "Uloženo",
+            "emptyTitle": "MOS nevrátil žádnou povolenou cestu",
+            "emptyText": "HTTP a Result.ID mohou být v pořádku, ale odpověď neobsahuje žádné položky CustomPermittedWay.",
+            "sourceRegex": {
+              "itemPattern": "<CustomPermittedWay[^>]*>([\\s\\S]*?)</CustomPermittedWay>",
+              "fields": {
+                "superZoneFrom": "<SuperZoneIDFrom>([^<]+)</SuperZoneIDFrom>",
+                "superZoneTo": "<SuperZoneIDTo>([^<]+)</SuperZoneIDTo>",
+                "zoneWay": "<ZoneWay>([^<]*)</ZoneWay>"
+              }
+            },
+            "store": {
+              "mosHealthSuperZoneFrom": "$.superZoneFrom",
+              "mosHealthSuperZoneTo": "$.superZoneTo",
+              "mosHealthZoneWay": "$.zoneWay"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "mos-create-login-and-self-customer-soap",
+      "title": "MOS - založení loginu a self klienta",
+      "description": "Změnový diagnostický scénář pro podezření na pád založení klienta: CreateLogin přes UserName/Password a navazující CreateSelfCustomer podle vráceného LoginID.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["account", "customer", "soap", "core-mos", "mutation", "diagnostics"],
+      "app": {
+        "section": "profile",
+        "title": "MOS klient",
+        "subtitle": "CreateLogin + CreateSelfCustomer"
+      },
+      "instructions": [
+        "V panelu Přístup vložte Core MOS ServiceKey.",
+        "Použijte unikátní UserName/e-mail, jinak může MOS správně vrátit chybu duplicity.",
+        "Scénář je změnový: CreateLogin založí login a CreateSelfCustomer založí zákazníka k vrácenému LoginID.",
+        "Pokud podezření míří jen na první část, spusťte pouze krok CreateLogin a druhý krok nevolejte."
+      ],
+      "steps": [
+        {
+          "id": "mos-create-login",
+          "title": "Založit login",
+          "description": "Zavolá CreateLogin přes UserName a Password. Z odpovědi uloží LoginID pro založení self zákazníka.",
+          "fields": [
+            {
+              "name": "userName",
+              "label": "UserName / e-mail",
+              "type": "email",
+              "value": "",
+              "placeholder": "např. mos-test-{{timestamp}}@example.test"
+            },
+            {
+              "name": "password",
+              "label": "Heslo",
+              "type": "password",
+              "value": "",
+              "placeholder": "Heslo pro nový login"
+            },
+            {
+              "name": "activationUrl",
+              "label": "Aktivační URL",
+              "type": "text",
+              "value": "https://example.test/activate",
+              "placeholder": "URL pro aktivační e-mail"
+            },
+            {
+              "name": "sendPuk",
+              "label": "Poslat PUK",
+              "type": "select",
+              "value": "false",
+              "options": [
+                { "value": "false", "label": "Ne" },
+                { "value": "true", "label": "Ano" }
+              ]
+            },
+            {
+              "name": "sendRegistrationEmail",
+              "label": "Poslat registrační e-mail",
+              "type": "select",
+              "value": "false",
+              "options": [
+                { "value": "false", "label": "Ne" },
+                { "value": "true", "label": "Ano" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/CreateLogin\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <CreateLogin xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <Password>{{form.password}}</Password>\n      <URL>{{form.activationUrl}}</URL>\n      <SendPUK>{{form.sendPuk}}</SendPUK>\n      <SendRegistrationEmail>{{form.sendRegistrationEmail}}</SendRegistrationEmail>\n    </CreateLogin>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "regex": "<CreateLoginResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>"
+              },
+              {
+                "path": "$",
+                "regex": "<LoginID>\\d+</LoginID>"
+              }
+            ]
+          },
+          "extractRegex": {
+            "mosCreateLoginId": "<LoginID>([^<]+)</LoginID>",
+            "mosCreateLoginUserName": "<UserName>([^<]+)</UserName>"
+          }
+        },
+        {
+          "id": "mos-create-self-customer",
+          "title": "Založit self klienta",
+          "description": "Zavolá CreateSelfCustomer nad LoginID z předchozího kroku.",
+          "requiresContext": ["mosCreateLoginId"],
+          "fields": [
+            {
+              "name": "loginId",
+              "label": "LoginID",
+              "type": "number",
+              "value": "{{context.mosCreateLoginId}}"
+            },
+            {
+              "name": "displayName",
+              "label": "DisplayName",
+              "type": "text",
+              "value": "{{context.mosCreateLoginUserName}}",
+              "placeholder": "Zobrazované jméno klienta"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/CreateSelfCustomer\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <CreateSelfCustomer xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <LoginID>{{form.loginId}}</LoginID>\n      <DisplayName>{{form.displayName}}</DisplayName>\n    </CreateSelfCustomer>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "regex": "<CreateSelfCustomerResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>"
+              },
+              {
+                "path": "$",
+                "regex": "<CustomerID>\\d+</CustomerID>"
+              }
+            ]
+          },
+          "extractRegex": {
+            "mosCreateCustomerId": "<CustomerID>([^<]+)</CustomerID>"
+          }
+        }
+      ]
+    }
+  ]
+}

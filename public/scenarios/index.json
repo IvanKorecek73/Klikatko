@@ -301,6 +301,29 @@
       ]
     },
     {
+      "id": "mos-diagnostics",
+      "name": "MOS Diagnostika",
+      "description": "Ad hoc Core MOS SOAP operace pro rychlou kontrolu dostupnosti a podezřelých flow.",
+      "manifest": "mos-diagnostics/index.json",
+      "defaultBaseUrl": "/api",
+      "auth": {
+        "type": "apiKey",
+        "panelTitle": "Přístup (Core MOS ServiceKey)",
+        "apiKeyHeader": "X-Klikatko-ServiceKey",
+        "apiKeyInHeader": false,
+        "apiKeyLabel": "ServiceKey",
+        "apiKeyPlaceholder": "Vložte ServiceKey pro Core MOS"
+      },
+      "defaultEnvironmentId": "mos-pre-core",
+      "environments": [
+        {
+          "id": "mos-pre-core",
+          "name": "PRE-CORE",
+          "targetBaseUrl": "https://pre-core.mos.oict.cz"
+        }
+      ]
+    },
+    {
       "id": "mos-coupons",
       "name": "MOS Kupóny",
       "description": "Přímé diagnostické scénáře nad Core MOS SOAP API pro práci s kupóny.",
