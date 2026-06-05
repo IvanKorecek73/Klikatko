@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MOS - nákup testovacího kupónu</title>
+  <title>MOS - nákup kupónu z mobilní aplikace</title>
   <style>
     :root {
       color-scheme: light;
@@ -139,48 +139,63 @@
 <body>
 <main>
   <header>
-    <h1>MOS - nákup testovacího kupónu</h1>
+    <h1>MOS - nákup kupónu z mobilní aplikace</h1>
     <p class="lead">
-      Přehled business toku pro vytvoření testovacího kupónu v Core MOS přes SOAP API.
-      Praktické requesty jsou připravené v souboru
-      <a href="../http/mos-coupon-purchase.http"><code>public/http/mos-coupon-purchase.http</code></a>.
+      Přehled business toku pro nákup kupónu z mobilní aplikace v Core MOS přes SOAP API.
+      Na rozdíl od pobočkového toku se platba provádí přes <strong>platební bránu</strong>
+      (<code>InitiateOrderPayment</code> + zpracování výsledku), nikoliv kancelářskou platbou
+      <code>SetOrderPaid</code>. Praktické requesty jsou v souboru
+      <a href="../http/nakup-kuponu-mobil.http"><code>public/analysis/http/nakup-kuponu-mobil.http</code></a>.
     </p>
   </header>
 
   <section class="section">
     <h2>Business smysl</h2>
     <p>
-      Cílem je vytvořit testovací kupón bez zásahu do PidLitacka backendu. Kupón se založí
-      přímo v Core MOS, přiřadí se na vybraný token/identifikátor zákazníka a objednávka se
-      následně označí jako zaplacená kancelářskou platbou.
+      Uživatel si v mobilní aplikaci koupí kupón na vybraný identifikátor (token). Objednávka se založí
+      přímo v Core MOS, kupón se vloží jako položka objednávky a platba proběhne online přes platební bránu.
+      Po úspěšné platbě je objednávka označena jako zaplacená a kupón je platný.
     </p>
     <p>
-      Klíčové je použití <code>IsTest=true</code> v kroku <code>AddItemToOrder</code>. Tím se kupón
-      vytvoří jako testovací a nemá vstupovat do prodejních statistik a reportů.
+      Klíčový rozdíl proti pobočce: <code>SetOrderPaid</code> s <code>PaymentType</code> 3/4 (karta/hotovost
+      u přepážky) se <strong>nepoužívá</strong>. Mobil platí přes bránu, takže krok platby je nahrazen
+      operacemi <code>InitiateOrderPayment*</code> a navazujícím zpracováním výsledku.
     </p>
   </section>
 
   <section class="section diagram">
-    <h2>Diagram toku</h2>
+    <h2>Diagram toku (pouze MOS)</h2>
     <pre class="mermaid">
 flowchart TD
   Start([Start: připrav ServiceKey, MOS uživatele a heslo])
-  Login["1. AuthenticateLogin<br/>Přihlášení přepážkového uživatele"]
+  Login["1. AuthenticateLogin<br/>Přihlášení uživatele"]
   Session["Výstup: SessionID"]
   Tokens["2. GetTokens<br/>Načtení tokenů zákazníka"]
   TokenPick["Vybrat TokenID a CustomerIDx"]
-  Tariffs["3. GetTokenTariffs<br/>Tarify a zóny pro vybraný token"]
+  Tariffs["3. GetTokenTariffs<br/>Tarify, zóny a ceny pro token"]
   TariffPick["Vybrat TariffID, TariffZoneID,<br/>Price, ValidFrom, ValidTill"]
-  AddOrder["4. AddItemToOrder<br/>NewCoupon + IsTest=true"]
+  AddOrder["4. AddItemToOrder<br/>NewCoupon, IsTest=false"]
   OrderCheck{"Result.ID = 0<br/>a OrderID > 0?"}
   StopBad["Stop: nepokračovat na platbu<br/>zkontrolovat chybu MOS"]
-  Paid["5. SetOrderPaid<br/>PaymentType 3 nebo 4"]
-  Coupons["6. GetCoupons<br/>Kontrola kupónů na tokenu"]
-  Done([Hotovo: testovací kupón existuje])
+  PayMethod{"Platební metoda?"}
+  InitCard["5a. InitiateOrderPayment<br/>karta + EshopRedirectUrl"]
+  InitToken["5b. InitiateOrderPaymentWithTokenCustomerPresent<br/>uložená karta + 3DS"]
+  InitGoogle["5c. InitiateOrderPaymentGooglePay<br/>PaymentData"]
+  InitApple["5d. InitiateOrderPaymentApplePay<br/>PaymentData"]
+  Redirect["Brána vrátí PaymentGatewayRedirectURL<br/>uživatel zaplatí, návrat na EshopRedirectUrl"]
+  ProcessCard["6a. ProcessPaymentGatewayResult<br/>PaymentGWData"]
+  ProcessWallet["6b/6c. ProcessOrderPaymentGooglePay / ApplePay<br/>pokud PaymentInProgress"]
+  Coupons["7. GetCoupons<br/>Kontrola kupónu na tokenu"]
+  Done([Hotovo: kupón je zaplacený a platný])
 
   Start --> Login --> Session --> Tokens --> TokenPick --> Tariffs --> TariffPick --> AddOrder --> OrderCheck
   OrderCheck -- Ne --> StopBad
-  OrderCheck -- Ano --> Paid --> Coupons --> Done
+  OrderCheck -- Ano --> PayMethod
+  PayMethod -- Karta --> InitCard --> Redirect --> ProcessCard --> Coupons
+  PayMethod -- Uložená karta --> InitToken --> ProcessWallet --> Coupons
+  PayMethod -- Google Pay --> InitGoogle --> ProcessWallet
+  PayMethod -- Apple Pay --> InitApple --> ProcessWallet
+  ProcessWallet --> Coupons --> Done
     </pre>
   </section>
 
@@ -198,18 +213,25 @@ flowchart TD
       </div>
       <div class="item">
         <strong>3. GetTokenTariffs</strong>
-        Vrací možné tarify, zóny, ceny a platnost. Vybraná zóna musí patřit ke stejnému tarifu.
+        Vrací možné tarify, zóny, ceny a platnost (<code>CouponTariff/TariffBuy</code>).
       </div>
       <div class="item">
         <strong>4. AddItemToOrder</strong>
-        Vytvoří novou objednávku a vloží testovací kupón. <code>Description</code> ponechat vyplněné.
+        Založí objednávku a vloží kupón. Pro reálný nákup <code>IsTest=false</code>.
+        Vrací <code>OrderID</code> a <code>CouponID</code>.
       </div>
       <div class="item">
-        <strong>5. SetOrderPaid</strong>
-        Aktivuje kupón potvrzením platby. Používat <code>PaymentType=3</code> nebo <code>4</code>.
+        <strong>5. InitiateOrderPayment*</strong>
+        Zahájí platbu v bráně podle metody (karta / uložená karta / Google Pay / Apple Pay).
+        Karta vrací <code>PaymentGatewayRedirectURL</code> pro přesměrování.
       </div>
       <div class="item">
-        <strong>6. GetCoupons</strong>
+        <strong>6. ProcessPaymentGatewayResult / ProcessOrderPayment*</strong>
+        Zpracuje výsledek po návratu z brány (karta) nebo dokončí peněženkovou platbu.
+        Po úspěchu je objednávka zaplacená.
+      </div>
+      <div class="item">
+        <strong>7. GetCoupons</strong>
         Ověří, že kupón na tokenu skutečně vznikl. Kontrolovat <code>CouponID</code>, <code>OrderID</code>,
         tarif, zóny a platnost.
       </div>
@@ -220,7 +242,8 @@ flowchart TD
     <strong>Pozor:</strong>
     Core MOS SOAP API vrací HTTP 200 i pro business chyby. V každém kroku je nutné číst
     <code>Result/ID</code> v SOAP těle. Pokud <code>AddItemToOrder</code> nevrátí <code>Result.ID = 0</code>
-    a platné <code>OrderID</code>, nepokračujte na <code>SetOrderPaid</code>.
+    a platné <code>OrderID</code>, nepokračujte na platbu. Pro mobil se nikdy nepoužívá
+    <code>SetOrderPaid</code> s <code>PaymentType</code> 3/4 - to je výhradně pobočková (kancelářská) platba.
   </section>
 </main>
 

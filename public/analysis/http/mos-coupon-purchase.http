@@ -18,7 +18,7 @@
 # - Pro samostatnou zónu P může být v PRE-CORE cena pro nákup 0.0000.
 # - Pokud AddItemToOrder vrátí Result/ID != 0 nebo OrderID = 0, nepokračujte na SetOrderPaid.
 
-@baseUrl = https://pre-core.mos.oict.cz
+@baseUrl = {{coreMosBaseUrl}}
 @serviceKey =
 @userName =
 @password =

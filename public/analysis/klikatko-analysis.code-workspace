@@ -1,0 +1,32 @@
+{
+  "folders": [
+    {
+      "name": "Klikatko analysis",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.encoding": "utf8",
+    "files.eol": "\n",
+    "files.exclude": {
+      "**/.git": true,
+      "**/.DS_Store": true,
+      "**/Thumbs.db": true
+    },
+    "rest-client.environmentVariables": {
+      "$shared": {
+        "coreMosBaseUrl": "https://pre-core.mos.oict.cz",
+        "mosParkingPreBaseUrl": "https://pre-parking.mos.oict.cz",
+        "pidLitackaLocalBaseUrl": "https://localhost:7261",
+        "pidLitackaIntBaseUrl": "https://pidl2-backend.int.pidlitacka.cz",
+        "klikatkoBaseUrl": "http://localhost:5096",
+        "gatewayResponseUrl": "http://localhost:5096/analysis/html/GwResponsePage.html"
+      }
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "humao.rest-client"
+    ]
+  }
+}

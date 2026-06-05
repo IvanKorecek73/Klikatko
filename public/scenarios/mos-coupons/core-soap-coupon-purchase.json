@@ -406,7 +406,7 @@
         "Vyberte token a konkrétní tarifní zónu stejně jako u pobočkového scénáře.",
         "AddItemToOrder zde posílá IsTest=false, protože mobilní nákup simuluje skutečný online nákup. Pro bezpečný test použijte PRE-CORE a testovací účet/token.",
         "Mobilní platba se nepotvrzuje přes SetOrderPaid. Scénář používá InitiateOrderPayment a potom ruční ProcessPaymentGatewayResult po návratu z brány.",
-        "Varianty s uloženou kartou, Google Pay a Apple Pay vyžadují PaymentGWToken nebo wallet payload z klienta. Jsou zdokumentované v public/http/nakup-kuponu-mobil.http, ale tento Klikátko scénář pokrývá kartový redirect happy path."
+        "Varianty s uloženou kartou, Google Pay a Apple Pay vyžadují PaymentGWToken nebo wallet payload z klienta. Jsou zdokumentované v public/analysis/http/nakup-kuponu-mobil.http, ale tento Klikátko scénář pokrývá kartový redirect happy path."
       ],
       "steps": [
         {
@@ -680,7 +680,7 @@
               "name": "eshopRedirectUrl",
               "label": "EshopRedirectUrl",
               "type": "text",
-              "value": "http://localhost:5096/html/GwResponsePage.html",
+              "value": "http://localhost:5096/analysis/html/GwResponsePage.html",
               "placeholder": "V produkci deep link nebo návratová URL mobilní aplikace"
             },
             {

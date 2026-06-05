@@ -29,7 +29,7 @@
 #   (v produkci deep link do mobilní aplikace, např. pid-litacka-coupon://complete/{paymentId}).
 # - Cena v AddItemToOrder.Price musí odpovídat ceně vrácené v GetTokenTariffs pro zvolenou zónu.
 
-@baseUrl = https://pre-core.mos.oict.cz
+@baseUrl = {{coreMosBaseUrl}}
 @serviceKey =
 @userName =
 @password =
@@ -47,7 +47,7 @@
 @description = Kupon zona P - mobilni nakup
 @orderId =
 @language = cs
-@eshopRedirectUrl = https://pre-core.mos.oict.cz/return-stub
+@eshopRedirectUrl = {{gatewayResponseUrl}}
 # Pro variantu s uloženou kartou:
 @paymentGWToken =
 # Pro Google Pay / Apple Pay (peněženkový payload z klienta):
