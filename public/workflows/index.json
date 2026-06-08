@@ -35,7 +35,19 @@
           "scenarioId": "client-identifiers-tokenize-bank-card",
           "title": "Tokenizovat a personalizovat platební kartu",
           "description": "Zahájí registraci karty, zastaví se po vrácení gateway URL a po ruční tokenizaci pokračuje kontrolou stavu, kompletací a personalizací.",
-          "stopAfterStepIds": ["client-identifiers-bank-card-start"]
+          "stopAfter": [
+            {
+              "stepId": "client-identifiers-bank-card-start",
+              "message": "Otevřete tokenizační bránu a dokončete registraci platební karty.",
+              "instructions": [
+                "V odpovědi kroku je gatewayRedirectUrl.",
+                "Otevřete URL v prohlížeči a dokončete testovací tokenizaci karty.",
+                "Po návratu z brány pokračujte ve workflow; další krok ověří stav registrace.",
+                "Pokud je potřeba URL zkopírovat, najdete ji také v logu a workflow kontextu."
+              ],
+              "contextKeys": ["bankCardGatewayRedirectUrl", "bankCardRegistrationId"]
+            }
+          ]
         },
         {
           "projectId": "pidlitacka",

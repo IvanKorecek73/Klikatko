@@ -18,6 +18,13 @@
           "id": "account-check-new-user",
           "title": "Ověřit, že uživatel neexistuje",
           "description": "Před založením ověří, že zadaný e-mail ještě neexistuje v MOSu.",
+          "workflowStop": {
+            "message": "Zadejte e-mail pro nového testovacího uživatele.",
+            "instructions": [
+              "Použijte dosud nepoužitý e-mail v testovacím prostředí.",
+              "Stejný e-mail se uloží do workflow kontextu a použije se v dalších krocích."
+            ]
+          },
           "instructions": [
             "Doplňte e-mail, který ještě nebyl v MOSu použit."
           ],
@@ -52,6 +59,13 @@
           "id": "account-initialize-new-user",
           "title": "Initialize account creation",
           "description": "Založí neaktivní login a odešle aktivační e-mail.",
+          "workflowStop": {
+            "message": "Zadejte heslo pro nového testovacího uživatele.",
+            "instructions": [
+              "E-mail je převzatý z předchozího kroku.",
+              "Zadané heslo se uloží jako secret workflow/scénáře a použije se pro následné přihlášení."
+            ]
+          },
           "instructions": [
             "Heslo zvolte podle pravidel testovacího prostředí.",
             "Jazyk lze nechat na výchozí hodnotě cs."
@@ -105,6 +119,14 @@
           "id": "account-complete-new-user",
           "title": "Complete account creation",
           "description": "Dokončí aktivaci uživatele z tokenu, který přišel v e-mailu.",
+          "workflowStop": {
+            "message": "Doplňte aktivační token z e-mailu.",
+            "instructions": [
+              "Otevřete doručený aktivační e-mail.",
+              "Zkopírujte hodnotu query parametru token z aktivační URL.",
+              "Vložte ji do pole Token z e-mailu a pokračujte ve workflow."
+            ]
+          },
           "instructions": [
             "Otevřete doručený aktivační e-mail.",
             "Zkopírujte hodnotu query parametru token z URL a vložte ji do pole Token."

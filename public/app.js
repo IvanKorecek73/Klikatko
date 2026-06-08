@@ -3731,8 +3731,9 @@ async function continueWorkflowRun() {
         renderStep();
         setWorkflowControls(true);
 
-        if (elements.workflowAutoStop.checked && shouldPauseWorkflowBeforeStep(step)) {
-          pauseWorkflow(`Čeká se na ruční doplnění kroku: ${step.title}`, "warn");
+        const beforeStop = getWorkflowStopBeforeStep(step);
+        if (elements.workflowAutoStop.checked && beforeStop) {
+          pauseWorkflow(beforeStop.message, "warn", beforeStop.lines);
           return;
         }
 
@@ -3758,8 +3759,9 @@ async function continueWorkflowRun() {
 
         state.workflowRun.stepIndex += 1;
 
-        if (elements.workflowAutoStop.checked && shouldPauseWorkflowAfterStep(item, step)) {
-          pauseWorkflow(`Čeká se na navazující ruční akci po kroku: ${step.title}`, "warn");
+        const afterStop = getWorkflowStopAfterStep(item, step);
+        if (elements.workflowAutoStop.checked && afterStop) {
+          pauseWorkflow(afterStop.message, "warn", afterStop.lines);
           return;
         }
       }
@@ -3833,12 +3835,26 @@ function syncWorkflowContextFromScenario() {
   };
 }
 
-function shouldPauseWorkflowBeforeStep(step) {
-  if (step.manualStop || step.interaction) {
-    return true;
+function getWorkflowStopBeforeStep(step) {
+  if (step.workflowStop) {
+    return normalizeWorkflowStop(step.workflowStop, `Čeká se na ruční doplnění kroku: ${step.title}`);
   }
 
-  return (step.fields || []).some(field => workflowFieldNeedsInput(field));
+  if (step.manualStop || step.interaction) {
+    return {
+      message: `Čeká se na ruční doplnění kroku: ${step.title}`,
+      lines: getStepInstructionLines(step)
+    };
+  }
+
+  if ((step.fields || []).some(field => workflowFieldNeedsInput(field))) {
+    return {
+      message: `Čeká se na ruční doplnění kroku: ${step.title}`,
+      lines: getStepInstructionLines(step)
+    };
+  }
+
+  return null;
 }
 
 function workflowFieldNeedsInput(field) {
@@ -3854,15 +3870,59 @@ function workflowFieldNeedsInput(field) {
   return isEmpty(value);
 }
 
-function shouldPauseWorkflowAfterStep(item, step) {
-  if ((item.stopAfterStepIds || []).includes(step.id)) {
-    return true;
+function getWorkflowStopAfterStep(item, step) {
+  const stopAfter = (item.stopAfter || []).find(stop => stop.stepId === step.id);
+
+  if (stopAfter) {
+    return normalizeWorkflowStop(stopAfter, `Čeká se na navazující ruční akci po kroku: ${step.title}`);
   }
 
-  return Boolean(state.activeSelection);
+  if ((item.stopAfterStepIds || []).includes(step.id)) {
+    return {
+      message: `Čeká se na navazující ruční akci po kroku: ${step.title}`,
+      lines: getStepInstructionLines(step)
+    };
+  }
+
+  if (state.activeSelection) {
+    return {
+      message: `Čeká se na výběr z odpovědi kroku: ${step.title}`,
+      lines: ["Vyberte položku v náhledu mobilu a potom pokračujte ve workflow."]
+    };
+  }
+
+  return null;
 }
 
-function pauseWorkflow(message, level = "warn") {
+function normalizeWorkflowStop(stop, fallbackMessage) {
+  if (typeof stop === "string") {
+    return {
+      message: stop || fallbackMessage,
+      lines: []
+    };
+  }
+
+  return {
+    message: stop.message || stop.title || fallbackMessage,
+    lines: [
+      ...(stop.instructions || []),
+      ...(stop.contextKeys || [])
+        .filter(key => !isEmpty(state.workflowContext[key] ?? state.context[key]))
+        .map(key => `${key}: ${formatWorkflowValue(state.workflowContext[key] ?? state.context[key])}`)
+    ]
+  };
+}
+
+function getStepInstructionLines(step) {
+  return [
+    ...(step.instructions || []),
+    ...(step.fields || [])
+      .filter(field => workflowFieldNeedsInput(field))
+      .map(field => `Vyplňte pole: ${field.label || field.name}`)
+  ];
+}
+
+function pauseWorkflow(message, level = "warn", extraLines = []) {
   state.workflowRunning = false;
   state.batchRunning = false;
   if (state.workflowRun) {
@@ -3879,7 +3939,10 @@ function pauseWorkflow(message, level = "warn") {
       : null,
     context: state.workflowContext
   });
-  showWorkflowSummary(level, message, buildWorkflowProgressLines());
+  showWorkflowSummary(level, message, [
+    ...extraLines,
+    ...buildWorkflowProgressLines()
+  ]);
   setWorkflowControls(false);
   updateWorkflowStatus("Pozastaveno");
   renderStep();
