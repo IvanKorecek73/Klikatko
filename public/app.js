@@ -25,6 +25,12 @@ const state = {
   batchRunning: false,
   batchStopRequested: false,
   smokeResults: {},
+  workflowIndex: null,
+  selectedWorkflowId: null,
+  workflowRun: null,
+  workflowContext: {},
+  workflowRunning: false,
+  workflowStopRequested: false,
   harnessMeta: null,
   authSession: null,
   authFormValues: {},
@@ -98,9 +104,18 @@ const elements = {
   scenariosTab: document.querySelector("#scenariosTab"),
   smokeTab: document.querySelector("#smokeTab"),
   formsTab: document.querySelector("#formsTab"),
+  workflowsTab: document.querySelector("#workflowsTab"),
   scenariosPane: document.querySelector("#scenariosPane"),
   smokePane: document.querySelector("#smokePane"),
   formsPane: document.querySelector("#formsPane"),
+  workflowsPane: document.querySelector("#workflowsPane"),
+  workflowList: document.querySelector("#workflowList"),
+  workflowStatus: document.querySelector("#workflowStatus"),
+  workflowAutoStop: document.querySelector("#workflowAutoStop"),
+  runWorkflow: document.querySelector("#runWorkflow"),
+  continueWorkflow: document.querySelector("#continueWorkflow"),
+  stopWorkflow: document.querySelector("#stopWorkflow"),
+  workflowSummary: document.querySelector("#workflowSummary"),
   testerTab: document.querySelector("#testerTab"),
   logTab: document.querySelector("#logTab"),
   testerPane: document.querySelector("#testerPane"),
@@ -112,6 +127,7 @@ init();
 async function init() {
   initResizablePanels();
   state.projectIndex = await fetchJson("/scenarios/index.json");
+  await loadWorkflowIndex();
   await loadHarnessMeta();
   populateProjectOptions();
   const lastSelection = loadLastSelection();
@@ -133,6 +149,10 @@ async function init() {
   elements.scenariosTab.addEventListener("click", () => activateLeftTab("scenarios"));
   elements.smokeTab.addEventListener("click", () => activateLeftTab("smoke"));
   elements.formsTab.addEventListener("click", () => activateLeftTab("forms"));
+  elements.workflowsTab.addEventListener("click", () => activateLeftTab("workflows"));
+  elements.runWorkflow.addEventListener("click", startSelectedWorkflow);
+  elements.continueWorkflow.addEventListener("click", continueWorkflowRun);
+  elements.stopWorkflow.addEventListener("click", requestStopWorkflowRun);
   elements.scenarioSearch.addEventListener("input", event => {
     state.scenarioSearch = event.target.value.trim().toLowerCase();
     renderScenarioList();
@@ -181,6 +201,24 @@ function populateProjectOptions() {
     option.value = project.id;
     option.textContent = project.name;
     elements.projectSelect.appendChild(option);
+  }
+}
+
+async function loadWorkflowIndex() {
+  try {
+    state.workflowIndex = await fetchJson("/workflows/index.json");
+    state.selectedWorkflowId = state.workflowIndex.defaultWorkflowId
+      || state.workflowIndex.workflows?.[0]?.id
+      || null;
+    renderWorkflowList();
+    updateWorkflowControls();
+  } catch (error) {
+    state.workflowIndex = { version: 1, workflows: [] };
+    state.selectedWorkflowId = null;
+    renderWorkflowList();
+    showWorkflowSummary("error", "Workflow katalog se nepodařilo načíst.", [
+      error instanceof Error ? error.message : String(error)
+    ]);
   }
 }
 
@@ -1807,16 +1845,20 @@ function activateLeftTab(tab) {
   const showScenarios = tab === "scenarios";
   const showSmoke = tab === "smoke";
   const showForms = tab === "forms";
+  const showWorkflows = tab === "workflows";
 
   elements.scenariosTab.classList.toggle("active", showScenarios);
   elements.smokeTab.classList.toggle("active", showSmoke);
   elements.formsTab.classList.toggle("active", showForms);
+  elements.workflowsTab.classList.toggle("active", showWorkflows);
   elements.scenariosTab.setAttribute("aria-selected", String(showScenarios));
   elements.smokeTab.setAttribute("aria-selected", String(showSmoke));
   elements.formsTab.setAttribute("aria-selected", String(showForms));
+  elements.workflowsTab.setAttribute("aria-selected", String(showWorkflows));
   elements.scenariosPane.classList.toggle("active", showScenarios);
   elements.smokePane.classList.toggle("active", showSmoke);
   elements.formsPane.classList.toggle("active", showForms);
+  elements.workflowsPane.classList.toggle("active", showWorkflows);
 }
 
 function activateRightTab(tab) {
@@ -2008,6 +2050,75 @@ function renderSmokeList() {
   for (const scenario of state.catalog.scenarios) {
     elements.smokeList.appendChild(createSmokeCard(scenario));
   }
+}
+
+function renderWorkflowList() {
+  if (!elements.workflowList) {
+    return;
+  }
+
+  elements.workflowList.innerHTML = "";
+  const workflows = state.workflowIndex?.workflows || [];
+
+  if (workflows.length === 0) {
+    elements.workflowList.innerHTML = `<div class="empty-state">Žádné workflow není nakonfigurované.</div>`;
+    updateWorkflowControls();
+    return;
+  }
+
+  for (const workflow of workflows) {
+    elements.workflowList.appendChild(createWorkflowCard(workflow));
+  }
+
+  updateWorkflowControls();
+}
+
+function createWorkflowCard(workflow) {
+  const card = document.createElement("article");
+  card.className = "scenario-card";
+  card.dataset.workflowId = workflow.id;
+  card.innerHTML = `
+    <button class="scenario-main" type="button" ${state.workflowRunning ? "disabled" : ""}>
+      <strong>${escapeHtml(workflow.name)}</strong>
+      <p>${escapeHtml(workflow.description || "")}</p>
+      <div class="form-meta">
+        ${renderTagChips(workflow.tags)}
+        <span class="meta-badge">${escapeHtml(`${workflow.items?.length || 0} scénářů`)}</span>
+      </div>
+    </button>
+    <button class="scenario-toggle" type="button" aria-expanded="false" ${state.workflowRunning ? "disabled" : ""}>Kroky (${workflow.items?.length || 0})</button>
+    <ol class="scenario-steps hidden">
+      ${(workflow.items || []).map((item, index) => `
+        <li>
+          <span>${index + 1}</span>
+          <div>
+            <strong>${escapeHtml(item.title || item.scenarioId)}</strong>
+            <p>${escapeHtml(`${item.projectId} / ${item.packId} / ${item.scenarioId}`)}</p>
+          </div>
+        </li>`).join("")}
+    </ol>
+  `;
+
+  card.querySelector(".scenario-main").addEventListener("click", () => selectWorkflow(workflow.id));
+  card.querySelector(".scenario-toggle").addEventListener("click", event => {
+    event.stopPropagation();
+    const steps = card.querySelector(".scenario-steps");
+    const toggle = card.querySelector(".scenario-toggle");
+    const expanded = steps.classList.toggle("hidden") === false;
+    toggle.setAttribute("aria-expanded", String(expanded));
+    toggle.textContent = expanded ? "Skrýt kroky" : `Kroky (${workflow.items?.length || 0})`;
+  });
+  card.classList.toggle("active", state.selectedWorkflowId === workflow.id);
+  return card;
+}
+
+function selectWorkflow(workflowId) {
+  state.selectedWorkflowId = workflowId;
+  state.workflowRun = null;
+  state.workflowContext = {};
+  renderWorkflowList();
+  clearWorkflowSummary();
+  updateWorkflowControls();
 }
 
 function selectScenario(scenarioId, options = {}) {
@@ -3548,6 +3659,346 @@ async function runScenarioToSelectedStep() {
       .map(result => result.index + 1)
   });
   setAutoRunControls(false);
+}
+
+async function startSelectedWorkflow() {
+  const workflow = getSelectedWorkflow();
+
+  if (!workflow) {
+    return;
+  }
+
+  state.workflowContext = {};
+  state.workflowRun = {
+    workflowId: workflow.id,
+    itemIndex: 0,
+    stepIndex: 0,
+    results: [],
+    startedAt: new Date().toISOString(),
+    status: "running"
+  };
+  state.log = [];
+  addLog("ok", "Workflow started", {
+    id: workflow.id,
+    name: workflow.name,
+    items: workflow.items?.length || 0
+  });
+  await continueWorkflowRun();
+}
+
+async function continueWorkflowRun() {
+  const workflow = getSelectedWorkflow();
+
+  if (!workflow || !state.workflowRun) {
+    return;
+  }
+
+  state.workflowRun.status = "running";
+  state.workflowRunning = true;
+  state.workflowStopRequested = false;
+  state.batchRunning = true;
+  setWorkflowControls(true);
+  activateRightTab("tester");
+  showWorkflowSummary("warn", "Workflow běží...", [
+    workflow.name
+  ]);
+
+  try {
+    while (state.workflowRun.itemIndex < (workflow.items || []).length) {
+      if (state.workflowStopRequested) {
+        pauseWorkflow("Workflow byl zastaven uživatelem.", "warn");
+        return;
+      }
+
+      const item = workflow.items[state.workflowRun.itemIndex];
+      await openWorkflowItem(item);
+      const scenario = state.scenario;
+
+      if (!scenario) {
+        pauseWorkflow(`Scénář ${item.scenarioId} nebyl nalezen.`, "error");
+        return;
+      }
+
+      while (state.workflowRun.stepIndex < scenario.steps.length) {
+        if (state.workflowStopRequested) {
+          pauseWorkflow("Workflow byl zastaven uživatelem.", "warn");
+          return;
+        }
+
+        const step = scenario.steps[state.workflowRun.stepIndex];
+        state.stepIndex = state.workflowRun.stepIndex;
+        applyWorkflowContextToScenario();
+        renderStep();
+        setWorkflowControls(true);
+
+        if (elements.workflowAutoStop.checked && shouldPauseWorkflowBeforeStep(step)) {
+          pauseWorkflow(`Čeká se na ruční doplnění kroku: ${step.title}`, "warn");
+          return;
+        }
+
+        await runCurrentStep();
+        syncWorkflowContextFromScenario();
+
+        const result = {
+          projectId: item.projectId,
+          packId: item.packId,
+          scenarioId: item.scenarioId,
+          scenarioTitle: scenario.title,
+          stepId: step.id,
+          stepTitle: step.title,
+          level: state.lastStepResult?.level || "error",
+          messages: state.lastStepResult?.messages || []
+        };
+        state.workflowRun.results.push(result);
+
+        if (result.level === "error") {
+          pauseWorkflow(`Workflow se zastavil na chybě kroku: ${step.title}`, "error");
+          return;
+        }
+
+        state.workflowRun.stepIndex += 1;
+
+        if (elements.workflowAutoStop.checked && shouldPauseWorkflowAfterStep(item, step)) {
+          pauseWorkflow(`Čeká se na navazující ruční akci po kroku: ${step.title}`, "warn");
+          return;
+        }
+      }
+
+      addLog("ok", "Workflow scenario finished", {
+        projectId: item.projectId,
+        packId: item.packId,
+        scenarioId: item.scenarioId,
+        title: item.title || scenario.title
+      });
+      state.workflowRun.itemIndex += 1;
+      state.workflowRun.stepIndex = 0;
+    }
+
+    finishWorkflow(workflow);
+  } finally {
+    state.workflowRunning = false;
+    state.batchRunning = false;
+    setWorkflowControls(false);
+    renderStep();
+    renderWorkflowList();
+  }
+}
+
+function requestStopWorkflowRun() {
+  state.workflowStopRequested = true;
+  updateWorkflowStatus("Zastavuji...");
+}
+
+async function openWorkflowItem(item) {
+  if (state.currentProject?.id !== item.projectId) {
+    await loadProject(item.projectId, {
+      packId: item.packId,
+      scenarioId: item.scenarioId,
+      suppressLog: true
+    });
+  } else if (state.currentPackId !== item.packId) {
+    await loadScenarioPack(item.packId, {
+      scenarioId: item.scenarioId,
+      suppressLog: true
+    });
+  } else if (state.scenario?.id !== item.scenarioId) {
+    selectScenario(item.scenarioId, {
+      preserveLog: true,
+      suppressLog: true,
+      persistSelection: false
+    });
+  }
+
+  applyWorkflowContextToScenario();
+  renderStep();
+  addLog("ok", "Workflow scenario selected", {
+    projectId: item.projectId,
+    packId: item.packId,
+    scenarioId: item.scenarioId,
+    title: item.title || state.scenario?.title
+  });
+}
+
+function applyWorkflowContextToScenario() {
+  state.context = {
+    ...state.workflowContext,
+    ...state.context
+  };
+}
+
+function syncWorkflowContextFromScenario() {
+  state.workflowContext = {
+    ...state.workflowContext,
+    ...state.context
+  };
+}
+
+function shouldPauseWorkflowBeforeStep(step) {
+  if (step.manualStop || step.interaction) {
+    return true;
+  }
+
+  return (step.fields || []).some(field => workflowFieldNeedsInput(field));
+}
+
+function workflowFieldNeedsInput(field) {
+  if (!field || field.workflowAutoStop === false || field.type === "info") {
+    return false;
+  }
+
+  if (field.type === "image-file") {
+    return false;
+  }
+
+  const value = state.values[field.name];
+  return isEmpty(value);
+}
+
+function shouldPauseWorkflowAfterStep(item, step) {
+  if ((item.stopAfterStepIds || []).includes(step.id)) {
+    return true;
+  }
+
+  return Boolean(state.activeSelection);
+}
+
+function pauseWorkflow(message, level = "warn") {
+  state.workflowRunning = false;
+  state.batchRunning = false;
+  if (state.workflowRun) {
+    state.workflowRun.status = "paused";
+  }
+  addLog(level, "Workflow paused", {
+    message,
+    workflow: state.workflowRun
+      ? {
+          workflowId: state.workflowRun.workflowId,
+          itemIndex: state.workflowRun.itemIndex,
+          stepIndex: state.workflowRun.stepIndex
+        }
+      : null,
+    context: state.workflowContext
+  });
+  showWorkflowSummary(level, message, buildWorkflowProgressLines());
+  setWorkflowControls(false);
+  updateWorkflowStatus("Pozastaveno");
+  renderStep();
+}
+
+function finishWorkflow(workflow) {
+  if (state.workflowRun) {
+    state.workflowRun.status = "completed";
+    state.workflowRun.completedAt = new Date().toISOString();
+  }
+
+  const report = buildWorkflowReport(workflow);
+  addLog("ok", "Workflow finished", report);
+  showWorkflowSummary("ok", "Workflow dokončen.", report.lines);
+  updateWorkflowStatus("Dokončeno");
+}
+
+function buildWorkflowProgressLines() {
+  const workflow = getSelectedWorkflow();
+  const run = state.workflowRun;
+
+  if (!workflow || !run) {
+    return [];
+  }
+
+  const item = workflow.items?.[run.itemIndex];
+  return [
+    `Workflow: ${workflow.name}`,
+    item ? `Aktuální část: ${item.title || item.scenarioId}` : "",
+    `Dokončené kroky: ${run.results.length}`
+  ].filter(Boolean);
+}
+
+function buildWorkflowReport(workflow) {
+  const run = state.workflowRun || { results: [] };
+  const failed = run.results.filter(result => result.level === "error");
+  const warnings = run.results.filter(result => result.level === "warn");
+  const contextKeys = workflow.report?.contextKeys || Object.keys(state.workflowContext);
+  const contextLines = contextKeys
+    .filter(key => !isEmpty(state.workflowContext[key]))
+    .map(key => `${key}: ${formatWorkflowValue(state.workflowContext[key])}`);
+  const lines = [
+    `Workflow: ${workflow.name}`,
+    `Scénáře: ${workflow.items?.length || 0}`,
+    `Kroky: ${run.results.length}`,
+    `Chyby: ${failed.length}`,
+    `Upozornění: ${warnings.length}`,
+    ...contextLines
+  ];
+
+  return {
+    workflowId: workflow.id,
+    workflowName: workflow.name,
+    startedAt: run.startedAt,
+    completedAt: new Date().toISOString(),
+    status: failed.length > 0 ? "Failed" : warnings.length > 0 ? "Warning" : "Completed",
+    lines,
+    context: state.workflowContext,
+    results: run.results
+  };
+}
+
+function formatWorkflowValue(value) {
+  if (typeof value === "string") {
+    return value.length > 160 ? `${value.slice(0, 157)}...` : value;
+  }
+
+  return JSON.stringify(value);
+}
+
+function getSelectedWorkflow() {
+  return (state.workflowIndex?.workflows || []).find(workflow => workflow.id === state.selectedWorkflowId) || null;
+}
+
+function setWorkflowControls(isRunning) {
+  state.workflowRunning = isRunning;
+  updateWorkflowControls();
+  renderWorkflowList();
+}
+
+function updateWorkflowControls() {
+  if (!elements.runWorkflow) {
+    return;
+  }
+
+  const hasWorkflow = Boolean(getSelectedWorkflow());
+  const hasPausedRun = Boolean(state.workflowRun?.status === "paused" && !state.workflowRunning);
+  const hasCompletedRun = Boolean(state.workflowRun?.status === "completed");
+  elements.runWorkflow.disabled = !hasWorkflow || state.workflowRunning;
+  elements.continueWorkflow.disabled = !hasWorkflow || !hasPausedRun || state.workflowRunning;
+  elements.stopWorkflow.disabled = !state.workflowRunning;
+  updateWorkflowStatus(state.workflowRunning
+    ? "Běží"
+    : hasPausedRun
+      ? "Pozastaveno"
+      : hasCompletedRun
+        ? "Dokončeno"
+      : hasWorkflow
+        ? "Připraven"
+        : "Nenakonfigurováno");
+}
+
+function updateWorkflowStatus(status) {
+  if (elements.workflowStatus) {
+    elements.workflowStatus.textContent = status;
+  }
+}
+
+function showWorkflowSummary(level, headline, lines = []) {
+  elements.workflowSummary.className = `auto-run-summary ${level}`;
+  elements.workflowSummary.innerHTML = `
+    <strong>${escapeHtml(headline)}</strong>
+    ${lines.length > 0 ? `<ul>${lines.map(line => `<li>${escapeHtml(line)}</li>`).join("")}</ul>` : ""}
+  `;
+}
+
+function clearWorkflowSummary() {
+  elements.workflowSummary.className = "auto-run-summary hidden";
+  elements.workflowSummary.innerHTML = "";
 }
 
 function setAutoRunControls(isRunning) {

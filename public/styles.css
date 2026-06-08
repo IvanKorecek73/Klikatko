@@ -446,6 +446,28 @@ p {
   padding: 12px;
 }
 
+.workflow-runner {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fbfcfd;
+  padding: 12px;
+}
+
+.workflow-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.workflow-option input {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
 .batch-runner-head {
   display: flex;
   align-items: center;

@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "defaultWorkflowId": "pidlitacka-client-with-phone-and-card",
+  "workflows": [
+    {
+      "id": "pidlitacka-client-with-phone-and-card",
+      "name": "PidLitacka - příprava klienta s telefonem a kartou",
+      "description": "Runbook pro přípravu testovacího klienta: založení a aktivace uživatele, založení klientských dat, tokenizace telefonu, tokenizace platební karty a závěrečná kontrola identifikátorů.",
+      "tags": ["pidlitacka", "client", "identifiers", "setup"],
+      "items": [
+        {
+          "projectId": "pidlitacka",
+          "packId": "pidlitacka-feature-729",
+          "scenarioId": "account-creation-new-user",
+          "title": "Založit a aktivovat uživatele",
+          "description": "Workflow se zastaví na e-mailu, heslu a aktivačním tokenu podle polí scénáře."
+        },
+        {
+          "projectId": "pidlitacka",
+          "packId": "pidlitacka-client-data",
+          "scenarioId": "client-data-create-and-save",
+          "title": "Založit klienta a osobní údaje",
+          "description": "Vytvoří nebo doplní klientská data a fotografii pro aktuálně přihlášeného uživatele."
+        },
+        {
+          "projectId": "pidlitacka",
+          "packId": "pidlitacka-client-data",
+          "scenarioId": "client-identifiers-tokenize-phone",
+          "title": "Tokenizovat a personalizovat telefon",
+          "description": "Přidá MobApp identifikátor a nastaví ho jako personalizovaný."
+        },
+        {
+          "projectId": "pidlitacka",
+          "packId": "pidlitacka-client-data",
+          "scenarioId": "client-identifiers-tokenize-bank-card",
+          "title": "Tokenizovat a personalizovat platební kartu",
+          "description": "Zahájí registraci karty, zastaví se po vrácení gateway URL a po ruční tokenizaci pokračuje kontrolou stavu, kompletací a personalizací.",
+          "stopAfterStepIds": ["client-identifiers-bank-card-start"]
+        },
+        {
+          "projectId": "pidlitacka",
+          "packId": "pidlitacka-client-data",
+          "scenarioId": "client-identifiers-current-user",
+          "title": "Ověřit identifikátory klienta",
+          "description": "Závěrečné načtení identifikátorů aktuálního klienta."
+        }
+      ],
+      "report": {
+        "title": "Příprava klienta",
+        "contextKeys": [
+          "userName",
+          "mobileIdentifierId",
+          "bankCardRegistrationId",
+          "bankCardGatewayRedirectUrl",
+          "bankCardIdentifierId"
+        ]
+      }
+    }
+  ]
+}
