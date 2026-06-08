@@ -61,7 +61,20 @@
           "packId": "mos-coupons-core-soap",
           "scenarioId": "mos-coupon-test-purchase-soap",
           "title": "Koupit testovací kupón přes MOS pobočku",
-          "description": "Pobočkový Core MOS SOAP tok: přihlášení, výběr identifikátoru a tarifu, AddItemToOrder, SetOrderPaid a kontrola kupónu."
+          "description": "Pobočkový Core MOS SOAP tok: přihlášení, výběr identifikátoru a tarifu, AddItemToOrder, SetOrderPaid a kontrola kupónu.",
+          "stopAfter": [
+            {
+              "stepId": "mos-coupon-add-item-to-order",
+              "message": "Zkontrolujte typ platby objednávky.",
+              "instructions": [
+                "Workflow vytvořilo objednávku kupónu a další krok ji označí jako zaplacenou.",
+                "Ve formuláři dalšího kroku vyberte PaymentType pro pobočkovou úhradu.",
+                "Výchozí hodnota 3 znamená karta v kanceláři, hodnota 4 hotovost.",
+                "Až bude typ platby správně nastavený, pokračujte ve workflow."
+              ],
+              "contextKeys": ["mosCouponOrderId", "mosCouponPrice"]
+            }
+          ]
         }
       ],
       "report": {

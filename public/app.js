@@ -3879,6 +3879,12 @@ async function continueWorkflowRun() {
           return;
         }
 
+        const selectionStop = getWorkflowSelectionStopAfterStep(step);
+        if (elements.workflowAutoStop.checked && selectionStop) {
+          pauseWorkflow(selectionStop.message, "warn", selectionStop.lines, { preserveResult: true });
+          return;
+        }
+
         state.workflowRun.stepIndex += 1;
 
         const afterStop = getWorkflowStopAfterStep(item, step);
@@ -3998,9 +4004,14 @@ function isWorkflowItemOpen(item) {
 
 function findFirstIncompleteWorkflowStepIndex(scenario) {
   for (let index = 0; index < scenario.steps.length; index += 1) {
+    const step = scenario.steps[index];
     const result = state.stepResults[String(index)];
 
     if (!result || result.level === "error") {
+      return index;
+    }
+
+    if (step?.selection && state.activeSelection?.stepId === step.id && state.activeSelection.selectedIndex === null) {
       return index;
     }
   }
@@ -4131,10 +4142,15 @@ function getWorkflowStopAfterStep(item, step) {
     };
   }
 
-  if (state.activeSelection) {
+  return null;
+}
+
+function getWorkflowSelectionStopAfterStep(step) {
+  if (state.activeSelection?.stepId === step.id && state.activeSelection.selectedIndex === null) {
+    const buttonLabel = state.activeSelection.config?.buttonLabel || "Vybrat";
     return {
       message: `Čeká se na výběr z odpovědi kroku: ${step.title}`,
-      lines: ["Vyberte položku v náhledu mobilu a potom pokračujte ve workflow."]
+      lines: [`V náhledu mobilu klikněte na „${buttonLabel}“ u požadované položky a potom pokračujte ve workflow.`]
     };
   }
 
@@ -4169,7 +4185,7 @@ function getStepInstructionLines(step) {
   ];
 }
 
-function pauseWorkflow(message, level = "warn", extraLines = []) {
+function pauseWorkflow(message, level = "warn", extraLines = [], options = {}) {
   state.workflowRunning = false;
   state.batchRunning = false;
   if (state.workflowRun) {
@@ -4192,9 +4208,11 @@ function pauseWorkflow(message, level = "warn", extraLines = []) {
   ]);
   setWorkflowControls(false);
   updateWorkflowStatus("Pozastaveno");
-  syncVisibleStepFromWorkflowRun();
-  renderStep({ preserveValues: true });
-  showWorkflowPauseResult(level, message, extraLines);
+  if (!options.preserveResult) {
+    syncVisibleStepFromWorkflowRun();
+    renderStep({ preserveValues: true });
+    showWorkflowPauseResult(level, message, extraLines);
+  }
 }
 
 function syncVisibleStepFromWorkflowRun() {
