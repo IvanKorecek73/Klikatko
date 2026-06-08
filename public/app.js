@@ -37,7 +37,7 @@ const state = {
   authFormValues: {},
   authProfileNotes: {},
   authCustomProfiles: [],
-  redisBridgeUrl: localStorage.getItem("demoHarness.redisBridgeUrl") || "http://127.0.0.1:5097",
+  redisBridgeUrl: localStorage.getItem("demoHarness.redisBridgeUrl") || "/__redis",
   redisIdentityId: "",
   redisLastSession: null,
   displayedResult: null,
@@ -2092,14 +2092,14 @@ function renderRedisViewer() {
     return;
   }
 
-  elements.redisBridgeUrl.value = state.redisBridgeUrl || "http://127.0.0.1:5097";
+  elements.redisBridgeUrl.value = state.redisBridgeUrl || "/__redis";
 
   if (!state.redisIdentityId && state.authSession?.identityId) {
     state.redisIdentityId = state.authSession.identityId;
   }
 
   elements.redisIdentityId.value = state.redisIdentityId || "";
-  elements.redisUseSession.disabled = !state.redisLastSession?.sessionId;
+  elements.redisUseSession.disabled = !isUsableRedisSession(state.redisLastSession);
 }
 
 async function loadRedisSessionFromViewer() {
@@ -2126,7 +2126,7 @@ async function loadRedisSessionFromViewer() {
 function useRedisSessionFromViewer() {
   const sessionId = state.redisLastSession?.sessionId;
 
-  if (!sessionId) {
+  if (!isUsableRedisSession(state.redisLastSession)) {
     showRedisResult("error", "SessionID není k dispozici.", "Nejprve načtěte existující MOS session z Redis.");
     return;
   }
@@ -2145,13 +2145,7 @@ function useRedisSessionFromViewer() {
 async function scanRedisSessionsFromViewer() {
   try {
     showRedisResult("warn", "Hledám MOS session klíče...", "pattern: mos:session:user:*");
-    const url = `${getRedisBridgeBaseUrl()}/scan?pattern=${encodeURIComponent("mos:session:user:*")}&count=50`;
-    const response = await fetch(url);
-    const body = await response.json();
-
-    if (!response.ok) {
-      throw new Error(body.message || body.error || `HTTP ${response.status}`);
-    }
+    const body = await fetchRedisBridgeJson(`/scan?pattern=${encodeURIComponent("mos:session:user:*")}&count=50`);
 
     showRedisResult("ok", `Nalezeno ${body.keys?.length || 0} session klíčů`, `
       <div class="redis-key-list">
@@ -2159,6 +2153,7 @@ async function scanRedisSessionsFromViewer() {
       </div>
     `, { html: true });
 
+    renderRedisViewer();
     elements.redisResult.querySelectorAll("[data-redis-key]").forEach(button => {
       button.addEventListener("click", () => {
         const key = button.dataset.redisKey || "";
@@ -2174,15 +2169,7 @@ async function scanRedisSessionsFromViewer() {
 }
 
 async function fetchRedisSession(identityId) {
-  const url = `${getRedisBridgeBaseUrl()}/session/${encodeURIComponent(identityId)}`;
-  const response = await fetch(url);
-  const body = await response.json();
-
-  if (!response.ok) {
-    throw new Error(body.message || body.error || `HTTP ${response.status}`);
-  }
-
-  return body;
+  return await fetchRedisBridgeJson(`/session/${encodeURIComponent(identityId)}`);
 }
 
 function getRedisViewerIdentityId() {
@@ -2191,13 +2178,77 @@ function getRedisViewerIdentityId() {
 }
 
 function getRedisBridgeBaseUrl() {
-  return String(state.redisBridgeUrl || elements.redisBridgeUrl?.value || "http://127.0.0.1:5097").replace(/\/$/, "");
+  return String(state.redisBridgeUrl || elements.redisBridgeUrl?.value || "/__redis").replace(/\/$/, "");
+}
+
+function isUsableRedisSession(session) {
+  const sessionId = String(session?.sessionId || session?.payload?.sessionId || session?.payload?.SessionId || "").trim();
+  return Boolean(session?.exists && sessionId && !isEmptyGuid(sessionId));
+}
+
+function isEmptyGuid(value) {
+  return String(value || "").trim().toLowerCase() === "00000000-0000-0000-0000-000000000000";
+}
+
+function getRedisSessionProblem(session) {
+  const sessionId = String(session?.sessionId || session?.payload?.sessionId || session?.payload?.SessionId || "").trim();
+
+  if (!session?.exists) {
+    return "MissingRedisKey";
+  }
+
+  if (!sessionId) {
+    return "MissingSessionId";
+  }
+
+  if (isEmptyGuid(sessionId)) {
+    return "EmptySessionId";
+  }
+
+  return "";
+}
+
+function getRedisBridgeBaseUrls() {
+  const configured = getRedisBridgeBaseUrl();
+  return [...new Set([configured, "/__redis", "http://127.0.0.1:5097"].filter(Boolean))];
+}
+
+async function fetchRedisBridgeJson(path) {
+  const errors = [];
+
+  for (const baseUrl of getRedisBridgeBaseUrls()) {
+    const url = `${baseUrl}${path}`;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 1500);
+
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(body.message || body.error || `HTTP ${response.status}`);
+      }
+
+      if (baseUrl !== state.redisBridgeUrl) {
+        state.redisBridgeUrl = baseUrl;
+        localStorage.setItem("demoHarness.redisBridgeUrl", baseUrl);
+      }
+
+      return body;
+    } catch (error) {
+      errors.push(`${url}: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }
+
+  throw new Error(errors.join("\n"));
 }
 
 function renderRedisSession(session, note = "") {
   const payload = session.payload || {};
   const sessionId = session.sessionId || "";
-  const exists = Boolean(session.exists && sessionId);
+  const exists = isUsableRedisSession(session);
   const ttl = Number(session.ttlSeconds);
   const ttlText = ttl < 0 ? "bez TTL / nenalezeno" : `${ttl} s`;
   elements.redisStatus.textContent = exists ? "Session nalezena" : "Session nenalezena";
@@ -2205,6 +2256,7 @@ function renderRedisSession(session, note = "") {
 
   showRedisResult(exists ? "ok" : "error", exists ? "MOS session v Redis" : "MOS session nebyla nalezena", `
     ${note ? `<p>${escapeHtml(note)}</p>` : ""}
+    ${!exists ? `<p>${escapeHtml(getRedisSessionProblem(session) || "Session nelze pouzit pro prime MOS volani.")}</p>` : ""}
     <div class="redis-detail-row"><span>Key</span><code>${escapeHtml(session.key || "")}</code></div>
     <div class="redis-detail-row"><span>TTL</span><code>${escapeHtml(ttlText)}</code></div>
     <div class="redis-detail-row"><span>SessionID</span><code>${escapeHtml(sessionId || "-")}</code></div>
@@ -4353,11 +4405,12 @@ async function applyWorkflowRedisSession(item) {
     const session = await fetchRedisSession(identityId);
     const sessionId = session.sessionId || session.payload?.sessionId || session.payload?.SessionId;
 
-    if (!session.exists || !sessionId) {
+    if (!isUsableRedisSession(session)) {
       addLog("warn", "Redis MOS session not found", {
         identityId,
         key: session.key,
-        exists: session.exists
+        exists: session.exists,
+        reason: getRedisSessionProblem(session)
       });
       return;
     }
