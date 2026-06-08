@@ -688,6 +688,11 @@ p {
   padding-top: 8px;
 }
 
+.scenario-steps li.workflow-step-item {
+  grid-template-columns: 24px 1fr auto;
+  align-items: start;
+}
+
 .scenario-steps li > span {
   display: grid;
   place-items: center;
@@ -706,6 +711,30 @@ p {
 
 .scenario-steps p {
   color: var(--muted);
+}
+
+.workflow-step-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.workflow-start-at {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--accent-dark);
+  padding: 6px 9px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.workflow-start-at:hover {
+  background: #e6f4f1;
+}
+
+.workflow-start-at:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .smoke-list {

@@ -2089,11 +2089,14 @@ function createWorkflowCard(workflow) {
     <button class="scenario-toggle" type="button" aria-expanded="false" ${state.workflowRunning ? "disabled" : ""}>Kroky (${workflow.items?.length || 0})</button>
     <ol class="scenario-steps hidden">
       ${(workflow.items || []).map((item, index) => `
-        <li>
+        <li class="workflow-step-item">
           <span>${index + 1}</span>
           <div>
             <strong>${escapeHtml(item.title || item.scenarioId)}</strong>
             <p>${escapeHtml(`${item.projectId} / ${item.packId} / ${item.scenarioId}`)}</p>
+          </div>
+          <div class="workflow-step-actions">
+            <button class="workflow-start-at" type="button" data-workflow-step-index="${index}" ${state.workflowRunning ? "disabled" : ""}>Pokra\u010dovat odtud</button>
           </div>
         </li>`).join("")}
     </ol>
@@ -2107,6 +2110,12 @@ function createWorkflowCard(workflow) {
     const expanded = steps.classList.toggle("hidden") === false;
     toggle.setAttribute("aria-expanded", String(expanded));
     toggle.textContent = expanded ? "Skrýt kroky" : `Kroky (${workflow.items?.length || 0})`;
+  });
+  card.querySelectorAll(".workflow-start-at").forEach(button => {
+    button.addEventListener("click", event => {
+      event.stopPropagation();
+      startWorkflowFromItem(workflow.id, Number(button.dataset.workflowStepIndex));
+    });
   });
   card.classList.toggle("active", state.selectedWorkflowId === workflow.id);
   return card;
@@ -3704,15 +3713,10 @@ async function startSelectedWorkflow() {
     return;
   }
 
-  state.workflowContext = {};
-  state.workflowRun = {
-    workflowId: workflow.id,
-    itemIndex: 0,
-    stepIndex: 0,
-    results: [],
-    startedAt: new Date().toISOString(),
-    status: "running"
-  };
+  prepareWorkflowRun(workflow, 0, {
+    keepContext: false,
+    keepPreviousResults: false
+  });
   state.log = [];
   addLog("ok", "Workflow started", {
     id: workflow.id,
@@ -3720,6 +3724,63 @@ async function startSelectedWorkflow() {
     items: workflow.items?.length || 0
   });
   await continueWorkflowRun();
+}
+
+async function startWorkflowFromItem(workflowId, itemIndex) {
+  const workflow = (state.workflowIndex?.workflows || []).find(item => item.id === workflowId);
+
+  if (!workflow || !workflow.items?.[itemIndex]) {
+    return;
+  }
+
+  const keepContext = state.workflowRun?.workflowId === workflow.id;
+  state.selectedWorkflowId = workflow.id;
+  prepareWorkflowRun(workflow, itemIndex, {
+    keepContext,
+    keepPreviousResults: keepContext
+  });
+  addLog("ok", "Workflow restarted from selected item", {
+    id: workflow.id,
+    name: workflow.name,
+    itemIndex,
+    item: workflow.items[itemIndex]?.title || workflow.items[itemIndex]?.scenarioId
+  });
+  showWorkflowSummary("warn", "Workflow bude pokra\u010dovat od vybran\u00e9 \u010d\u00e1sti.", [
+    workflow.name,
+    workflow.items[itemIndex]?.title || workflow.items[itemIndex]?.scenarioId
+  ]);
+  await continueWorkflowRun();
+}
+
+function prepareWorkflowRun(workflow, itemIndex, options = {}) {
+  const keepContext = options.keepContext === true;
+  const keepPreviousResults = options.keepPreviousResults === true;
+  const previousResults = keepPreviousResults
+    ? (state.workflowRun?.results || []).filter(result => {
+        const resultItemIndex = getWorkflowResultItemIndex(workflow, result);
+        return resultItemIndex >= 0 && resultItemIndex < itemIndex;
+      })
+    : [];
+
+  if (!keepContext) {
+    state.workflowContext = {};
+  }
+
+  state.workflowRun = {
+    workflowId: workflow.id,
+    itemIndex,
+    stepIndex: 0,
+    results: previousResults,
+    startedAt: new Date().toISOString(),
+    status: "running"
+  };
+}
+
+function getWorkflowResultItemIndex(workflow, result) {
+  return (workflow.items || []).findIndex(item =>
+    item.projectId === result.projectId
+    && item.packId === result.packId
+    && item.scenarioId === result.scenarioId);
 }
 
 async function continueWorkflowRun() {
