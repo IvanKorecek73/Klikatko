@@ -1,7 +1,9 @@
 param(
     [int]$Port = 5095,
     [string]$TargetBaseUrl = "http://localhost:5087",
-    [int]$ProxyTimeoutSeconds = 30
+    [int]$ProxyTimeoutSeconds = 30,
+    [int]$RedisBridgePort = 5097,
+    [string]$RedisConnectionString = "localhost:6379,abortConnect=false"
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,6 +12,7 @@ Add-Type -AssemblyName System.Net.Http
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $publicRoot = Join-Path $root "public"
+$redisBridgeProcess = $null
 $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Port)
 $httpClientHandler = [System.Net.Http.HttpClientHandler]::new()
 $decompressionMethods = [System.Net.DecompressionMethods]::GZip -bor [System.Net.DecompressionMethods]::Deflate
@@ -299,9 +302,23 @@ function Set-ProxyTarget {
 }
 
 try {
+    $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
+    if ($nodeCommand) {
+        $env:REDIS_BRIDGE_PORT = [string]$RedisBridgePort
+        $env:REDIS_CONNECTION_STRING = $RedisConnectionString
+        $redisBridgeScript = Join-Path $root "tools\redis-bridge\src\server.js"
+        $redisBridgeProcess = Start-Process -FilePath $nodeCommand.Source -ArgumentList @($redisBridgeScript) -WorkingDirectory $root -WindowStyle Hidden -PassThru
+    }
+
     $listener.Start()
     Write-Host "Ticket Service demo harness: http://localhost:$Port"
     Write-Host "Proxy target: $TargetBaseUrl"
+    if ($redisBridgeProcess) {
+        Write-Host "Redis bridge: http://127.0.0.1:$RedisBridgePort"
+    }
+    else {
+        Write-Host "Redis bridge: Node.js not found, bridge was not started"
+    }
     Write-Host "Stop with Ctrl+C."
 
     while ($true) {
@@ -338,4 +355,8 @@ try {
 finally {
     $httpClient.Dispose()
     $listener.Stop()
+    if ($redisBridgeProcess -and -not $redisBridgeProcess.HasExited) {
+        $redisBridgeProcess.Kill()
+        $redisBridgeProcess.Dispose()
+    }
 }

@@ -29,6 +29,9 @@
           "id": "mos-coupon-authenticate-login",
           "title": "Přihlásit se do Core MOS",
           "description": "Zavolá AuthenticateLogin a uloží SessionID pro další SOAP volání.",
+          "skipWhen": {
+            "contextExists": "mosCouponSessionId"
+          },
           "fields": [
             {
               "name": "userName",

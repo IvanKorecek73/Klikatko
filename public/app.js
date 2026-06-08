@@ -37,6 +37,9 @@ const state = {
   authFormValues: {},
   authProfileNotes: {},
   authCustomProfiles: [],
+  redisBridgeUrl: localStorage.getItem("demoHarness.redisBridgeUrl") || "http://127.0.0.1:5097",
+  redisIdentityId: "",
+  redisLastSession: null,
   displayedResult: null,
   activeSelection: null,
   resultCountdownTimer: null
@@ -106,10 +109,12 @@ const elements = {
   smokeTab: document.querySelector("#smokeTab"),
   formsTab: document.querySelector("#formsTab"),
   workflowsTab: document.querySelector("#workflowsTab"),
+  redisTab: document.querySelector("#redisTab"),
   scenariosPane: document.querySelector("#scenariosPane"),
   smokePane: document.querySelector("#smokePane"),
   formsPane: document.querySelector("#formsPane"),
   workflowsPane: document.querySelector("#workflowsPane"),
+  redisPane: document.querySelector("#redisPane"),
   workflowList: document.querySelector("#workflowList"),
   workflowStatus: document.querySelector("#workflowStatus"),
   workflowAutoStop: document.querySelector("#workflowAutoStop"),
@@ -117,6 +122,13 @@ const elements = {
   continueWorkflow: document.querySelector("#continueWorkflow"),
   stopWorkflow: document.querySelector("#stopWorkflow"),
   workflowSummary: document.querySelector("#workflowSummary"),
+  redisBridgeUrl: document.querySelector("#redisBridgeUrl"),
+  redisIdentityId: document.querySelector("#redisIdentityId"),
+  redisStatus: document.querySelector("#redisStatus"),
+  redisLoadSession: document.querySelector("#redisLoadSession"),
+  redisUseSession: document.querySelector("#redisUseSession"),
+  redisScanSessions: document.querySelector("#redisScanSessions"),
+  redisResult: document.querySelector("#redisResult"),
   testerTab: document.querySelector("#testerTab"),
   logTab: document.querySelector("#logTab"),
   testerPane: document.querySelector("#testerPane"),
@@ -137,6 +149,7 @@ async function init() {
     scenarioId: lastSelection?.scenarioId,
     suppressLog: true
   });
+  renderRedisViewer();
 
   elements.runStep.addEventListener("click", runCurrentStep);
   elements.previousStep.addEventListener("click", previousStep);
@@ -151,6 +164,10 @@ async function init() {
   elements.smokeTab.addEventListener("click", () => activateLeftTab("smoke"));
   elements.formsTab.addEventListener("click", () => activateLeftTab("forms"));
   elements.workflowsTab.addEventListener("click", () => activateLeftTab("workflows"));
+  elements.redisTab.addEventListener("click", () => {
+    renderRedisViewer();
+    activateLeftTab("redis");
+  });
   elements.runWorkflow.addEventListener("click", startSelectedWorkflow);
   elements.continueWorkflow.addEventListener("click", continueWorkflowRun);
   elements.stopWorkflow.addEventListener("click", requestStopWorkflowRun);
@@ -181,6 +198,16 @@ async function init() {
   elements.authRefreshAction.addEventListener("click", executeAuthRefresh);
   elements.authLogoutAction.addEventListener("click", executeAuthLogout);
   elements.authResetAction.addEventListener("click", resetAuthState);
+  elements.redisBridgeUrl.addEventListener("input", event => {
+    state.redisBridgeUrl = event.target.value.trim() || "http://127.0.0.1:5097";
+    localStorage.setItem("demoHarness.redisBridgeUrl", state.redisBridgeUrl);
+  });
+  elements.redisIdentityId.addEventListener("input", event => {
+    state.redisIdentityId = event.target.value.trim();
+  });
+  elements.redisLoadSession.addEventListener("click", loadRedisSessionFromViewer);
+  elements.redisUseSession.addEventListener("click", useRedisSessionFromViewer);
+  elements.redisScanSessions.addEventListener("click", scanRedisSessionsFromViewer);
   elements.formSearch.addEventListener("input", event => {
     state.formSearch = event.target.value.trim().toLowerCase();
     renderFormList();
@@ -1122,6 +1149,7 @@ function removeSelectedAuthProfile() {
   }
 
   renderAuthPanel();
+  renderRedisViewer();
   renderModeBanner();
 }
 
@@ -1380,6 +1408,8 @@ function updateSessionFromAuthResponse(body, config, kind = "login") {
     deviceId: state.authFormValues?.[deviceIdField] || state.authSession?.deviceId || "",
     isAnonymous: isAnonymousSession
   };
+
+  applyAuthSessionContext();
 }
 
 function resolveAuthTemplate(template) {
@@ -1847,19 +1877,23 @@ function activateLeftTab(tab) {
   const showSmoke = tab === "smoke";
   const showForms = tab === "forms";
   const showWorkflows = tab === "workflows";
+  const showRedis = tab === "redis";
 
   elements.scenariosTab.classList.toggle("active", showScenarios);
   elements.smokeTab.classList.toggle("active", showSmoke);
   elements.formsTab.classList.toggle("active", showForms);
   elements.workflowsTab.classList.toggle("active", showWorkflows);
+  elements.redisTab.classList.toggle("active", showRedis);
   elements.scenariosTab.setAttribute("aria-selected", String(showScenarios));
   elements.smokeTab.setAttribute("aria-selected", String(showSmoke));
   elements.formsTab.setAttribute("aria-selected", String(showForms));
   elements.workflowsTab.setAttribute("aria-selected", String(showWorkflows));
+  elements.redisTab.setAttribute("aria-selected", String(showRedis));
   elements.scenariosPane.classList.toggle("active", showScenarios);
   elements.smokePane.classList.toggle("active", showSmoke);
   elements.formsPane.classList.toggle("active", showForms);
   elements.workflowsPane.classList.toggle("active", showWorkflows);
+  elements.redisPane.classList.toggle("active", showRedis);
 }
 
 function activateRightTab(tab) {
@@ -2051,6 +2085,141 @@ function renderSmokeList() {
   for (const scenario of state.catalog.scenarios) {
     elements.smokeList.appendChild(createSmokeCard(scenario));
   }
+}
+
+function renderRedisViewer() {
+  if (!elements.redisBridgeUrl) {
+    return;
+  }
+
+  elements.redisBridgeUrl.value = state.redisBridgeUrl || "http://127.0.0.1:5097";
+
+  if (!state.redisIdentityId && state.authSession?.identityId) {
+    state.redisIdentityId = state.authSession.identityId;
+  }
+
+  elements.redisIdentityId.value = state.redisIdentityId || "";
+  elements.redisUseSession.disabled = !state.redisLastSession?.sessionId;
+}
+
+async function loadRedisSessionFromViewer() {
+  const identityId = getRedisViewerIdentityId();
+
+  if (!identityId) {
+    showRedisResult("error", "Chybí identityId.", "Přihlaste se do BE PidLitacka nebo identityId vyplňte ručně.");
+    return;
+  }
+
+  try {
+    showRedisResult("warn", "Načítám Redis session...", identityId);
+    const session = await fetchRedisSession(identityId);
+    state.redisLastSession = session;
+    renderRedisSession(session);
+  } catch (error) {
+    state.redisLastSession = null;
+    showRedisResult("error", "Redis bridge neodpověděl.", error instanceof Error ? error.message : String(error));
+  }
+
+  renderRedisViewer();
+}
+
+function useRedisSessionFromViewer() {
+  const sessionId = state.redisLastSession?.sessionId;
+
+  if (!sessionId) {
+    showRedisResult("error", "SessionID není k dispozici.", "Nejprve načtěte existující MOS session z Redis.");
+    return;
+  }
+
+  state.context.mosCouponSessionId = sessionId;
+  state.workflowContext.mosCouponSessionId = sessionId;
+  renderContext();
+  addLog("ok", "Redis MOS session applied manually", {
+    key: state.redisLastSession.key,
+    ttlSeconds: state.redisLastSession.ttlSeconds,
+    contextKey: "mosCouponSessionId"
+  });
+  renderRedisSession(state.redisLastSession, "SessionID bylo vloženo do kontextu jako mosCouponSessionId.");
+}
+
+async function scanRedisSessionsFromViewer() {
+  try {
+    showRedisResult("warn", "Hledám MOS session klíče...", "pattern: mos:session:user:*");
+    const url = `${getRedisBridgeBaseUrl()}/scan?pattern=${encodeURIComponent("mos:session:user:*")}&count=50`;
+    const response = await fetch(url);
+    const body = await response.json();
+
+    if (!response.ok) {
+      throw new Error(body.message || body.error || `HTTP ${response.status}`);
+    }
+
+    showRedisResult("ok", `Nalezeno ${body.keys?.length || 0} session klíčů`, `
+      <div class="redis-key-list">
+        ${(body.keys || []).map(key => `<button type="button" data-redis-key="${escapeHtml(key)}">${escapeHtml(key)}</button>`).join("")}
+      </div>
+    `, { html: true });
+
+    elements.redisResult.querySelectorAll("[data-redis-key]").forEach(button => {
+      button.addEventListener("click", () => {
+        const key = button.dataset.redisKey || "";
+        const identityId = key.replace(/^mos:session:user:/, "");
+        state.redisIdentityId = identityId;
+        renderRedisViewer();
+        loadRedisSessionFromViewer();
+      });
+    });
+  } catch (error) {
+    showRedisResult("error", "Redis scan selhal.", error instanceof Error ? error.message : String(error));
+  }
+}
+
+async function fetchRedisSession(identityId) {
+  const url = `${getRedisBridgeBaseUrl()}/session/${encodeURIComponent(identityId)}`;
+  const response = await fetch(url);
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new Error(body.message || body.error || `HTTP ${response.status}`);
+  }
+
+  return body;
+}
+
+function getRedisViewerIdentityId() {
+  state.redisIdentityId = String(elements.redisIdentityId?.value || state.redisIdentityId || state.authSession?.identityId || "").trim();
+  return state.redisIdentityId;
+}
+
+function getRedisBridgeBaseUrl() {
+  return String(state.redisBridgeUrl || elements.redisBridgeUrl?.value || "http://127.0.0.1:5097").replace(/\/$/, "");
+}
+
+function renderRedisSession(session, note = "") {
+  const payload = session.payload || {};
+  const sessionId = session.sessionId || "";
+  const exists = Boolean(session.exists && sessionId);
+  const ttl = Number(session.ttlSeconds);
+  const ttlText = ttl < 0 ? "bez TTL / nenalezeno" : `${ttl} s`;
+  elements.redisStatus.textContent = exists ? "Session nalezena" : "Session nenalezena";
+  elements.redisUseSession.disabled = !exists;
+
+  showRedisResult(exists ? "ok" : "error", exists ? "MOS session v Redis" : "MOS session nebyla nalezena", `
+    ${note ? `<p>${escapeHtml(note)}</p>` : ""}
+    <div class="redis-detail-row"><span>Key</span><code>${escapeHtml(session.key || "")}</code></div>
+    <div class="redis-detail-row"><span>TTL</span><code>${escapeHtml(ttlText)}</code></div>
+    <div class="redis-detail-row"><span>SessionID</span><code>${escapeHtml(sessionId || "-")}</code></div>
+    <div class="redis-detail-row"><span>MOS LoginID</span><code>${escapeHtml(payload.mosLoginId ?? payload.MosLoginId ?? "-")}</code></div>
+    <pre>${escapeHtml(JSON.stringify(payload, null, 2))}</pre>
+  `, { html: true });
+}
+
+function showRedisResult(level, title, detail, options = {}) {
+  elements.redisStatus.textContent = level === "ok" ? "OK" : level === "warn" ? "Pracuji" : "Chyba";
+  elements.redisResult.className = `redis-result auto-run-summary ${level}`;
+  elements.redisResult.innerHTML = `
+    <strong>${escapeHtml(title)}</strong>
+    ${options.html ? String(detail || "") : `<p>${escapeHtml(detail || "")}</p>`}
+  `;
 }
 
 function renderWorkflowList() {
@@ -3898,6 +4067,7 @@ async function continueWorkflowRun() {
       }
 
       const item = workflow.items[state.workflowRun.itemIndex];
+      await applyWorkflowRedisSession(item);
       await openWorkflowItem(item);
       const scenario = state.scenario;
 
@@ -3912,9 +4082,18 @@ async function continueWorkflowRun() {
           return;
         }
 
+        applyWorkflowContextToScenario();
+        const runnableStepIndex = findNextRunnableStepIndex(state.workflowRun.stepIndex);
+        if (runnableStepIndex !== state.workflowRun.stepIndex) {
+          state.workflowRun.stepIndex = runnableStepIndex;
+        }
+
+        if (state.workflowRun.stepIndex >= scenario.steps.length) {
+          break;
+        }
+
         const step = scenario.steps[state.workflowRun.stepIndex];
         state.stepIndex = state.workflowRun.stepIndex;
-        applyWorkflowContextToScenario();
         renderStep({ preserveValues: true });
         setWorkflowControls(true);
 
@@ -4074,6 +4253,10 @@ function isWorkflowItemOpen(item) {
 function findFirstIncompleteWorkflowStepIndex(scenario) {
   for (let index = 0; index < scenario.steps.length; index += 1) {
     const step = scenario.steps[index];
+    if (shouldSkipStep(step)) {
+      continue;
+    }
+
     const result = state.stepResults[String(index)];
 
     if (!result || result.level === "error") {
@@ -4135,6 +4318,7 @@ function applyWorkflowContextToScenario() {
 }
 
 function syncWorkflowContextFromScenario() {
+  applyAuthSessionContext();
   state.workflowContext = {
     ...state.workflowContext,
     ...state.context
@@ -4143,6 +4327,57 @@ function syncWorkflowContextFromScenario() {
     ...state.workflowSecrets,
     ...state.secrets
   };
+}
+
+async function applyWorkflowRedisSession(item) {
+  const config = item?.redisSession;
+
+  if (!config || !isEmpty(state.workflowContext?.[config.contextKey || "mosCouponSessionId"])) {
+    return;
+  }
+
+  const identityContextKey = config.identityContextKey || "pidLitackaIdentityId";
+  const identityId = state.workflowContext?.[identityContextKey]
+    || state.context?.[identityContextKey]
+    || state.authSession?.identityId;
+
+  if (!identityId) {
+    addLog("warn", "Redis MOS session skipped", {
+      reason: "MissingIdentityId",
+      identityContextKey
+    });
+    return;
+  }
+
+  try {
+    const session = await fetchRedisSession(identityId);
+    const sessionId = session.sessionId || session.payload?.sessionId || session.payload?.SessionId;
+
+    if (!session.exists || !sessionId) {
+      addLog("warn", "Redis MOS session not found", {
+        identityId,
+        key: session.key,
+        exists: session.exists
+      });
+      return;
+    }
+
+    const contextKey = config.contextKey || "mosCouponSessionId";
+    state.workflowContext[contextKey] = sessionId;
+    state.context[contextKey] = sessionId;
+    state.redisLastSession = session;
+    addLog("ok", "Redis MOS session applied", {
+      identityId,
+      key: session.key,
+      ttlSeconds: session.ttlSeconds,
+      contextKey
+    });
+  } catch (error) {
+    addLog("warn", "Redis MOS session failed", {
+      identityId,
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
 }
 
 function getWorkflowStopBeforeStep(step) {
@@ -4580,12 +4815,29 @@ function applyAuthSessionFromStep(step, body, result) {
   };
 
   updateSessionFromAuthResponse(body, sessionConfig, "login");
+  applyAuthSessionContext();
   saveAuthFormValues();
   saveAuthSession();
   renderAuthPanel();
   renderModeBanner();
 
   return step.authSession.message || "Uživatel je přihlášený a připravený pro další scénáře.";
+}
+
+function applyAuthSessionContext() {
+  if (!state.authSession) {
+    return;
+  }
+
+  if (state.authSession.identityId) {
+    state.context.authIdentityId = state.authSession.identityId;
+    state.context.pidLitackaIdentityId = state.authSession.identityId;
+  }
+
+  if (state.authSession.email) {
+    state.context.authEmail = state.authSession.email;
+    state.context.pidLitackaUserName = state.authSession.email;
+  }
 }
 
 function showAutoRunSummaryFromResults(results) {
