@@ -2511,7 +2511,7 @@
               "name": "registeredNumberIsic",
               "label": "ISIC",
               "type": "text",
-              "value": "ISIC123"
+              "value": ""
             },
             {
               "name": "language",
@@ -2775,7 +2775,7 @@
               "name": "registeredNumberIsic",
               "label": "ISIC",
               "type": "text",
-              "value": "ISIC123"
+              "value": ""
             },
             {
               "name": "language",
