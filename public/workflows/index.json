@@ -63,6 +63,21 @@
           "scenarioId": "mos-coupon-test-purchase-soap",
           "title": "Koupit testovací kupón přes MOS pobočku",
           "description": "Pobočkový Core MOS SOAP tok: přihlášení, výběr identifikátoru a tarifu, AddItemToOrder, SetOrderPaid a kontrola kupónu.",
+          "autoSelect": [
+            {
+              "stepId": "mos-coupon-get-token-tariffs",
+              "preferredMatches": [
+                {
+                  "zoneName": "P",
+                  "price": "0.0000"
+                },
+                {
+                  "zoneName": "P"
+                }
+              ],
+              "strategy": "first"
+            }
+          ],
           "stopAfter": [
             {
               "stepId": "mos-coupon-add-item-to-order",

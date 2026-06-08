@@ -3884,6 +3884,8 @@ async function continueWorkflowRun() {
           return;
         }
 
+        applyWorkflowAutoSelection(item, step);
+
         const selectionStop = getWorkflowSelectionStopAfterStep(step);
         if (elements.workflowAutoStop.checked && selectionStop) {
           pauseWorkflow(selectionStop.message, "warn", selectionStop.lines, { preserveResult: true });
@@ -4162,6 +4164,92 @@ function getWorkflowSelectionStopAfterStep(step) {
   }
 
   return null;
+}
+
+function applyWorkflowAutoSelection(item, step) {
+  if (!state.activeSelection || state.activeSelection.stepId !== step.id || state.activeSelection.selectedIndex !== null) {
+    return false;
+  }
+
+  const rule = getWorkflowAutoSelectionRule(item, step);
+
+  if (!rule) {
+    return false;
+  }
+
+  const selectedIndex = resolveWorkflowAutoSelectionIndex(state.activeSelection.items, rule);
+
+  if (selectedIndex === null) {
+    addLog("warn", "Workflow automatic selection skipped", {
+      stepId: step.id,
+      reason: "No selectable item matched the workflow rule.",
+      rule
+    });
+    return false;
+  }
+
+  applySelection(selectedIndex);
+  syncWorkflowContextFromScenario();
+  addLog("ok", "Workflow automatic selection applied", {
+    stepId: step.id,
+    selectedIndex,
+    rule
+  });
+  return true;
+}
+
+function getWorkflowAutoSelectionRule(item, step) {
+  const rules = Array.isArray(item?.autoSelect) ? item.autoSelect : [];
+  return rules.find(rule => rule?.stepId === step.id) || null;
+}
+
+function resolveWorkflowAutoSelectionIndex(items, rule) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return null;
+  }
+
+  for (const match of asArray(rule.preferredMatches)) {
+    const index = findWorkflowSelectionMatchIndex(items, match);
+
+    if (index !== null) {
+      return index;
+    }
+  }
+
+  if (rule.match) {
+    const index = findWorkflowSelectionMatchIndex(items, rule.match);
+
+    if (index !== null) {
+      return index;
+    }
+  }
+
+  if (rule.strategy === "random") {
+    return Math.floor(Math.random() * items.length);
+  }
+
+  if (rule.fallback === false) {
+    return null;
+  }
+
+  return 0;
+}
+
+function findWorkflowSelectionMatchIndex(items, match) {
+  if (!match || typeof match !== "object") {
+    return null;
+  }
+
+  const entries = Object.entries(match);
+
+  if (entries.length === 0) {
+    return null;
+  }
+
+  const index = items.findIndex(item => entries.every(([key, expected]) =>
+    String(item?.[key] ?? "") === String(expected ?? "")));
+
+  return index >= 0 ? index : null;
 }
 
 function normalizeWorkflowStop(stop, fallbackMessage) {
