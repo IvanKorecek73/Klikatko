@@ -331,7 +331,7 @@ function getDefaultEnvironmentId(project) {
 }
 
 function isSmokeEligible(scenario) {
-  return scenario?.smoke !== false;
+  return scenario?.formsOnly !== true && scenario?.smoke !== false;
 }
 
 function requiresManualInput(item) {
@@ -2045,10 +2045,12 @@ function collectForms() {
 
 function renderScenarioList() {
   elements.scenarioList.innerHTML = "";
-  const scenarios = state.catalog.scenarios.map(scenario => ({
-    ...scenario,
-    tags: deriveScenarioTags(scenario)
-  }));
+  const scenarios = state.catalog.scenarios
+    .filter(scenario => scenario.formsOnly !== true)
+    .map(scenario => ({
+      ...scenario,
+      tags: deriveScenarioTags(scenario)
+    }));
 
   renderTagFilters(elements.scenarioCategoryFilters, scenarios, state.scenarioCategory, category => {
     state.scenarioCategory = category;
@@ -3710,7 +3712,7 @@ async function runCurrentStep() {
   let request = null;
 
   try {
-    if (step.customAction === "mosTokenCouponsOverview") {
+    if (step.customAction) {
       await runCustomStep(step, runningStepIndex);
       return;
     }
@@ -3827,6 +3829,44 @@ async function runCurrentStep() {
 }
 
 async function runCustomStep(step, runningStepIndex) {
+  if (step.customAction === "loadMosSessionFromRedis") {
+    const startedAt = performance.now();
+    const loaded = await loadMosSessionFromRedisStep(step);
+    const durationMs = Math.round(performance.now() - startedAt);
+    const result = {
+      level: "ok",
+      appMessage: "MOS SessionID bylo načteno z Redis.",
+      messages: [
+        `SessionID je připraveno v kontextu jako ${loaded.contextKey}.`,
+        `IdentityId: ${loaded.identityId}`
+      ]
+    };
+
+    state.lastStepResult = result;
+    state.stepResults[runningStepIndex] = result;
+    addLog("ok", `${step.title} -> Redis`, {
+      request: {
+        action: step.customAction,
+        identityId: loaded.identityId,
+        key: loaded.key,
+        contextKey: loaded.contextKey
+      },
+      response: {
+        durationMs,
+        ttlSeconds: loaded.ttlSeconds,
+        mosLoginId: loaded.mosLoginId
+      },
+      expected: step.expected || null,
+      mode: state.dirty ? "exploratory" : "scenario",
+      notes: result.messages
+    });
+    showResult("ok", result.appMessage, loaded, step);
+    renderContext();
+    elements.nextStep.disabled = !canAdvanceFromCurrentStep();
+    elements.nextStep.classList.toggle("ready", !elements.nextStep.disabled);
+    return;
+  }
+
   if (step.customAction === "mosTokenCouponsOverview") {
     const startedAt = performance.now();
     const overview = await loadMosTokenCouponsOverview(step);
@@ -3868,6 +3908,75 @@ async function runCustomStep(step, runningStepIndex) {
   }
 
   throw new Error(`Neznámá vlastní akce kroku: ${step.customAction}`);
+}
+
+async function loadMosSessionFromRedisStep(step) {
+  const contextKey = step.redisSession?.contextKey || "mosCouponSessionId";
+  const identityContextKey = step.redisSession?.identityContextKey || "pidLitackaIdentityId";
+  const identityId = getPidLitackaIdentityIdForRedis(identityContextKey);
+
+  if (!identityId) {
+    throw new Error("Chybí PidLitacka IdentityId pro načtení MOS SessionID z Redis. Nejdříve se přihlaste do projektu PidLitacka nebo spusťte workflow od kroku, který PidLitacka uživatele přihlásí.");
+  }
+
+  const session = await fetchRedisSession(identityId);
+
+  if (!isUsableRedisSession(session)) {
+    throw new Error(`Redis session pro identityId ${identityId} není použitelná: ${getRedisSessionProblem(session) || "UnknownRedisSessionProblem"}.`);
+  }
+
+  const sessionId = session.sessionId || session.payload?.sessionId || session.payload?.SessionId;
+  state.context[contextKey] = sessionId;
+  state.context[identityContextKey] = identityId;
+  state.redisLastSession = session;
+
+  return {
+    kind: "mosSessionFromRedis",
+    identityId,
+    contextKey,
+    key: session.key,
+    ttlSeconds: session.ttlSeconds,
+    mosLoginId: session.payload?.mosLoginId ?? session.payload?.MosLoginId ?? "",
+    sessionIdMasked: maskSessionId(sessionId)
+  };
+}
+
+function getPidLitackaIdentityIdForRedis(identityContextKey = "pidLitackaIdentityId") {
+  return String(
+    state.context?.[identityContextKey]
+    || state.workflowContext?.[identityContextKey]
+    || state.context?.pidLitackaIdentityId
+    || state.context?.authIdentityId
+    || state.authSession?.identityId
+    || loadLastPidLitackaAuthSession()?.identityId
+    || ""
+  ).trim();
+}
+
+function loadLastPidLitackaAuthSession() {
+  const project = state.projectIndex?.projects?.find(item => item.id === "pidlitacka");
+  const environments = project?.environments || [];
+  const preferredEnvironmentIds = [
+    getSavedEnvironmentId(project),
+    project?.defaultEnvironmentId,
+    ...environments.map(environment => environment.id)
+  ].filter(Boolean);
+
+  for (const environmentId of [...new Set(preferredEnvironmentIds)]) {
+    const session = loadSavedAuthSession(project, environmentId);
+    if (session?.identityId) {
+      return session;
+    }
+  }
+
+  return null;
+}
+
+function maskSessionId(sessionId) {
+  const value = String(sessionId || "");
+  return value.length > 12
+    ? `${value.slice(0, 8)}...${value.slice(-4)}`
+    : value;
 }
 
 async function loadMosTokenCouponsOverview(step) {
@@ -4389,9 +4498,7 @@ async function applyWorkflowRedisSession(item) {
   }
 
   const identityContextKey = config.identityContextKey || "pidLitackaIdentityId";
-  const identityId = state.workflowContext?.[identityContextKey]
-    || state.context?.[identityContextKey]
-    || state.authSession?.identityId;
+  const identityId = getPidLitackaIdentityIdForRedis(identityContextKey);
 
   if (!identityId) {
     addLog("warn", "Redis MOS session skipped", {

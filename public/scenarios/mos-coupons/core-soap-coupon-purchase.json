@@ -10,7 +10,13 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["coupons", "soap", "core-mos", "test-data", "purchase"],
+      "tags": [
+        "coupons",
+        "soap",
+        "core-mos",
+        "test-data",
+        "purchase"
+      ],
       "app": {
         "section": "profile",
         "title": "Kupóny",
@@ -18,7 +24,7 @@
       },
       "instructions": [
         "V panelu Přístup vložte Core MOS ServiceKey.",
-        "Ve scénáři zadejte přepážkový MOS účet a heslo. Po přihlášení se SessionID uloží do kontextu.",
+        "Scenar automaticky nacte MOS SessionID z Redis podle PidLitacka IdentityId. Rucni MOS login je dostupny jen pres zalozku Formulare.",
         "Krok zjištění tarifů nabídne kombinace tarif + zóna. Vybraná zóna vždy pochází ze stejného tarifu, který se posílá do AddItemToOrder.",
         "Kvůli chování Core MOS se pro samotnou fixní zónu P do nákupu posílá cena 0.0000. U ostatních zón se použije cena vrácená v daném tarifním pásmu.",
         "Kupón se vytváří s IsTest=true, tedy jako testovací nákup vyloučený ze statistik a reportů.",
@@ -27,68 +33,27 @@
       "steps": [
         {
           "id": "mos-coupon-authenticate-login",
-          "title": "Přihlásit se do Core MOS",
-          "description": "Zavolá AuthenticateLogin a uloží SessionID pro další SOAP volání.",
-          "skipWhen": {
-            "contextExists": "mosCouponSessionId"
-          },
-          "fields": [
-            {
-              "name": "userName",
-              "label": "MOS uživatel",
-              "type": "text",
-              "value": "{{context.userName}}",
-              "placeholder": "Přepážkový účet"
-            },
-            {
-              "name": "password",
-              "label": "Heslo",
-              "type": "password",
-              "value": "{{secret.accountPassword}}",
-              "placeholder": "Heslo přepážkového účtu"
-            },
-            {
-              "name": "codeSms",
-              "label": "SMS kód",
-              "type": "text",
-              "value": "",
-              "placeholder": "Volitelné",
-              "workflowAutoStop": false
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "path": "/services/MOSservice.asmx",
-            "contentType": "text/xml; charset=utf-8",
-            "headers": {
-              "SOAPAction": "\"globdata/AuthenticateLogin\""
-            },
-            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AuthenticateLogin xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <Password>{{form.password}}</Password>\n      <CodeSMS>{{form.codeSms}}</CodeSMS>\n    </AuthenticateLogin>\n  </soap:Body>\n</soap:Envelope>"
+          "title": "Nacist MOS SessionID z Redis",
+          "description": "Nacte MOS SessionID z Redis podle PidLitacka IdentityId a ulozi ho do kontextu jako mosCouponSessionId.",
+          "customAction": "loadMosSessionFromRedis",
+          "redisSession": {
+            "identityContextKey": "pidLitackaIdentityId",
+            "contextKey": "mosCouponSessionId"
           },
           "expected": {
-            "status": 200,
-            "assertions": [
-              {
-                "regex": "<AuthenticateLoginResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
-                "label": "MOS Result.ID = 0",
-                "message": "Přihlášení do Core MOS neproběhlo úspěšně."
-              },
-              {
-                "regex": "<SessionID>[^<]+</SessionID>",
-                "label": "SessionID vráceno",
-                "message": "MOS nevrátil SessionID. Další kroky nemohou pokračovat."
-              }
-            ]
+            "status": 200
           },
-          "extractRegex": {
-            "mosCouponSessionId": "<SessionID>([^<]+)</SessionID>"
+          "skipWhen": {
+            "contextExists": "mosCouponSessionId"
           }
         },
         {
           "id": "mos-coupon-get-tokens",
           "title": "Načíst identifikátory",
           "description": "Načte dostupné tokeny/identifikátory přihlášeného MOS účtu. Vybraný identifikátor se použije pro zjištění tarifů a vytvoření kupónu.",
-          "requiresContext": ["mosCouponSessionId"],
+          "requiresContext": [
+            "mosCouponSessionId"
+          ],
           "request": {
             "method": "POST",
             "path": "/services/MOSservice.asmx",
@@ -127,7 +92,9 @@
           "id": "mos-coupon-get-token-tariffs",
           "title": "Vybrat tarif a zónu",
           "description": "Načte tarify a zóny pro vybraný token. V Mobilu vyberte konkrétní kombinaci tarifního pásma a zóny.",
-          "requiresContext": ["mosCouponSessionId"],
+          "requiresContext": [
+            "mosCouponSessionId"
+          ],
           "fields": [
             {
               "name": "tokenId",
@@ -182,7 +149,13 @@
           "id": "mos-coupon-add-item-to-order",
           "title": "Přidat testovací kupón do objednávky",
           "description": "Zavolá AddItemToOrder s NewCoupon a IsTest=true. Pokud OrderID není zadán, MOS vytvoří novou objednávku.",
-          "requiresContext": ["mosCouponSessionId", "mosCouponTokenId", "mosCouponSuggestedTariffId", "mosCouponSuggestedZoneId", "mosCouponSuggestedPrice"],
+          "requiresContext": [
+            "mosCouponSessionId",
+            "mosCouponTokenId",
+            "mosCouponSuggestedTariffId",
+            "mosCouponSuggestedZoneId",
+            "mosCouponSuggestedPrice"
+          ],
           "fields": [
             {
               "name": "customerId",
@@ -275,7 +248,11 @@
           "id": "mos-coupon-set-order-paid",
           "title": "Potvrdit platbu objednávky",
           "description": "Zavolá SetOrderPaid s kancelářskou platbou a aktivuje testovací kupón přiřazený k tokenu.",
-          "requiresContext": ["mosCouponSessionId", "mosCouponOrderId", "mosCouponPrice"],
+          "requiresContext": [
+            "mosCouponSessionId",
+            "mosCouponOrderId",
+            "mosCouponPrice"
+          ],
           "fields": [
             {
               "name": "orderId",
@@ -289,8 +266,14 @@
               "type": "select",
               "value": "3",
               "options": [
-                { "value": "3", "text": "3 - karta v kanceláři" },
-                { "value": "4", "text": "4 - hotovost" }
+                {
+                  "value": "3",
+                  "text": "3 - karta v kanceláři"
+                },
+                {
+                  "value": "4",
+                  "text": "4 - hotovost"
+                }
               ]
             },
             {
@@ -325,7 +308,10 @@
           "id": "mos-coupon-get-coupons",
           "title": "Zobrazit kupóny na identifikátoru",
           "description": "Načte kupóny přiřazené k vybranému TokenID, aby bylo možné ověřit, že se testovací kupón po zaplacení skutečně objevil.",
-          "requiresContext": ["mosCouponSessionId", "mosCouponTokenId"],
+          "requiresContext": [
+            "mosCouponSessionId",
+            "mosCouponTokenId"
+          ],
           "fields": [
             {
               "name": "tokenId",
@@ -339,8 +325,14 @@
               "type": "select",
               "value": "true",
               "options": [
-                { "value": "true", "text": "Všechny kupóny" },
-                { "value": "false", "text": "Jen aktuálně dostupné" }
+                {
+                  "value": "true",
+                  "text": "Všechny kupóny"
+                },
+                {
+                  "value": "false",
+                  "text": "Jen aktuálně dostupné"
+                }
               ]
             }
           ],
@@ -406,7 +398,14 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["coupons", "soap", "core-mos", "mobile-app", "payment-gateway", "purchase"],
+      "tags": [
+        "coupons",
+        "soap",
+        "core-mos",
+        "mobile-app",
+        "payment-gateway",
+        "purchase"
+      ],
       "app": {
         "section": "profile",
         "title": "Kupóny",
@@ -415,7 +414,7 @@
       "instructions": [
         "Tento scénář je MOBILNÍ varianta nákupu. Stávající scénář MOS - nákup testovacího kupónu je pobočkový a používá SetOrderPaid.",
         "V panelu Přístup vložte Core MOS ServiceKey.",
-        "Ve scénáři zadejte MOS uživatele a heslo. Po přihlášení se SessionID uloží do kontextu.",
+        "Scenar automaticky nacte MOS SessionID z Redis podle PidLitacka IdentityId. Rucni MOS login je dostupny jen pres zalozku Formulare.",
         "Vyberte token a konkrétní tarifní zónu stejně jako u pobočkového scénáře.",
         "AddItemToOrder zde posílá IsTest=false, protože mobilní nákup simuluje skutečný online nákup. Pro bezpečný test použijte PRE-CORE a testovací účet/token.",
         "Mobilní platba se nepotvrzuje přes SetOrderPaid. Scénář používá InitiateOrderPayment a potom ruční ProcessPaymentGatewayResult po návratu z brány.",
@@ -424,59 +423,27 @@
       "steps": [
         {
           "id": "mos-mobile-coupon-authenticate-login",
-          "title": "Přihlásit se do Core MOS",
-          "description": "Zavolá AuthenticateLogin a uloží SessionID pro další SOAP volání.",
-          "fields": [
-            {
-              "name": "userName",
-              "label": "MOS uživatel",
-              "type": "text",
-              "value": "",
-              "placeholder": "MOS účet pro mobilní nákup"
-            },
-            {
-              "name": "password",
-              "label": "Heslo",
-              "type": "password",
-              "value": "",
-              "placeholder": "Heslo MOS účtu"
-            },
-            {
-              "name": "codeSms",
-              "label": "SMS kód",
-              "type": "text",
-              "value": "",
-              "placeholder": "Volitelné"
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "path": "/services/MOSservice.asmx",
-            "contentType": "text/xml; charset=utf-8",
-            "headers": {
-              "SOAPAction": "\"globdata/AuthenticateLogin\""
-            },
-            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AuthenticateLogin xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <Password>{{form.password}}</Password>\n      <CodeSMS>{{form.codeSms}}</CodeSMS>\n    </AuthenticateLogin>\n  </soap:Body>\n</soap:Envelope>"
+          "title": "Nacist MOS SessionID z Redis",
+          "description": "Nacte MOS SessionID z Redis podle PidLitacka IdentityId a ulozi ho do kontextu jako mosMobileCouponSessionId.",
+          "customAction": "loadMosSessionFromRedis",
+          "redisSession": {
+            "identityContextKey": "pidLitackaIdentityId",
+            "contextKey": "mosMobileCouponSessionId"
           },
           "expected": {
-            "status": 200,
-            "assertions": [
-              {
-                "regex": "<AuthenticateLoginResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
-                "label": "MOS Result.ID = 0",
-                "message": "Přihlášení do Core MOS neproběhlo úspěšně."
-              }
-            ]
+            "status": 200
           },
-          "extractRegex": {
-            "mosMobileCouponSessionId": "<SessionID>([^<]+)</SessionID>"
+          "skipWhen": {
+            "contextExists": "mosMobileCouponSessionId"
           }
         },
         {
           "id": "mos-mobile-coupon-get-tokens",
           "title": "Vybrat identifikátor",
           "description": "Načte dostupné tokeny/identifikátory přihlášeného MOS účtu. Vybraný identifikátor se použije pro zjištění tarifů a nákup kupónu.",
-          "requiresContext": ["mosMobileCouponSessionId"],
+          "requiresContext": [
+            "mosMobileCouponSessionId"
+          ],
           "request": {
             "method": "POST",
             "path": "/services/MOSservice.asmx",
@@ -523,7 +490,10 @@
           "id": "mos-mobile-coupon-get-token-tariffs",
           "title": "Vybrat tarif a zónu",
           "description": "Načte tarify a zóny pro vybraný token. V Mobilu vyberte konkrétní kombinaci tarifního pásma a zóny.",
-          "requiresContext": ["mosMobileCouponSessionId", "mosMobileCouponTokenId"],
+          "requiresContext": [
+            "mosMobileCouponSessionId",
+            "mosMobileCouponTokenId"
+          ],
           "fields": [
             {
               "name": "tokenId",
@@ -585,7 +555,13 @@
           "id": "mos-mobile-coupon-add-item-to-order",
           "title": "Přidat kupón do objednávky",
           "description": "Zavolá AddItemToOrder s NewCoupon a IsTest=false. Pokud OrderID není zadán, MOS vytvoří novou objednávku pro online platbu.",
-          "requiresContext": ["mosMobileCouponSessionId", "mosMobileCouponTokenId", "mosMobileCouponSuggestedTariffId", "mosMobileCouponSuggestedZoneId", "mosMobileCouponSuggestedPrice"],
+          "requiresContext": [
+            "mosMobileCouponSessionId",
+            "mosMobileCouponTokenId",
+            "mosMobileCouponSuggestedTariffId",
+            "mosMobileCouponSuggestedZoneId",
+            "mosMobileCouponSuggestedPrice"
+          ],
           "fields": [
             {
               "name": "customerId",
@@ -681,7 +657,10 @@
           "id": "mos-mobile-coupon-initiate-card-payment",
           "title": "Zahájit platbu kartou přes bránu",
           "description": "Zavolá InitiateOrderPayment. MOS má vrátit PaymentGatewayRedirectURL, kterou mobil otevře pro zaplacení kartou.",
-          "requiresContext": ["mosMobileCouponSessionId", "mosMobileCouponOrderId"],
+          "requiresContext": [
+            "mosMobileCouponSessionId",
+            "mosMobileCouponOrderId"
+          ],
           "fields": [
             {
               "name": "orderId",
@@ -736,7 +715,9 @@
           "id": "mos-mobile-coupon-process-card-payment-result",
           "title": "Zpracovat návrat z platební brány",
           "description": "Po ručním průchodu platební bránou vložte PaymentGWData z návratu na EshopRedirectUrl. Bez skutečných dat brány tento krok nelze úspěšně dokončit.",
-          "requiresContext": ["mosMobileCouponSessionId"],
+          "requiresContext": [
+            "mosMobileCouponSessionId"
+          ],
           "fields": [
             {
               "name": "paymentGWData",
@@ -770,7 +751,10 @@
           "id": "mos-mobile-coupon-get-coupons",
           "title": "Zobrazit kupóny na identifikátoru",
           "description": "Načte kupóny přiřazené k vybranému TokenID, aby bylo možné ověřit, že mobilní online nákup doběhl.",
-          "requiresContext": ["mosMobileCouponSessionId", "mosMobileCouponTokenId"],
+          "requiresContext": [
+            "mosMobileCouponSessionId",
+            "mosMobileCouponTokenId"
+          ],
           "fields": [
             {
               "name": "tokenId",
@@ -784,8 +768,14 @@
               "type": "select",
               "value": "true",
               "options": [
-                { "value": "true", "text": "Všechny kupóny" },
-                { "value": "false", "text": "Jen aktuálně dostupné" }
+                {
+                  "value": "true",
+                  "text": "Všechny kupóny"
+                },
+                {
+                  "value": "false",
+                  "text": "Jen aktuálně dostupné"
+                }
               ]
             }
           ],
@@ -851,7 +841,13 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["coupons", "soap", "core-mos", "identifiers", "overview"],
+      "tags": [
+        "coupons",
+        "soap",
+        "core-mos",
+        "identifiers",
+        "overview"
+      ],
       "app": {
         "section": "profile",
         "title": "Kupóny",
@@ -859,66 +855,34 @@
       },
       "instructions": [
         "V panelu Přístup vložte Core MOS ServiceKey.",
-        "Ve scénáři zadejte přepážkový MOS účet a heslo. Po přihlášení se SessionID uloží do kontextu.",
+        "Scenar automaticky nacte MOS SessionID z Redis podle PidLitacka IdentityId. Rucni MOS login je dostupny jen pres zalozku Formulare.",
         "Druhý krok nejprve zavolá GetTokens a potom pro každý TokenID zavolá GetCoupons.",
         "V Mobilu se zobrazí stručný přehled identifikátorů a kupónů: TokenID, typ, hodnota, personalizace a základní údaje kupónů."
       ],
       "steps": [
         {
           "id": "mos-token-coupons-overview-authenticate-login",
-          "title": "Přihlásit se do Core MOS",
-          "description": "Zavolá AuthenticateLogin a uloží SessionID pro další SOAP volání.",
-          "fields": [
-            {
-              "name": "userName",
-              "label": "MOS uživatel",
-              "type": "text",
-              "value": "",
-              "placeholder": "Přepážkový účet"
-            },
-            {
-              "name": "password",
-              "label": "Heslo",
-              "type": "password",
-              "value": "",
-              "placeholder": "Heslo přepážkového účtu"
-            },
-            {
-              "name": "codeSms",
-              "label": "SMS kód",
-              "type": "text",
-              "value": "",
-              "placeholder": "Volitelné"
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "path": "/services/MOSservice.asmx",
-            "contentType": "text/xml; charset=utf-8",
-            "headers": {
-              "SOAPAction": "\"globdata/AuthenticateLogin\""
-            },
-            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AuthenticateLogin xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <Password>{{form.password}}</Password>\n      <CodeSMS>{{form.codeSms}}</CodeSMS>\n    </AuthenticateLogin>\n  </soap:Body>\n</soap:Envelope>"
+          "title": "Nacist MOS SessionID z Redis",
+          "description": "Nacte MOS SessionID z Redis podle PidLitacka IdentityId a ulozi ho do kontextu jako mosCouponSessionId.",
+          "customAction": "loadMosSessionFromRedis",
+          "redisSession": {
+            "identityContextKey": "pidLitackaIdentityId",
+            "contextKey": "mosCouponSessionId"
           },
           "expected": {
-            "status": 200,
-            "assertions": [
-              {
-                "regex": "<AuthenticateLoginResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
-                "label": "MOS Result.ID = 0",
-                "message": "Přihlášení do Core MOS neproběhlo úspěšně."
-              }
-            ]
+            "status": 200
           },
-          "extractRegex": {
-            "mosCouponSessionId": "<SessionID>([^<]+)</SessionID>"
+          "skipWhen": {
+            "contextExists": "mosCouponSessionId"
           }
         },
         {
           "id": "mos-token-coupons-overview-load",
           "title": "Načíst identifikátory a kupóny",
           "description": "Zavolá GetTokens a pro každý vrácený TokenID následně GetCoupons.",
-          "requiresContext": ["mosCouponSessionId"],
+          "requiresContext": [
+            "mosCouponSessionId"
+          ],
           "fields": [
             {
               "name": "loadAllCoupons",
@@ -926,8 +890,14 @@
               "type": "select",
               "value": "true",
               "options": [
-                { "value": "true", "text": "Všechny kupóny" },
-                { "value": "false", "text": "Jen aktuálně dostupné" }
+                {
+                  "value": "true",
+                  "text": "Všechny kupóny"
+                },
+                {
+                  "value": "false",
+                  "text": "Jen aktuálně dostupné"
+                }
               ]
             }
           ],
@@ -954,7 +924,14 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["coupons", "soap", "core-mos", "customer-profile", "split-coupon", "test-data"],
+      "tags": [
+        "coupons",
+        "soap",
+        "core-mos",
+        "customer-profile",
+        "split-coupon",
+        "test-data"
+      ],
       "app": {
         "section": "profile",
         "title": "Kupóny",
@@ -962,7 +939,7 @@
       },
       "instructions": [
         "Scénář je změnový a má se používat pouze nad testovacím zákazníkem v PRE-CORE.",
-        "V panelu Přístup vložte Core MOS ServiceKey a ve scénáři se přihlaste MOS účtem.",
+        "V panelu Pristup vlozte Core MOS ServiceKey. MOS SessionID se ve scenari nacita automaticky z Redis podle PidLitacka IdentityId.",
         "Vyberte token zákazníka, kterému chcete přiřadit Senior nebo jiný speciální profil. CustomerID se uloží z vybraného tokenu.",
         "Krok GetCustomerProfilesForDistributionChannel načte profily dostupné pro mobilní aplikaci: CompanyID 1, TariffTypes 0 = kupóny, DistributionChannels 1 = MobApps.",
         "Tato metoda nemá vyžadovat counter oprávnění, takže ji lze použít i se stávajícím ServiceKey pro zjištění CustomerProfileID profilu Senior.",
@@ -971,59 +948,27 @@
       "steps": [
         {
           "id": "mos-customer-profile-authenticate-login",
-          "title": "Přihlásit se do Core MOS",
-          "description": "Zavolá AuthenticateLogin a uloží SessionID pro další SOAP volání.",
-          "fields": [
-            {
-              "name": "userName",
-              "label": "MOS uživatel",
-              "type": "text",
-              "value": "",
-              "placeholder": "Přepážkový účet"
-            },
-            {
-              "name": "password",
-              "label": "Heslo",
-              "type": "password",
-              "value": "",
-              "placeholder": "Heslo MOS účtu"
-            },
-            {
-              "name": "codeSms",
-              "label": "SMS kód",
-              "type": "text",
-              "value": "",
-              "placeholder": "Volitelné"
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "path": "/services/MOSservice.asmx",
-            "contentType": "text/xml; charset=utf-8",
-            "headers": {
-              "SOAPAction": "\"globdata/AuthenticateLogin\""
-            },
-            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AuthenticateLogin xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <Password>{{form.password}}</Password>\n      <CodeSMS>{{form.codeSms}}</CodeSMS>\n    </AuthenticateLogin>\n  </soap:Body>\n</soap:Envelope>"
+          "title": "Nacist MOS SessionID z Redis",
+          "description": "Nacte MOS SessionID z Redis podle PidLitacka IdentityId a ulozi ho do kontextu jako mosCustomerProfileSessionId.",
+          "customAction": "loadMosSessionFromRedis",
+          "redisSession": {
+            "identityContextKey": "pidLitackaIdentityId",
+            "contextKey": "mosCustomerProfileSessionId"
           },
           "expected": {
-            "status": 200,
-            "assertions": [
-              {
-                "regex": "<AuthenticateLoginResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
-                "label": "MOS Result.ID = 0",
-                "message": "Přihlášení do Core MOS neproběhlo úspěšně."
-              }
-            ]
+            "status": 200
           },
-          "extractRegex": {
-            "mosCustomerProfileSessionId": "<SessionID>([^<]+)</SessionID>"
+          "skipWhen": {
+            "contextExists": "mosCustomerProfileSessionId"
           }
         },
         {
           "id": "mos-customer-profile-get-tokens",
           "title": "Vybrat zákazníka podle tokenu",
           "description": "Načte dostupné tokeny a umožní vybrat zákazníka, kterému se má přiřadit profil.",
-          "requiresContext": ["mosCustomerProfileSessionId"],
+          "requiresContext": [
+            "mosCustomerProfileSessionId"
+          ],
           "request": {
             "method": "POST",
             "path": "/services/MOSservice.asmx",
@@ -1066,7 +1011,10 @@
           "id": "mos-customer-profile-current-profiles",
           "title": "Zobrazit stávající profily zákazníka",
           "description": "Kontrolně načte profily vybraného zákazníka před změnou.",
-          "requiresContext": ["mosCustomerProfileSessionId", "mosCustomerProfileCustomerId"],
+          "requiresContext": [
+            "mosCustomerProfileSessionId",
+            "mosCustomerProfileCustomerId"
+          ],
           "request": {
             "method": "POST",
             "path": "/services/MOSservice.asmx",
@@ -1104,7 +1052,9 @@
           "id": "mos-customer-profile-get-profiles",
           "title": "Vybrat dostupný zákaznický profil",
           "description": "Načte profily dostupné pro mobilní aplikaci a umožní vybrat Senior nebo jiný speciální profil.",
-          "requiresContext": ["mosCustomerProfileSessionId"],
+          "requiresContext": [
+            "mosCustomerProfileSessionId"
+          ],
           "fields": [
             {
               "type": "info",
@@ -1117,7 +1067,10 @@
               "type": "select",
               "value": "1",
               "options": [
-                { "value": "1", "text": "1 - výchozí firma pro pražské profily" }
+                {
+                  "value": "1",
+                  "text": "1 - výchozí firma pro pražské profily"
+                }
               ],
               "help": "Nejde o číslo profilu. Profil Senior se vybírá až z odpovědi tohoto kroku."
             },
@@ -1127,7 +1080,10 @@
               "type": "select",
               "value": "0",
               "options": [
-                { "value": "0", "text": "0 - kupóny" }
+                {
+                  "value": "0",
+                  "text": "0 - kupóny"
+                }
               ]
             },
             {
@@ -1136,7 +1092,10 @@
               "type": "select",
               "value": "1",
               "options": [
-                { "value": "1", "text": "1 - mobilní aplikace" }
+                {
+                  "value": "1",
+                  "text": "1 - mobilní aplikace"
+                }
               ]
             }
           ],
@@ -1190,7 +1149,11 @@
           "id": "mos-customer-profile-set-profile",
           "title": "Přiřadit profil zákazníkovi",
           "description": "Zavolá SetCustomerProfiles s vybraným CustomerProfileForCustomer.",
-          "requiresContext": ["mosCustomerProfileSessionId", "mosCustomerProfileCustomerId", "mosCustomerProfileSelectedProfileId"],
+          "requiresContext": [
+            "mosCustomerProfileSessionId",
+            "mosCustomerProfileCustomerId",
+            "mosCustomerProfileSelectedProfileId"
+          ],
           "fields": [
             {
               "name": "customerId",
@@ -1234,8 +1197,14 @@
               "type": "select",
               "value": "false",
               "options": [
-                { "value": "false", "text": "Ne" },
-                { "value": "true", "text": "Ano" }
+                {
+                  "value": "false",
+                  "text": "Ne"
+                },
+                {
+                  "value": "true",
+                  "text": "Ano"
+                }
               ]
             }
           ],
@@ -1263,7 +1232,10 @@
           "id": "mos-customer-profile-verify-profiles",
           "title": "Ověřit profily zákazníka po změně",
           "description": "Znovu načte profily zákazníka a umožní vizuálně ověřit, že vybraný profil je přiřazený.",
-          "requiresContext": ["mosCustomerProfileSessionId", "mosCustomerProfileCustomerId"],
+          "requiresContext": [
+            "mosCustomerProfileSessionId",
+            "mosCustomerProfileCustomerId"
+          ],
           "request": {
             "method": "POST",
             "path": "/services/MOSservice.asmx",
@@ -1307,7 +1279,10 @@
           "id": "mos-customer-profile-verify-tariffs",
           "title": "Ověřit tarify po přiřazení profilu",
           "description": "Načte GetTokenTariffs pro původně vybraný token. Pokud profil vede k lomenému kupónu, v položkách se má objevit CustomerProfileID2.",
-          "requiresContext": ["mosCustomerProfileSessionId", "mosCustomerProfileTokenId"],
+          "requiresContext": [
+            "mosCustomerProfileSessionId",
+            "mosCustomerProfileTokenId"
+          ],
           "fields": [
             {
               "name": "tokenId",
@@ -1358,7 +1333,14 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["coupons", "soap", "core-mos", "tariffs", "split-coupon", "diagnostics"],
+      "tags": [
+        "coupons",
+        "soap",
+        "core-mos",
+        "tariffs",
+        "split-coupon",
+        "diagnostics"
+      ],
       "app": {
         "section": "profile",
         "title": "Kupóny",
@@ -1366,7 +1348,7 @@
       },
       "instructions": [
         "Scénář vychází z mos-tariffs-normal-vs-split.http.",
-        "Nejprve se přihlaste MOS účtem s běžným občanským profilem, vyberte personalizovaný token a načtěte GetTokenTariffs.",
+        "Nejprve se musi nacist MOS SessionID z Redis; potom vyberte personalizovany token a nactete GetTokenTariffs.",
         "Potom totéž proveďte s MOS účtem, který má senior nebo jiný split-enabled zákaznický profil.",
         "Lomený tarif poznáte podle neprázdného CustomerProfileID2 a případně SplitDate. V Mobilu se tyto hodnoty zobrazují u vybraných tarifních zón.",
         "Konkrétní senior účet není v podkladu uvedený, proto je ve druhé přihlašovací části potřeba doplnit jej ručně."
@@ -1374,59 +1356,27 @@
       "steps": [
         {
           "id": "mos-tariffs-normal-authenticate-login",
-          "title": "Přihlásit běžný MOS účet",
-          "description": "Zavolá AuthenticateLogin pro účet s normálními tarify a uloží SessionID pro další SOAP volání.",
-          "fields": [
-            {
-              "name": "userName",
-              "label": "MOS uživatel",
-              "type": "text",
-              "value": "zedellixolli-8241@yopmail.com",
-              "placeholder": "Účet s občanským profilem"
-            },
-            {
-              "name": "password",
-              "label": "Heslo",
-              "type": "password",
-              "value": "abc123abc123",
-              "placeholder": "Heslo MOS účtu"
-            },
-            {
-              "name": "codeSms",
-              "label": "SMS kód",
-              "type": "text",
-              "value": "",
-              "placeholder": "Volitelné"
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "path": "/services/MOSservice.asmx",
-            "contentType": "text/xml; charset=utf-8",
-            "headers": {
-              "SOAPAction": "\"globdata/AuthenticateLogin\""
-            },
-            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AuthenticateLogin xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <Password>{{form.password}}</Password>\n      <CodeSMS>{{form.codeSms}}</CodeSMS>\n    </AuthenticateLogin>\n  </soap:Body>\n</soap:Envelope>"
+          "title": "Nacist MOS SessionID z Redis",
+          "description": "Nacte MOS SessionID z Redis podle PidLitacka IdentityId a ulozi ho do kontextu jako mosTariffsNormalSessionId.",
+          "customAction": "loadMosSessionFromRedis",
+          "redisSession": {
+            "identityContextKey": "pidLitackaIdentityId",
+            "contextKey": "mosTariffsNormalSessionId"
           },
           "expected": {
-            "status": 200,
-            "assertions": [
-              {
-                "regex": "<AuthenticateLoginResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
-                "label": "MOS Result.ID = 0",
-                "message": "Přihlášení běžného MOS účtu neproběhlo úspěšně."
-              }
-            ]
+            "status": 200
           },
-          "extractRegex": {
-            "mosTariffsNormalSessionId": "<SessionID>([^<]+)</SessionID>"
+          "skipWhen": {
+            "contextExists": "mosTariffsNormalSessionId"
           }
         },
         {
           "id": "mos-tariffs-normal-get-tokens",
           "title": "Vybrat token běžného účtu",
           "description": "Načte dostupné tokeny běžného účtu. Pro porovnání tarifů vyberte personalizovaný token.",
-          "requiresContext": ["mosTariffsNormalSessionId"],
+          "requiresContext": [
+            "mosTariffsNormalSessionId"
+          ],
           "request": {
             "method": "POST",
             "path": "/services/MOSservice.asmx",
@@ -1469,7 +1419,10 @@
           "id": "mos-tariffs-normal-get-token-tariffs",
           "title": "Načíst normální tarify",
           "description": "Zavolá GetTokenTariffs pro token běžného účtu. U normálního kupónu mají být CustomerProfileID2 a SplitDate prázdné.",
-          "requiresContext": ["mosTariffsNormalSessionId", "mosTariffsNormalTokenId"],
+          "requiresContext": [
+            "mosTariffsNormalSessionId",
+            "mosTariffsNormalTokenId"
+          ],
           "fields": [
             {
               "name": "tokenId",
@@ -1512,59 +1465,27 @@
         },
         {
           "id": "mos-tariffs-split-authenticate-login",
-          "title": "Přihlásit split / senior MOS účet",
-          "description": "Zavolá AuthenticateLogin pro účet, který má v Core MOS přiřazený senior nebo jiný split-enabled zákaznický profil.",
-          "fields": [
-            {
-              "name": "userName",
-              "label": "MOS uživatel",
-              "type": "text",
-              "value": "",
-              "placeholder": "Doplňte účet se senior/split profilem"
-            },
-            {
-              "name": "password",
-              "label": "Heslo",
-              "type": "password",
-              "value": "abc123abc123",
-              "placeholder": "Heslo MOS účtu"
-            },
-            {
-              "name": "codeSms",
-              "label": "SMS kód",
-              "type": "text",
-              "value": "",
-              "placeholder": "Volitelné"
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "path": "/services/MOSservice.asmx",
-            "contentType": "text/xml; charset=utf-8",
-            "headers": {
-              "SOAPAction": "\"globdata/AuthenticateLogin\""
-            },
-            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AuthenticateLogin xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <Password>{{form.password}}</Password>\n      <CodeSMS>{{form.codeSms}}</CodeSMS>\n    </AuthenticateLogin>\n  </soap:Body>\n</soap:Envelope>"
+          "title": "Nacist MOS SessionID z Redis",
+          "description": "Nacte MOS SessionID z Redis podle PidLitacka IdentityId a ulozi ho do kontextu jako mosTariffsSplitSessionId.",
+          "customAction": "loadMosSessionFromRedis",
+          "redisSession": {
+            "identityContextKey": "pidLitackaIdentityId",
+            "contextKey": "mosTariffsSplitSessionId"
           },
           "expected": {
-            "status": 200,
-            "assertions": [
-              {
-                "regex": "<AuthenticateLoginResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
-                "label": "MOS Result.ID = 0",
-                "message": "Přihlášení split/senior MOS účtu neproběhlo úspěšně."
-              }
-            ]
+            "status": 200
           },
-          "extractRegex": {
-            "mosTariffsSplitSessionId": "<SessionID>([^<]+)</SessionID>"
+          "skipWhen": {
+            "contextExists": "mosTariffsSplitSessionId"
           }
         },
         {
           "id": "mos-tariffs-split-get-tokens",
           "title": "Vybrat token split účtu",
           "description": "Načte dostupné tokeny split/senior účtu. Vyberte personalizovaný token, pro který má MOS vrátit lomené tarify.",
-          "requiresContext": ["mosTariffsSplitSessionId"],
+          "requiresContext": [
+            "mosTariffsSplitSessionId"
+          ],
           "request": {
             "method": "POST",
             "path": "/services/MOSservice.asmx",
@@ -1607,7 +1528,10 @@
           "id": "mos-tariffs-split-get-token-tariffs",
           "title": "Načíst lomené tarify",
           "description": "Zavolá GetTokenTariffs pro token split/senior účtu. Lomený tarif poznáte podle CustomerProfileID2 a případně SplitDate.",
-          "requiresContext": ["mosTariffsSplitSessionId", "mosTariffsSplitTokenId"],
+          "requiresContext": [
+            "mosTariffsSplitSessionId",
+            "mosTariffsSplitTokenId"
+          ],
           "fields": [
             {
               "name": "tokenId",
@@ -1659,7 +1583,13 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["coupons", "soap", "core-mos", "identifiers", "personalization"],
+      "tags": [
+        "coupons",
+        "soap",
+        "core-mos",
+        "identifiers",
+        "personalization"
+      ],
       "app": {
         "section": "profile",
         "title": "Kupóny",
@@ -1667,7 +1597,7 @@
       },
       "instructions": [
         "V panelu Přístup vložte Core MOS ServiceKey.",
-        "Ve scénáři zadejte přepážkový MOS účet a heslo. Po přihlášení se SessionID uloží do kontextu.",
+        "Scenar automaticky nacte MOS SessionID z Redis podle PidLitacka IdentityId. Rucni MOS login je dostupny jen pres zalozku Formulare.",
         "Vyberte token typu BPK nebo MobApp. Podle dokumentace Core MOS je SetTokenIsPersonalized určeno právě pro tyto typy.",
         "Pozor: nastavení personalizace je v MOSu nevratná změna. Výchozí hodnota je Ano, protože cílem je ověřit přechod na osobní identifikátor pro nepřenosné kupóny.",
         "Pokud MOS vrátí chybu, mobil i log ukážou surovou SOAP odpověď. Ta pomůže rozlišit, zda token už personalizovaný je, zda nemá klient fotografii, nebo zda typ tokenu není podporovaný."
@@ -1675,59 +1605,27 @@
       "steps": [
         {
           "id": "mos-token-personalization-authenticate-login",
-          "title": "Přihlásit se do Core MOS",
-          "description": "Zavolá AuthenticateLogin a uloží SessionID pro další SOAP volání.",
-          "fields": [
-            {
-              "name": "userName",
-              "label": "MOS uživatel",
-              "type": "text",
-              "value": "",
-              "placeholder": "Přepážkový účet"
-            },
-            {
-              "name": "password",
-              "label": "Heslo",
-              "type": "password",
-              "value": "",
-              "placeholder": "Heslo přepážkového účtu"
-            },
-            {
-              "name": "codeSms",
-              "label": "SMS kód",
-              "type": "text",
-              "value": "",
-              "placeholder": "Volitelné"
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "path": "/services/MOSservice.asmx",
-            "contentType": "text/xml; charset=utf-8",
-            "headers": {
-              "SOAPAction": "\"globdata/AuthenticateLogin\""
-            },
-            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AuthenticateLogin xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <Password>{{form.password}}</Password>\n      <CodeSMS>{{form.codeSms}}</CodeSMS>\n    </AuthenticateLogin>\n  </soap:Body>\n</soap:Envelope>"
+          "title": "Nacist MOS SessionID z Redis",
+          "description": "Nacte MOS SessionID z Redis podle PidLitacka IdentityId a ulozi ho do kontextu jako mosCouponSessionId.",
+          "customAction": "loadMosSessionFromRedis",
+          "redisSession": {
+            "identityContextKey": "pidLitackaIdentityId",
+            "contextKey": "mosCouponSessionId"
           },
           "expected": {
-            "status": 200,
-            "assertions": [
-              {
-                "regex": "<AuthenticateLoginResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
-                "label": "MOS Result.ID = 0",
-                "message": "Přihlášení do Core MOS neproběhlo úspěšně."
-              }
-            ]
+            "status": 200
           },
-          "extractRegex": {
-            "mosCouponSessionId": "<SessionID>([^<]+)</SessionID>"
+          "skipWhen": {
+            "contextExists": "mosCouponSessionId"
           }
         },
         {
           "id": "mos-token-personalization-get-tokens",
           "title": "Vybrat token k personalizaci",
           "description": "Načte dostupné tokeny/identifikátory přihlášeného MOS účtu. Vybraný TokenID se použije pro SetTokenIsPersonalized.",
-          "requiresContext": ["mosCouponSessionId"],
+          "requiresContext": [
+            "mosCouponSessionId"
+          ],
           "request": {
             "method": "POST",
             "path": "/services/MOSservice.asmx",
@@ -1775,7 +1673,10 @@
           "id": "mos-token-personalization-set",
           "title": "Nastavit personalizaci tokenu",
           "description": "Přímo zavolá MOS SetTokenIsPersonalized nad vybraným TokenID.",
-          "requiresContext": ["mosCouponSessionId", "mosPersonalizeTokenId"],
+          "requiresContext": [
+            "mosCouponSessionId",
+            "mosPersonalizeTokenId"
+          ],
           "fields": [
             {
               "name": "tokenId",
@@ -1826,7 +1727,9 @@
           "id": "mos-token-personalization-verify-tokens",
           "title": "Ověřit tokeny po personalizaci",
           "description": "Znovu načte tokeny přihlášeného účtu. V Mobilu ověřte, že vybraný TokenID má očekávané IsPersonalized.",
-          "requiresContext": ["mosCouponSessionId"],
+          "requiresContext": [
+            "mosCouponSessionId"
+          ],
           "request": {
             "method": "POST",
             "path": "/services/MOSservice.asmx",
@@ -1874,7 +1777,13 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["coupons", "soap", "core-mos", "move", "identifiers"],
+      "tags": [
+        "coupons",
+        "soap",
+        "core-mos",
+        "move",
+        "identifiers"
+      ],
       "app": {
         "section": "profile",
         "title": "Kupóny",
@@ -1882,7 +1791,7 @@
       },
       "instructions": [
         "V panelu Přístup vložte Core MOS ServiceKey.",
-        "Ve scénáři zadejte přepážkový MOS účet a heslo. Po přihlášení se SessionID uloží do kontextu.",
+        "Scenar automaticky nacte MOS SessionID z Redis podle PidLitacka IdentityId. Rucni MOS login je dostupny jen pres zalozku Formulare.",
         "Nejprve vyberte zdrojový identifikátor, ze kterého se mají kupóny přesunout.",
         "Scénář potom načte kupóny na zdrojovém identifikátoru. Pokud zdroj nemá žádné kupóny, krok záměrně selže a v přesunu se nepokračuje.",
         "Poté vyberte cílový identifikátor. Zdrojový a cílový identifikátor nesmí být stejný.",
@@ -1891,59 +1800,27 @@
       "steps": [
         {
           "id": "mos-coupon-move-authenticate-login",
-          "title": "Přihlásit se do Core MOS",
-          "description": "Zavolá AuthenticateLogin a uloží SessionID pro další SOAP volání.",
-          "fields": [
-            {
-              "name": "userName",
-              "label": "MOS uživatel",
-              "type": "text",
-              "value": "",
-              "placeholder": "Přepážkový účet"
-            },
-            {
-              "name": "password",
-              "label": "Heslo",
-              "type": "password",
-              "value": "",
-              "placeholder": "Heslo přepážkového účtu"
-            },
-            {
-              "name": "codeSms",
-              "label": "SMS kód",
-              "type": "text",
-              "value": "",
-              "placeholder": "Volitelné"
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "path": "/services/MOSservice.asmx",
-            "contentType": "text/xml; charset=utf-8",
-            "headers": {
-              "SOAPAction": "\"globdata/AuthenticateLogin\""
-            },
-            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AuthenticateLogin xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <Password>{{form.password}}</Password>\n      <CodeSMS>{{form.codeSms}}</CodeSMS>\n    </AuthenticateLogin>\n  </soap:Body>\n</soap:Envelope>"
+          "title": "Nacist MOS SessionID z Redis",
+          "description": "Nacte MOS SessionID z Redis podle PidLitacka IdentityId a ulozi ho do kontextu jako mosCouponSessionId.",
+          "customAction": "loadMosSessionFromRedis",
+          "redisSession": {
+            "identityContextKey": "pidLitackaIdentityId",
+            "contextKey": "mosCouponSessionId"
           },
           "expected": {
-            "status": 200,
-            "assertions": [
-              {
-                "regex": "<AuthenticateLoginResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
-                "label": "MOS Result.ID = 0",
-                "message": "Přihlášení do Core MOS neproběhlo úspěšně."
-              }
-            ]
+            "status": 200
           },
-          "extractRegex": {
-            "mosCouponSessionId": "<SessionID>([^<]+)</SessionID>"
+          "skipWhen": {
+            "contextExists": "mosCouponSessionId"
           }
         },
         {
           "id": "mos-coupon-move-get-source-tokens",
           "title": "Vybrat zdrojový identifikátor",
           "description": "Načte dostupné tokeny/identifikátory a umožní vybrat zdroj, ze kterého se mají kupóny přesunout.",
-          "requiresContext": ["mosCouponSessionId"],
+          "requiresContext": [
+            "mosCouponSessionId"
+          ],
           "request": {
             "method": "POST",
             "path": "/services/MOSservice.asmx",
@@ -1990,7 +1867,10 @@
           "id": "mos-coupon-move-get-source-coupons",
           "title": "Ověřit kupóny na zdrojovém identifikátoru",
           "description": "Načte kupóny zdrojového identifikátoru. Pokud MOS nevrátí žádný kupón, scénář má selhat, protože není co přesouvat.",
-          "requiresContext": ["mosCouponSessionId", "mosCouponSourceTokenId"],
+          "requiresContext": [
+            "mosCouponSessionId",
+            "mosCouponSourceTokenId"
+          ],
           "fields": [
             {
               "name": "tokenId",
@@ -2004,8 +1884,14 @@
               "type": "select",
               "value": "true",
               "options": [
-                { "value": "true", "text": "Všechny kupóny" },
-                { "value": "false", "text": "Jen aktuálně dostupné" }
+                {
+                  "value": "true",
+                  "text": "Všechny kupóny"
+                },
+                {
+                  "value": "false",
+                  "text": "Jen aktuálně dostupné"
+                }
               ]
             }
           ],
@@ -2069,7 +1955,10 @@
           "id": "mos-coupon-move-get-target-tokens",
           "title": "Vybrat cílový identifikátor",
           "description": "Znovu načte dostupné identifikátory a umožní vybrat cíl, na který se kupóny přesunou.",
-          "requiresContext": ["mosCouponSessionId", "mosCouponSourceTokenId"],
+          "requiresContext": [
+            "mosCouponSessionId",
+            "mosCouponSourceTokenId"
+          ],
           "request": {
             "method": "POST",
             "path": "/services/MOSservice.asmx",
@@ -2115,7 +2004,11 @@
           "id": "mos-coupon-move-coupons",
           "title": "Přesunout kupóny na cílový identifikátor",
           "description": "Zavolá MoveCouponFromToken s prázdným CouponID, tedy přesune všechny kupóny ze zdrojového tokenu na cílový token.",
-          "requiresContext": ["mosCouponSessionId", "mosCouponSourceTokenId", "mosCouponTargetTokenId"],
+          "requiresContext": [
+            "mosCouponSessionId",
+            "mosCouponSourceTokenId",
+            "mosCouponTargetTokenId"
+          ],
           "fields": [
             {
               "name": "currentTokenId",
@@ -2158,7 +2051,10 @@
           "id": "mos-coupon-move-verify-target-coupons",
           "title": "Ověřit kupóny na cílovém identifikátoru",
           "description": "Načte kupóny cílového identifikátoru po přesunu, aby bylo možné ručně ověřit výsledek.",
-          "requiresContext": ["mosCouponSessionId", "mosCouponTargetTokenId"],
+          "requiresContext": [
+            "mosCouponSessionId",
+            "mosCouponTargetTokenId"
+          ],
           "fields": [
             {
               "name": "tokenId",
@@ -2172,8 +2068,14 @@
               "type": "select",
               "value": "true",
               "options": [
-                { "value": "true", "text": "Všechny kupóny" },
-                { "value": "false", "text": "Jen aktuálně dostupné" }
+                {
+                  "value": "true",
+                  "text": "Všechny kupóny"
+                },
+                {
+                  "value": "false",
+                  "text": "Jen aktuálně dostupné"
+                }
               ]
             }
           ],
@@ -2228,6 +2130,89 @@
             "store": {
               "mosCouponMovedCouponIdPreview": "$.couponId"
             }
+          }
+        }
+      ]
+    },
+    {
+      "id": "mos-authenticate-login-manual-form",
+      "title": "MOS - rucni prihlaseni do Core MOS",
+      "description": "Technicky formular pro rucni AuthenticateLogin. Bezna MOS flow pouzivaji SessionID z Redis.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "formsOnly": true,
+      "tags": [
+        "soap",
+        "core-mos",
+        "login",
+        "forms",
+        "diagnostics"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Core MOS",
+        "subtitle": "Rucni prihlaseni"
+      },
+      "instructions": [
+        "Tento formular je zamerne skryty v beznem seznamu scenaru.",
+        "Pouzijte ho pres zalozku Formulare pouze tehdy, kdyz potrebujete primo otestovat AuthenticateLogin.",
+        "Bezne MOS scenare pouzivaji SessionID nactene z Redis podle PidLitacka IdentityId."
+      ],
+      "steps": [
+        {
+          "id": "mos-manual-authenticate-login",
+          "title": "Rucni prihlaseni do Core MOS",
+          "description": "Volitelny diagnosticky formular pro prime volani AuthenticateLogin. Bezna MOS flow pouzivaji SessionID z Redis.",
+          "fields": [
+            {
+              "name": "userName",
+              "label": "MOS uzivatel",
+              "type": "text",
+              "value": "",
+              "placeholder": "MOS ucet"
+            },
+            {
+              "name": "password",
+              "label": "Heslo",
+              "type": "password",
+              "value": "",
+              "placeholder": "Heslo MOS uctu"
+            },
+            {
+              "name": "codeSms",
+              "label": "SMS kod",
+              "type": "text",
+              "value": "",
+              "placeholder": "Volitelne"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/AuthenticateLogin\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <AuthenticateLogin xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <UserName>{{form.userName}}</UserName>\n      <Password>{{form.password}}</Password>\n      <CodeSMS>{{form.codeSms}}</CodeSMS>\n    </AuthenticateLogin>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<AuthenticateLoginResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "Prihlaseni do Core MOS neprobehlo uspesne."
+              },
+              {
+                "regex": "<SessionID>[^<]+</SessionID>",
+                "label": "SessionID vr?ceno",
+                "message": "MOS nevratil SessionID."
+              }
+            ]
+          },
+          "extractRegex": {
+            "mosCouponSessionId": "<SessionID>([^<]+)</SessionID>"
           }
         }
       ]
