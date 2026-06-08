@@ -11,7 +11,18 @@ Add-Type -AssemblyName System.Net.Http
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $publicRoot = Join-Path $root "public"
 $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Port)
-$httpClient = [System.Net.Http.HttpClient]::new()
+$httpClientHandler = [System.Net.Http.HttpClientHandler]::new()
+$decompressionMethods = [System.Net.DecompressionMethods]::GZip -bor [System.Net.DecompressionMethods]::Deflate
+
+try {
+    $decompressionMethods = $decompressionMethods -bor [System.Net.DecompressionMethods]::Brotli
+}
+catch {
+    # Brotli is not available on older Windows PowerShell runtimes.
+}
+
+$httpClientHandler.AutomaticDecompression = $decompressionMethods
+$httpClient = [System.Net.Http.HttpClient]::new($httpClientHandler)
 $httpClient.Timeout = [TimeSpan]::FromSeconds($ProxyTimeoutSeconds)
 
 $mimeTypes = @{
@@ -172,12 +183,14 @@ function Send-ProxyResponse {
         $targetUri)
 
     foreach ($headerName in $Request.Headers.Keys) {
-        if ($headerName -in @("Host", "Content-Length", "Connection")) {
+        if ($headerName -in @("Host", "Content-Length", "Connection", "Accept-Encoding")) {
             continue
         }
 
         [void]$message.Headers.TryAddWithoutValidation($headerName, $Request.Headers[$headerName])
     }
+
+    [void]$message.Headers.TryAddWithoutValidation("Accept-Encoding", "identity")
 
     if ($Request.Body.Length -gt 0) {
         $message.Content = [System.Net.Http.ByteArrayContent]::new($Request.Body)
