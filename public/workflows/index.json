@@ -39,6 +39,7 @@
             {
               "stepId": "client-identifiers-bank-card-start",
               "message": "Otevřete tokenizační bránu a dokončete registraci platební karty.",
+              "preserveResult": true,
               "instructions": [
                 "V odpovědi kroku je gatewayRedirectUrl.",
                 "Otevřete URL v prohlížeči a dokončete testovací tokenizaci karty.",

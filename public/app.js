@@ -3889,7 +3889,9 @@ async function continueWorkflowRun() {
 
         const afterStop = getWorkflowStopAfterStep(item, step);
         if (elements.workflowAutoStop.checked && afterStop) {
-          pauseWorkflow(afterStop.message, "warn", afterStop.lines);
+          pauseWorkflow(afterStop.message, "warn", afterStop.lines, {
+            preserveResult: afterStop.preserveResult === true
+          });
           return;
         }
       }
@@ -4161,12 +4163,14 @@ function normalizeWorkflowStop(stop, fallbackMessage) {
   if (typeof stop === "string") {
     return {
       message: stop || fallbackMessage,
-      lines: []
+      lines: [],
+      preserveResult: false
     };
   }
 
   return {
     message: stop.message || stop.title || fallbackMessage,
+    preserveResult: stop.preserveResult === true,
     lines: [
       ...(stop.instructions || []),
       ...(stop.contextKeys || [])
