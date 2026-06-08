@@ -4,8 +4,8 @@
   "workflows": [
     {
       "id": "pidlitacka-client-with-phone-and-card",
-      "name": "PidLitacka - příprava klienta s telefonem a kartou",
-      "description": "Runbook pro přípravu testovacího klienta: založení a aktivace uživatele, založení klientských dat, tokenizace telefonu, tokenizace platební karty a závěrečná kontrola identifikátorů.",
+      "name": "PidLitacka - klient s identifikátory a testovacím kupónem",
+      "description": "Runbook pro přípravu testovacího klienta pro přesun kupónu: založení a aktivace uživatele, založení klientských dat, tokenizace telefonu, tokenizace platební karty, kontrola identifikátorů a nákup testovacího kupónu přes pobočkový Core MOS SOAP tok.",
       "tags": ["pidlitacka", "client", "identifiers", "setup"],
       "items": [
         {
@@ -55,16 +55,27 @@
           "scenarioId": "client-identifiers-current-user",
           "title": "Ověřit identifikátory klienta",
           "description": "Závěrečné načtení identifikátorů aktuálního klienta."
+        },
+        {
+          "projectId": "mos-coupons",
+          "packId": "mos-coupons-core-soap",
+          "scenarioId": "mos-coupon-test-purchase-soap",
+          "title": "Koupit testovací kupón přes MOS pobočku",
+          "description": "Pobočkový Core MOS SOAP tok: přihlášení, výběr identifikátoru a tarifu, AddItemToOrder, SetOrderPaid a kontrola kupónu."
         }
       ],
       "report": {
-        "title": "Příprava klienta",
+        "title": "Příprava klienta s kupónem",
         "contextKeys": [
           "userName",
           "mobileIdentifierId",
           "bankCardRegistrationId",
           "bankCardGatewayRedirectUrl",
-          "bankCardIdentifierId"
+          "bankCardIdentifierId",
+          "mosCouponTokenId",
+          "mosCouponOrderId",
+          "mosCouponCouponId",
+          "mosCouponDisplayedCouponId"
         ]
       }
     }
