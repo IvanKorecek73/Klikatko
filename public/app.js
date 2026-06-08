@@ -3737,8 +3737,10 @@ async function startWorkflowFromItem(workflowId, itemIndex) {
   state.selectedWorkflowId = workflow.id;
   prepareWorkflowRun(workflow, itemIndex, {
     keepContext,
-    keepPreviousResults: keepContext
+    keepPreviousResults: keepContext,
+    skipInitialSync: true
   });
+  clearOpenWorkflowItemProgress(workflow.items[itemIndex]);
   addLog("ok", "Workflow restarted from selected item", {
     id: workflow.id,
     name: workflow.name,
@@ -3755,6 +3757,7 @@ async function startWorkflowFromItem(workflowId, itemIndex) {
 function prepareWorkflowRun(workflow, itemIndex, options = {}) {
   const keepContext = options.keepContext === true;
   const keepPreviousResults = options.keepPreviousResults === true;
+  const skipInitialSync = options.skipInitialSync === true;
   const previousResults = keepPreviousResults
     ? (state.workflowRun?.results || []).filter(result => {
         const resultItemIndex = getWorkflowResultItemIndex(workflow, result);
@@ -3772,8 +3775,21 @@ function prepareWorkflowRun(workflow, itemIndex, options = {}) {
     stepIndex: 0,
     results: previousResults,
     startedAt: new Date().toISOString(),
-    status: "running"
+    status: "running",
+    skipInitialSync
   };
+}
+
+function clearOpenWorkflowItemProgress(item) {
+  if (!item || !isWorkflowItemOpen(item)) {
+    return;
+  }
+
+  state.stepIndex = 0;
+  state.stepResults = {};
+  state.lastStepResult = null;
+  state.displayedResult = null;
+  state.activeSelection = null;
 }
 
 function getWorkflowResultItemIndex(workflow, result) {
@@ -3791,7 +3807,11 @@ async function continueWorkflowRun() {
   }
 
   syncCurrentStepFormValuesFromDom();
-  synchronizeWorkflowRunFromCurrentScenario(workflow);
+  if (state.workflowRun.skipInitialSync) {
+    state.workflowRun.skipInitialSync = false;
+  } else {
+    synchronizeWorkflowRunFromCurrentScenario(workflow);
+  }
   state.workflowRun.status = "running";
   state.workflowRunning = true;
   state.workflowStopRequested = false;
