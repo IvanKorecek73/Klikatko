@@ -2219,6 +2219,10 @@ function renderStep(options = {}) {
   }
 
   const step = currentStep();
+  if (preserveValues) {
+    syncCurrentStepFormValuesFromDom();
+  }
+
   const scenarioRequiresManualInput = requiresManualInput(state.scenario);
   const stepRequiresAuth = requiresAuthorizationForStep(step);
   const missingContextKeys = getMissingContextKeys(step);
@@ -2243,6 +2247,8 @@ function renderStep(options = {}) {
     elements.testerDescription.textContent = state.scenario
       ? "Flow dob\u011bhl na konec dostupn\u00fdch krok\u016f."
       : "Technick\u00fd popis krok\u016f a o\u010dek\u00e1v\u00e1n\u00ed se zobraz\u00ed zde.";
+    delete elements.stepForm.dataset.scenarioId;
+    delete elements.stepForm.dataset.stepIndex;
     elements.stepForm.innerHTML = "";
     state.displayedResult = null;
     state.activeSelection = null;
@@ -2262,6 +2268,8 @@ function renderStep(options = {}) {
   elements.testerTitle.textContent = step.title;
   elements.testerDescription.textContent = buildTesterDescription(step);
   elements.testerExpected.textContent = formatExpected(step);
+  elements.stepForm.dataset.scenarioId = state.scenario.id;
+  elements.stepForm.dataset.stepIndex = String(state.stepIndex);
   elements.stepForm.innerHTML = "";
   elements.resultCard.className = "result-card hidden";
   state.lastStepResult = currentStepResult;
@@ -2294,6 +2302,29 @@ function renderStep(options = {}) {
 
   renderModeBanner();
   renderContext();
+}
+
+function syncCurrentStepFormValuesFromDom() {
+  if (!state.scenario || !elements.stepForm) {
+    return;
+  }
+
+  if (elements.stepForm.dataset.scenarioId !== state.scenario.id
+    || elements.stepForm.dataset.stepIndex !== String(state.stepIndex)) {
+    return;
+  }
+
+  const controls = elements.stepForm.querySelectorAll("input[name], select[name], textarea[name]");
+
+  for (const control of controls) {
+    if (control.type === "file") {
+      continue;
+    }
+
+    state.values[control.name] = control.type === "checkbox"
+      ? String(control.checked)
+      : control.value;
+  }
 }
 
 function renderAutoRunOptions() {
@@ -3698,6 +3729,7 @@ async function continueWorkflowRun() {
     return;
   }
 
+  syncCurrentStepFormValuesFromDom();
   synchronizeWorkflowRunFromCurrentScenario(workflow);
   state.workflowRun.status = "running";
   state.workflowRunning = true;
@@ -3939,18 +3971,20 @@ function syncWorkflowContextFromScenario() {
 }
 
 function getWorkflowStopBeforeStep(step) {
-  if (step.workflowStop) {
+  const needsInput = stepNeedsWorkflowInput(step);
+
+  if (step.workflowStop && needsInput) {
     return normalizeWorkflowStop(step.workflowStop, `Čeká se na ruční doplnění kroku: ${step.title}`);
   }
 
-  if (step.manualStop || step.interaction) {
+  if ((step.manualStop || step.interaction) && needsInput) {
     return {
       message: `Čeká se na ruční doplnění kroku: ${step.title}`,
       lines: getStepInstructionLines(step)
     };
   }
 
-  if ((step.fields || []).some(field => workflowFieldNeedsInput(field))) {
+  if (needsInput) {
     return {
       message: `Čeká se na ruční doplnění kroku: ${step.title}`,
       lines: getStepInstructionLines(step)
@@ -3958,6 +3992,21 @@ function getWorkflowStopBeforeStep(step) {
   }
 
   return null;
+}
+
+function stepNeedsWorkflowInput(step) {
+  const fields = step.fields || [];
+  const hasWorkflowFields = fields.some(field =>
+    field
+    && field.workflowAutoStop !== false
+    && field.type !== "info"
+    && field.type !== "image-file");
+
+  if (!hasWorkflowFields) {
+    return Boolean(step.workflowStop || step.manualStop || step.interaction);
+  }
+
+  return fields.some(field => workflowFieldNeedsInput(field));
 }
 
 function workflowFieldNeedsInput(field) {
@@ -4048,7 +4097,7 @@ function pauseWorkflow(message, level = "warn", extraLines = []) {
   ]);
   setWorkflowControls(false);
   updateWorkflowStatus("Pozastaveno");
-  renderStep();
+  renderStep({ preserveValues: true });
 }
 
 function finishWorkflow(workflow) {
