@@ -65,7 +65,16 @@
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$", "notEmpty": true }
+              {
+                "regex": "<AuthenticateLoginResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "Přihlášení do Core MOS neproběhlo úspěšně."
+              },
+              {
+                "regex": "<SessionID>[^<]+</SessionID>",
+                "label": "SessionID vráceno",
+                "message": "MOS nevrátil SessionID. Další kroky nemohou pokračovat."
+              }
             ]
           },
           "extractRegex": {

@@ -2,6 +2,7 @@ const http = require("http");
 const https = require("https");
 const fs = require("fs");
 const path = require("path");
+const zlib = require("zlib");
 
 const port = Number(process.env.PORT || 5095);
 let targetBaseUrl = process.env.TICKET_SERVICE_BASE_URL || "http://localhost:5087";
@@ -131,6 +132,7 @@ function proxyApi(request, response) {
     method: request.method,
     headers: {
       ...request.headers,
+      "accept-encoding": "identity",
       host: targetUrl.host
     }
   };
@@ -143,11 +145,25 @@ function proxyApi(request, response) {
     targetUrl,
     requestOptions,
     proxyResponse => {
-      response.writeHead(proxyResponse.statusCode || 502, {
-        ...proxyResponse.headers,
-        "Access-Control-Allow-Origin": "*"
+      const chunks = [];
+      proxyResponse.on("data", chunk => chunks.push(chunk));
+      proxyResponse.on("end", () => {
+        decodeProxyBody(Buffer.concat(chunks), proxyResponse.headers["content-encoding"], (error, body) => {
+          if (error) {
+            response.writeHead(502, { "Content-Type": "application/json; charset=utf-8" });
+            response.end(JSON.stringify({
+              error: "ProxyError",
+              message: "Backend response could not be decoded.",
+              detail: error.message,
+              target: targetUrl.toString()
+            }));
+            return;
+          }
+
+          response.writeHead(proxyResponse.statusCode || 502, sanitizeProxyResponseHeaders(proxyResponse.headers, body.length));
+          response.end(body);
+        });
       });
-      proxyResponse.pipe(response);
     });
 
   proxyRequest.setTimeout(proxyTimeoutMs, () => {
@@ -165,6 +181,49 @@ function proxyApi(request, response) {
   });
 
   request.pipe(proxyRequest);
+}
+
+function decodeProxyBody(body, contentEncoding, callback) {
+  const encoding = String(contentEncoding || "").toLowerCase();
+
+  if (!encoding || encoding === "identity") {
+    callback(null, body);
+    return;
+  }
+
+  if (encoding.includes("gzip")) {
+    zlib.gunzip(body, callback);
+    return;
+  }
+
+  if (encoding.includes("br") && typeof zlib.brotliDecompress === "function") {
+    zlib.brotliDecompress(body, callback);
+    return;
+  }
+
+  if (encoding.includes("deflate")) {
+    zlib.inflate(body, callback);
+    return;
+  }
+
+  callback(null, body);
+}
+
+function sanitizeProxyResponseHeaders(headers, bodyLength) {
+  const nextHeaders = {
+    ...headers,
+    "Access-Control-Allow-Origin": "*"
+  };
+
+  delete nextHeaders["content-encoding"];
+  delete nextHeaders["Content-Encoding"];
+  delete nextHeaders["content-length"];
+  delete nextHeaders["Content-Length"];
+  delete nextHeaders["transfer-encoding"];
+  delete nextHeaders["Transfer-Encoding"];
+  nextHeaders["Content-Length"] = String(bodyLength);
+
+  return nextHeaders;
 }
 
 function isLocalHostname(hostname) {
