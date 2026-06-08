@@ -2076,6 +2076,8 @@ function renderWorkflowList() {
 
 function createWorkflowCard(workflow) {
   const card = document.createElement("article");
+  const activeRun = state.workflowRun?.workflowId === workflow.id ? state.workflowRun : null;
+  const expanded = Boolean(activeRun && state.selectedWorkflowId === workflow.id);
   card.className = "scenario-card";
   card.dataset.workflowId = workflow.id;
   card.innerHTML = `
@@ -2087,19 +2089,26 @@ function createWorkflowCard(workflow) {
         <span class="meta-badge">${escapeHtml(`${workflow.items?.length || 0} scénářů`)}</span>
       </div>
     </button>
-    <button class="scenario-toggle" type="button" aria-expanded="false" ${state.workflowRunning ? "disabled" : ""}>Kroky (${workflow.items?.length || 0})</button>
-    <ol class="scenario-steps hidden">
-      ${(workflow.items || []).map((item, index) => `
-        <li class="workflow-step-item">
+    <button class="scenario-toggle" type="button" aria-expanded="${String(expanded)}" ${state.workflowRunning ? "disabled" : ""}>${expanded ? "Skrýt kroky" : `Kroky (${workflow.items?.length || 0})`}</button>
+    <ol class="scenario-steps ${expanded ? "" : "hidden"}">
+      ${(workflow.items || []).map((item, index) => {
+        const visualState = getWorkflowItemVisualState(workflow, index);
+
+        return `
+        <li class="workflow-step-item ${escapeHtml(visualState.className)}">
           <span>${index + 1}</span>
           <div>
-            <strong>${escapeHtml(item.title || item.scenarioId)}</strong>
+            <div class="workflow-step-title">
+              <strong>${escapeHtml(item.title || item.scenarioId)}</strong>
+              <small>${escapeHtml(visualState.label)}</small>
+            </div>
             <p>${escapeHtml(`${item.projectId} / ${item.packId} / ${item.scenarioId}`)}</p>
           </div>
           <div class="workflow-step-actions">
             <button class="workflow-start-at" type="button" data-workflow-step-index="${index}" ${state.workflowRunning ? "disabled" : ""}>Pokra\u010dovat odtud</button>
           </div>
-        </li>`).join("")}
+        </li>`;
+      }).join("")}
     </ol>
   `;
 
@@ -2120,6 +2129,57 @@ function createWorkflowCard(workflow) {
   });
   card.classList.toggle("active", state.selectedWorkflowId === workflow.id);
   return card;
+}
+
+function getWorkflowItemVisualState(workflow, itemIndex) {
+  const run = state.workflowRun?.workflowId === workflow.id ? state.workflowRun : null;
+
+  if (!run) {
+    return {
+      className: "workflow-step-waiting",
+      label: "Čeká"
+    };
+  }
+
+  const itemResults = getWorkflowItemResults(workflow, itemIndex);
+  const hasError = itemResults.some(result => result.level === "error");
+
+  if (hasError) {
+    return {
+      className: "workflow-step-error",
+      label: "Chyba"
+    };
+  }
+
+  if (itemIndex === run.itemIndex && run.status !== "completed") {
+    return {
+      className: run.status === "paused" ? "workflow-step-paused" : "workflow-step-current",
+      label: run.status === "paused" ? "Pozastaveno" : "Probíhá"
+    };
+  }
+
+  if (itemResults.length > 0 && (itemIndex < run.itemIndex || run.status === "completed")) {
+    return {
+      className: "workflow-step-completed",
+      label: "Hotovo"
+    };
+  }
+
+  return {
+    className: "workflow-step-waiting",
+    label: "Čeká"
+  };
+}
+
+function getWorkflowItemResults(workflow, itemIndex) {
+  const run = state.workflowRun?.workflowId === workflow.id ? state.workflowRun : null;
+  const item = workflow.items?.[itemIndex];
+
+  if (!run || !item) {
+    return [];
+  }
+
+  return (run.results || []).filter(result => getWorkflowResultItemIndex(workflow, result) === itemIndex);
 }
 
 function selectWorkflow(workflowId) {
