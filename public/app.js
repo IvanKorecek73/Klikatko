@@ -3693,6 +3693,7 @@ async function continueWorkflowRun() {
     return;
   }
 
+  synchronizeWorkflowRunFromCurrentScenario(workflow);
   state.workflowRun.status = "running";
   state.workflowRunning = true;
   state.workflowStopRequested = false;
@@ -3784,6 +3785,103 @@ async function continueWorkflowRun() {
     renderStep();
     renderWorkflowList();
   }
+}
+
+function synchronizeWorkflowRunFromCurrentScenario(workflow) {
+  const run = state.workflowRun;
+
+  if (!run || !state.scenario) {
+    return;
+  }
+
+  const currentItem = workflow.items?.[run.itemIndex];
+
+  if (!currentItem || !isWorkflowItemOpen(currentItem)) {
+    return;
+  }
+
+  syncWorkflowContextFromScenario();
+  syncCompletedWorkflowStepResults(currentItem, state.scenario);
+
+  const firstIncompleteStepIndex = findFirstIncompleteWorkflowStepIndex(state.scenario);
+  if (firstIncompleteStepIndex === null) {
+    addLog("ok", "Workflow progress synchronized", {
+      reason: "Current scenario was completed manually",
+      scenarioId: state.scenario.id,
+      completedItemIndex: run.itemIndex,
+      nextItemIndex: run.itemIndex + 1
+    });
+    run.itemIndex += 1;
+    run.stepIndex = 0;
+    return;
+  }
+
+  if (firstIncompleteStepIndex !== run.stepIndex) {
+    addLog("ok", "Workflow progress synchronized", {
+      reason: "Scenario steps were advanced manually",
+      scenarioId: state.scenario.id,
+      previousStepIndex: run.stepIndex,
+      nextStepIndex: firstIncompleteStepIndex
+    });
+    run.stepIndex = firstIncompleteStepIndex;
+  }
+}
+
+function syncCompletedWorkflowStepResults(item, scenario) {
+  const run = state.workflowRun;
+
+  if (!run) {
+    return;
+  }
+
+  for (let index = 0; index < scenario.steps.length; index += 1) {
+    const result = state.stepResults[String(index)];
+
+    if (!result || result.level === "error") {
+      continue;
+    }
+
+    const step = scenario.steps[index];
+    const alreadyTracked = run.results.some(existing =>
+      existing.projectId === item.projectId
+      && existing.packId === item.packId
+      && existing.scenarioId === item.scenarioId
+      && existing.stepId === step.id);
+
+    if (alreadyTracked) {
+      continue;
+    }
+
+    run.results.push({
+      projectId: item.projectId,
+      packId: item.packId,
+      scenarioId: item.scenarioId,
+      scenarioTitle: scenario.title,
+      stepId: step.id,
+      stepTitle: step.title,
+      level: result.level,
+      messages: result.messages || [],
+      mode: "manual"
+    });
+  }
+}
+
+function isWorkflowItemOpen(item) {
+  return state.currentProject?.id === item.projectId
+    && state.currentPackId === item.packId
+    && state.scenario?.id === item.scenarioId;
+}
+
+function findFirstIncompleteWorkflowStepIndex(scenario) {
+  for (let index = 0; index < scenario.steps.length; index += 1) {
+    const result = state.stepResults[String(index)];
+
+    if (!result || result.level === "error") {
+      return index;
+    }
+  }
+
+  return null;
 }
 
 function requestStopWorkflowRun() {
@@ -4031,7 +4129,7 @@ function updateWorkflowControls() {
   const hasWorkflow = Boolean(getSelectedWorkflow());
   const hasPausedRun = Boolean(state.workflowRun?.status === "paused" && !state.workflowRunning);
   const hasCompletedRun = Boolean(state.workflowRun?.status === "completed");
-  elements.runWorkflow.disabled = !hasWorkflow || state.workflowRunning;
+  elements.runWorkflow.disabled = !hasWorkflow || state.workflowRunning || hasPausedRun;
   elements.continueWorkflow.disabled = !hasWorkflow || !hasPausedRun || state.workflowRunning;
   elements.stopWorkflow.disabled = !state.workflowRunning;
   updateWorkflowStatus(state.workflowRunning
