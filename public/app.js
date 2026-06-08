@@ -2297,9 +2297,14 @@ function renderStep(options = {}) {
     }
 
     const hasCurrentValue = Object.prototype.hasOwnProperty.call(state.values, field.name);
-    const defaultValue = preserveValues && hasCurrentValue
+    const resolvedDefaultValue = resolveFieldDefaultValue(field);
+    const shouldRefillEmptyValue = preserveValues
+      && hasCurrentValue
+      && isEmpty(state.values[field.name])
+      && !isEmpty(resolvedDefaultValue);
+    const defaultValue = preserveValues && hasCurrentValue && !shouldRefillEmptyValue
       ? state.values[field.name]
-      : resolveFieldDefaultValue(field);
+      : resolvedDefaultValue;
     state.values[field.name] = defaultValue;
 
     if (!field.hidden) {
