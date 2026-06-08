@@ -2211,7 +2211,9 @@ function resetCurrentScenario() {
   }
 }
 
-function renderStep() {
+function renderStep(options = {}) {
+  const preserveValues = options.preserveValues === true;
+
   if (state.scenario) {
     state.stepIndex = findNextRunnableStepIndex(state.stepIndex);
   }
@@ -2275,7 +2277,10 @@ function renderStep() {
       continue;
     }
 
-    const defaultValue = resolveFieldDefaultValue(field);
+    const hasCurrentValue = Object.prototype.hasOwnProperty.call(state.values, field.name);
+    const defaultValue = preserveValues && hasCurrentValue
+      ? state.values[field.name]
+      : resolveFieldDefaultValue(field);
     state.values[field.name] = defaultValue;
 
     if (!field.hidden) {
@@ -3729,7 +3734,7 @@ async function continueWorkflowRun() {
         const step = scenario.steps[state.workflowRun.stepIndex];
         state.stepIndex = state.workflowRun.stepIndex;
         applyWorkflowContextToScenario();
-        renderStep();
+        renderStep({ preserveValues: true });
         setWorkflowControls(true);
 
         const beforeStop = getWorkflowStopBeforeStep(step);
@@ -3910,7 +3915,7 @@ async function openWorkflowItem(item) {
   }
 
   applyWorkflowContextToScenario();
-  renderStep();
+  renderStep({ preserveValues: true });
   addLog("ok", "Workflow scenario selected", {
     projectId: item.projectId,
     packId: item.packId,
