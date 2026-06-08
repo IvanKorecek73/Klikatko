@@ -29,6 +29,7 @@ const state = {
   selectedWorkflowId: null,
   workflowRun: null,
   workflowContext: {},
+  workflowSecrets: {},
   workflowRunning: false,
   workflowStopRequested: false,
   harnessMeta: null,
@@ -2125,6 +2126,7 @@ function selectWorkflow(workflowId) {
   state.selectedWorkflowId = workflowId;
   state.workflowRun = null;
   state.workflowContext = {};
+  state.workflowSecrets = {};
   renderWorkflowList();
   clearWorkflowSummary();
   updateWorkflowControls();
@@ -3767,6 +3769,7 @@ function prepareWorkflowRun(workflow, itemIndex, options = {}) {
 
   if (!keepContext) {
     state.workflowContext = {};
+    state.workflowSecrets = {};
   }
 
   state.workflowRun = {
@@ -4045,12 +4048,20 @@ function applyWorkflowContextToScenario() {
     ...state.workflowContext,
     ...state.context
   };
+  state.secrets = {
+    ...state.workflowSecrets,
+    ...state.secrets
+  };
 }
 
 function syncWorkflowContextFromScenario() {
   state.workflowContext = {
     ...state.workflowContext,
     ...state.context
+  };
+  state.workflowSecrets = {
+    ...state.workflowSecrets,
+    ...state.secrets
   };
 }
 

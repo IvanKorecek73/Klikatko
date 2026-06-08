@@ -34,14 +34,14 @@
               "name": "userName",
               "label": "MOS uživatel",
               "type": "text",
-              "value": "",
+              "value": "{{context.userName}}",
               "placeholder": "Přepážkový účet"
             },
             {
               "name": "password",
               "label": "Heslo",
               "type": "password",
-              "value": "",
+              "value": "{{secret.accountPassword}}",
               "placeholder": "Heslo přepážkového účtu"
             },
             {
