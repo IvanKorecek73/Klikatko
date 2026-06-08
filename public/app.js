@@ -3877,10 +3877,13 @@ async function continueWorkflowRun() {
 
     finishWorkflow(workflow);
   } finally {
+    const paused = state.workflowRun?.status === "paused";
     state.workflowRunning = false;
     state.batchRunning = false;
     setWorkflowControls(false);
-    renderStep();
+    if (!paused) {
+      renderStep();
+    }
     renderWorkflowList();
   }
 }
@@ -4158,7 +4161,44 @@ function pauseWorkflow(message, level = "warn", extraLines = []) {
   ]);
   setWorkflowControls(false);
   updateWorkflowStatus("Pozastaveno");
+  syncVisibleStepFromWorkflowRun();
   renderStep({ preserveValues: true });
+  showWorkflowPauseResult(level, message, extraLines);
+}
+
+function syncVisibleStepFromWorkflowRun() {
+  const workflow = getSelectedWorkflow();
+  const run = state.workflowRun;
+
+  if (!workflow || !run || !state.scenario) {
+    return;
+  }
+
+  const item = workflow.items?.[run.itemIndex];
+
+  if (!item || !isWorkflowItemOpen(item)) {
+    return;
+  }
+
+  state.stepIndex = run.stepIndex;
+}
+
+function showWorkflowPauseResult(level, message, lines = []) {
+  clearResultCountdown();
+  state.displayedResult = {
+    level,
+    message,
+    body: null,
+    step: currentStep(),
+    workflowPaused: true
+  };
+  elements.resultCard.className = `result-card ${level} workflow-pause-result`;
+  elements.resultCard.innerHTML = `
+    <strong class="result-title">Workflow pozastaveno</strong>
+    <div class="result-message">${escapeHtml(message)}</div>
+    ${lines.length > 0 ? `<ul class="workflow-pause-lines">${lines.map(line => `<li>${escapeHtml(line)}</li>`).join("")}</ul>` : ""}
+    <div class="workflow-pause-next">Po dokončení ruční akce klikněte na <strong>Pokračovat ve workflow</strong>.</div>
+  `;
 }
 
 function finishWorkflow(workflow) {

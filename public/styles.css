@@ -1394,6 +1394,27 @@ button:disabled {
   color: var(--error);
 }
 
+.workflow-pause-result {
+  border: 1px solid rgba(176, 111, 0, 0.28);
+  border-left-width: 5px;
+  background: #fff8e8;
+}
+
+.workflow-pause-lines {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding-left: 18px;
+  color: var(--ink);
+}
+
+.workflow-pause-next {
+  border-top: 1px solid rgba(176, 111, 0, 0.22);
+  color: var(--ink);
+  font-size: 13px;
+  padding-top: 10px;
+}
+
 .result-title {
   display: block;
   margin-bottom: 10px;
