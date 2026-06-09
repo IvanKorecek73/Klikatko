@@ -104,6 +104,7 @@ const elements = {
   resetScenario: document.querySelector("#resetScenario"),
   resultCard: document.querySelector("#resultCard"),
   clearLog: document.querySelector("#clearLog"),
+  savePhoneScreenshot: document.querySelector("#savePhoneScreenshot"),
   saveFullLog: document.querySelector("#saveFullLog"),
   contextView: document.querySelector("#contextView"),
   logEntries: document.querySelector("#logEntries"),
@@ -276,6 +277,7 @@ function bindEventHandlers() {
   });
   elements.testerTab.addEventListener("click", () => activateRightTab("tester"));
   elements.logTab.addEventListener("click", () => activateRightTab("log"));
+  elements.savePhoneScreenshot.addEventListener("click", savePhoneScreenshot);
   elements.saveFullLog.addEventListener("click", saveFullLog);
   elements.clearLog.addEventListener("click", () => {
     state.log = [];
@@ -6658,6 +6660,184 @@ function saveFullLog() {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+async function savePhoneScreenshot() {
+  const phone = document.querySelector(".phone");
+  const button = elements.savePhoneScreenshot;
+
+  if (!phone || !button) {
+    return;
+  }
+
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "Ukládám...";
+
+  try {
+    const blob = await renderPhoneToPngBlob(phone);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+
+    link.href = url;
+    link.download = `klikatko-screen-${timestamp}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    addLog("error", "Uložení obrazovky selhalo", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
+async function renderPhoneToPngBlob(phone) {
+  const overrideCss = `
+    .phone.phone-screenshot-capture {
+      height: auto !important;
+      max-height: none !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+    }
+    .phone.phone-screenshot-capture .phone-content {
+      flex: none !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+    }
+  `;
+  const tempStyle = document.createElement("style");
+  tempStyle.textContent = overrideCss;
+  document.head.appendChild(tempStyle);
+
+  const offscreen = document.createElement("div");
+  offscreen.style.position = "fixed";
+  offscreen.style.left = "-10000px";
+  offscreen.style.top = "0";
+  offscreen.style.width = `${Math.ceil(phone.getBoundingClientRect().width)}px`;
+  offscreen.style.pointerEvents = "none";
+  offscreen.style.zIndex = "-1";
+
+  const clone = phone.cloneNode(true);
+  clone.classList.add("phone-screenshot-capture");
+  clone.style.width = `${Math.ceil(phone.getBoundingClientRect().width)}px`;
+  clone.style.height = "auto";
+  clone.style.maxHeight = "none";
+  clone.style.minHeight = "0";
+  clone.style.overflow = "visible";
+
+  const cloneContent = clone.querySelector(".phone-content");
+  if (cloneContent) {
+    cloneContent.style.height = "auto";
+    cloneContent.style.maxHeight = "none";
+    cloneContent.style.overflow = "visible";
+    cloneContent.style.flex = "none";
+    cloneContent.scrollTop = 0;
+  }
+
+  offscreen.appendChild(clone);
+  document.body.appendChild(offscreen);
+
+  try {
+    if (document.fonts?.ready) {
+      await document.fonts.ready;
+    }
+
+    await nextAnimationFrame();
+    const width = Math.ceil(clone.getBoundingClientRect().width);
+    const height = Math.ceil(clone.scrollHeight);
+    const styleText = `${collectDocumentCssText()}\n${overrideCss}`;
+    const html = serializePhoneScreenshotMarkup(clone, styleText, width, height);
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+        <foreignObject width="100%" height="100%">${html}</foreignObject>
+      </svg>
+    `;
+
+    return await svgToPngBlob(svg, width, height);
+  } finally {
+    offscreen.remove();
+    tempStyle.remove();
+  }
+}
+
+function serializePhoneScreenshotMarkup(phoneClone, styleText, width, height) {
+  const wrapper = document.createElement("div");
+  wrapper.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+  wrapper.style.width = `${width}px`;
+  wrapper.style.minHeight = `${height}px`;
+
+  const style = document.createElement("style");
+  style.textContent = styleText;
+  wrapper.appendChild(style);
+  wrapper.appendChild(phoneClone.cloneNode(true));
+
+  return new XMLSerializer().serializeToString(wrapper);
+}
+
+function collectDocumentCssText() {
+  return [...document.styleSheets]
+    .map(sheet => {
+      try {
+        return [...sheet.cssRules].map(rule => rule.cssText).join("\n");
+      } catch {
+        return "";
+      }
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+function svgToPngBlob(svg, width, height) {
+  return new Promise((resolve, reject) => {
+    const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+    const svgUrl = URL.createObjectURL(svgBlob);
+    const image = new Image();
+    const scale = Math.min(window.devicePixelRatio || 1, 2);
+
+    image.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.ceil(width * scale);
+        canvas.height = Math.ceil(height * scale);
+        const context = canvas.getContext("2d");
+
+        if (!context) {
+          throw new Error("Canvas context není dostupný.");
+        }
+
+        context.scale(scale, scale);
+        context.drawImage(image, 0, 0, width, height);
+        canvas.toBlob(blob => {
+          URL.revokeObjectURL(svgUrl);
+
+          if (!blob) {
+            reject(new Error("PNG se nepodařilo vytvořit."));
+            return;
+          }
+
+          resolve(blob);
+        }, "image/png");
+      } catch (error) {
+        URL.revokeObjectURL(svgUrl);
+        reject(error);
+      }
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(svgUrl);
+      reject(new Error("SVG náhled obrazovky se nepodařilo načíst."));
+    };
+    image.src = svgUrl;
+  });
+}
+
+function nextAnimationFrame() {
+  return new Promise(resolve => window.requestAnimationFrame(() => resolve()));
 }
 
 function showResult(level, message, body = null, step = currentStep()) {
