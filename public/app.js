@@ -41,6 +41,8 @@ const state = {
   redisIdentityId: "",
   redisIdentityManual: false,
   redisLastSession: null,
+  redisHealth: null,
+  redisHealthCheckRunning: false,
   displayedResult: null,
   activeSelection: null,
   resultCountdownTimer: null,
@@ -2177,6 +2179,49 @@ function renderRedisViewer() {
 
   elements.redisIdentityId.value = state.redisIdentityId || "";
   elements.redisUseSession.disabled = !isUsableRedisSession(state.redisLastSession);
+  renderRedisHealthStatus();
+  checkRedisHealth();
+}
+
+function renderRedisHealthStatus() {
+  if (!elements.redisStatus) {
+    return;
+  }
+
+  if (state.redisHealth?.ok) {
+    const redis = state.redisHealth.body?.redis;
+    elements.redisStatus.textContent = redis?.host
+      ? `Připojeno: ${redis.host}:${redis.port ?? ""}`.replace(/:$/, "")
+      : "Připojeno";
+    return;
+  }
+
+  elements.redisStatus.textContent = state.redisHealth?.checked ? "Nepřipojeno" : "Ověřuji...";
+}
+
+async function checkRedisHealth() {
+  if (state.redisHealthCheckRunning) {
+    return;
+  }
+
+  state.redisHealthCheckRunning = true;
+  try {
+    const body = await fetchRedisBridgeJson("/health");
+    state.redisHealth = {
+      checked: true,
+      ok: String(body?.status || "").toUpperCase() === "OK",
+      body
+    };
+  } catch (error) {
+    state.redisHealth = {
+      checked: true,
+      ok: false,
+      message: error instanceof Error ? error.message : String(error)
+    };
+  } finally {
+    state.redisHealthCheckRunning = false;
+    renderRedisHealthStatus();
+  }
 }
 
 async function loadRedisSessionFromViewer() {
@@ -2189,6 +2234,7 @@ async function loadRedisSessionFromViewer() {
 
   try {
     showRedisResult("warn", "Načítám Redis session...", identityId);
+    await checkRedisHealth();
     const session = await fetchRedisSession(identityId);
     state.redisLastSession = session;
     renderRedisSession(session);
@@ -2222,6 +2268,7 @@ function useRedisSessionFromViewer() {
 async function scanRedisSessionsFromViewer() {
   try {
     showRedisResult("warn", "Hledám MOS session klíče...", "pattern: mos:session:user:*");
+    await checkRedisHealth();
     const body = await fetchRedisBridgeJson(`/scan?pattern=${encodeURIComponent("mos:session:user:*")}&count=50`);
 
     showRedisResult("ok", `Nalezeno ${body.keys?.length || 0} session klíčů`, `
@@ -2330,7 +2377,7 @@ function renderRedisSession(session, note = "") {
   const exists = isUsableRedisSession(session);
   const ttl = Number(session.ttlSeconds);
   const ttlText = ttl < 0 ? "bez TTL / nenalezeno" : `${ttl} s`;
-  elements.redisStatus.textContent = exists ? "Session nalezena" : "Session nenalezena";
+  elements.redisStatus.textContent = exists ? "Session nalezena" : "Redis připojeno, session nenalezena";
   elements.redisUseSession.disabled = !exists;
 
   showRedisResult(exists ? "ok" : "error", exists ? "MOS session v Redis" : "MOS session nebyla nalezena", `
