@@ -1,5 +1,5 @@
 param(
-    [int]$Port = 5095,
+    [int]$Port = 5096,
     [string]$TargetBaseUrl = "http://localhost:5087",
     [int]$ProxyTimeoutSeconds = 30,
     [int]$RedisBridgePort = 5097,

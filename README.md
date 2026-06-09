@@ -30,7 +30,7 @@ Start-Klikatko.cmd https://localhost:7261
 
 Po startu se otevře:
 
-- `http://localhost:5095`
+- `http://localhost:5096`
 
 Proxy target už pak lze přepínat přímo v UI přes:
 

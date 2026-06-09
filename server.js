@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
 
-const port = Number(process.env.PORT || 5095);
+const port = Number(process.env.PORT || 5096);
 let targetBaseUrl = process.env.TICKET_SERVICE_BASE_URL || "http://localhost:5087";
 const proxyTimeoutMs = Number(process.env.HARNESS_PROXY_TIMEOUT_MS || 30000);
 const publicDir = path.join(__dirname, "public");
