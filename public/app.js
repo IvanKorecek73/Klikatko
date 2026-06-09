@@ -43,7 +43,8 @@ const state = {
   redisLastSession: null,
   displayedResult: null,
   activeSelection: null,
-  resultCountdownTimer: null
+  resultCountdownTimer: null,
+  eventHandlersBound: false
 };
 
 const NEW_AUTH_PROFILE_ID = "__new_auth_profile__";
@@ -140,17 +141,60 @@ init();
 
 async function init() {
   initResizablePanels();
-  state.projectIndex = await fetchJson("/scenarios/index.json");
-  await loadWorkflowIndex();
-  await loadHarnessMeta();
-  populateProjectOptions();
-  const lastSelection = loadLastSelection();
-  await loadProject(getRestoredProjectId(lastSelection), {
-    packId: lastSelection?.packId,
-    scenarioId: lastSelection?.scenarioId,
-    suppressLog: true
-  });
-  renderRedisViewer();
+  bindEventHandlers();
+
+  try {
+    state.projectIndex = await fetchJson("/scenarios/index.json");
+    await loadWorkflowIndex();
+    await loadHarnessMeta();
+    populateProjectOptions();
+    const lastSelection = loadLastSelection();
+    await loadProject(getRestoredProjectId(lastSelection), {
+      packId: lastSelection?.packId,
+      scenarioId: lastSelection?.scenarioId,
+      suppressLog: true
+    });
+    renderRedisViewer();
+  } catch (error) {
+    const recovered = await recoverStartupFromStoredSelection(error);
+    if (!recovered) {
+      showStartupError(error);
+    }
+  }
+}
+
+async function recoverStartupFromStoredSelection(originalError) {
+  if (!state.projectIndex) {
+    return false;
+  }
+
+  try {
+    localStorage.removeItem(LAST_SELECTION_STORAGE_KEY);
+    populateProjectOptions();
+    await loadProject(getDefaultProjectId(), {
+      suppressLog: true
+    });
+    renderRedisViewer();
+    showBatchRunSummary("warn", "Klikatko ignorovalo ulozeny posledni vyber.", [
+      originalError instanceof Error ? originalError.message : String(originalError),
+      "Aplikace byla nactena z vychoziho projektu."
+    ]);
+    return true;
+  } catch (recoveryError) {
+    addLog("error", "Klikatko startup recovery failed", {
+      original: originalError instanceof Error ? originalError.message : String(originalError),
+      recovery: recoveryError instanceof Error ? recoveryError.message : String(recoveryError)
+    });
+    return false;
+  }
+}
+
+function bindEventHandlers() {
+  if (state.eventHandlersBound) {
+    return;
+  }
+
+  state.eventHandlersBound = true;
 
   elements.runStep.addEventListener("click", runCurrentStep);
   elements.previousStep.addEventListener("click", previousStep);
@@ -177,13 +221,25 @@ async function init() {
     renderScenarioList();
   });
   elements.projectSelect.addEventListener("change", async event => {
-    await loadProject(event.target.value);
+    try {
+      await loadProject(event.target.value);
+    } catch (error) {
+      showStartupError(error);
+    }
   });
   elements.environmentSelect.addEventListener("change", async event => {
-    await applyProjectEnvironment(state.currentProject, event.target.value);
+    try {
+      await applyProjectEnvironment(state.currentProject, event.target.value);
+    } catch (error) {
+      showStartupError(error);
+    }
   });
   elements.scenarioPack.addEventListener("change", async event => {
-    await loadScenarioPack(event.target.value);
+    try {
+      await loadScenarioPack(event.target.value);
+    } catch (error) {
+      showStartupError(error);
+    }
   });
   elements.baseUrl.addEventListener("input", () => {
     if (!state.currentProject) {
@@ -221,6 +277,20 @@ async function init() {
     state.log = [];
     renderLog();
   });
+}
+
+function showStartupError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  addLog("error", "Klikatko startup failed", { message });
+  elements.resultCard.className = "result-card error";
+  elements.resultCard.innerHTML = `
+    <strong class="result-title">Klikatko se nepodarilo nacist</strong>
+    <div class="result-message">${escapeHtml(message)}</div>
+    <div class="workflow-pause-next">Zkuste obnovit stranku. Pokud problem zustane, vymazte ulozeny stav Klikatka pro localhost:5096.</div>
+  `;
+  showBatchRunSummary("error", "Klikatko se nepodarilo nacist.", [
+    message
+  ]);
 }
 
 function populateProjectOptions() {
