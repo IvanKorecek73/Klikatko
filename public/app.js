@@ -32,6 +32,7 @@ const state = {
   workflowSecrets: {},
   workflowRunning: false,
   workflowStopRequested: false,
+  workflowLastReport: null,
   harnessMeta: null,
   authSession: null,
   authFormValues: {},
@@ -4593,6 +4594,7 @@ function prepareWorkflowRun(workflow, itemIndex, options = {}) {
     status: "running",
     skipInitialSync
   };
+  state.workflowLastReport = null;
 }
 
 function clearOpenWorkflowItemProgress(item) {
@@ -4737,10 +4739,13 @@ async function continueWorkflowRun() {
     ]);
   } finally {
     const paused = state.workflowRun?.status === "paused";
+    const completed = state.workflowRun?.status === "completed";
     state.workflowRunning = false;
     state.batchRunning = false;
     setWorkflowControls(false);
-    if (!paused) {
+    if (completed) {
+      showWorkflowCompletionResult(state.workflowLastReport || buildWorkflowReport(workflow));
+    } else if (!paused) {
       renderStep();
     }
     renderWorkflowList();
@@ -5288,12 +5293,134 @@ function finishWorkflow(workflow) {
   if (state.workflowRun) {
     state.workflowRun.status = "completed";
     state.workflowRun.completedAt = new Date().toISOString();
+    state.workflowRun.itemIndex = workflow.items?.length || state.workflowRun.itemIndex;
+    state.workflowRun.stepIndex = 0;
   }
 
   const report = buildWorkflowReport(workflow);
+  state.workflowLastReport = report;
   addLog("ok", "Workflow finished", report);
   showWorkflowSummary("ok", "Workflow dokončen.", report.lines);
   updateWorkflowStatus("Dokončeno");
+}
+
+function showWorkflowCompletionResult(report) {
+  clearResultCountdown();
+  state.displayedResult = {
+    level: "ok",
+    message: "Workflow dokončeno.",
+    body: report,
+    step: null,
+    workflowCompleted: true
+  };
+  elements.screenTitle.textContent = "Workflow dokončeno";
+  elements.screenDescription.textContent = report.workflowName || "Běh workflow doběhl do konce.";
+  elements.testerTitle.textContent = "Workflow dokončeno";
+  elements.testerDescription.textContent = "Souhrn provedených scénářů a uloženého kontextu.";
+  elements.testerExpected.textContent = "";
+  elements.stepCounter.textContent = "";
+  elements.stepForm.innerHTML = "";
+  elements.resultCard.className = "result-card ok workflow-complete-result";
+  elements.resultCard.innerHTML = buildWorkflowCompletionHtml(report);
+  elements.nextStep.disabled = true;
+  elements.nextStep.textContent = "Další";
+  elements.nextStep.title = "";
+  elements.nextStep.classList.remove("ready");
+  renderContext();
+}
+
+function buildWorkflowCompletionHtml(report) {
+  const results = Array.isArray(report.results) ? report.results : [];
+  const failed = results.filter(result => result.level === "error");
+  const warnings = results.filter(result => result.level === "warn");
+  const grouped = groupWorkflowResults(results);
+  const contextEntries = Object.entries(report.context || {})
+    .filter(([, value]) => !isEmpty(value))
+    .slice(0, 12);
+
+  return `
+    <strong class="result-title">Workflow dokončeno</strong>
+    <div class="result-message">${escapeHtml(report.workflowName || "Workflow doběhl do konce.")}</div>
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>Výsledek</strong>
+        <p>${escapeHtml(failed.length > 0
+          ? "Workflow doběhlo, ale některé kroky selhaly."
+          : warnings.length > 0
+            ? "Workflow doběhlo s upozorněními."
+            : "Workflow doběhlo bez chyb.")}</p>
+        <div class="app-card-meta">
+          ${renderAppChip(report.status || "Completed")}
+          ${renderAppChip(`${results.length} kroků`)}
+          ${warnings.length > 0 ? renderAppChip(`${warnings.length} upozornění`) : ""}
+          ${failed.length > 0 ? renderAppChip(`${failed.length} chyb`) : ""}
+        </div>
+      </article>
+      ${grouped.map(group => `
+        <article class="app-card">
+          <strong>${escapeHtml(group.title)}</strong>
+          <p>${escapeHtml(formatCount(group.results.length, "krok proběhl", "kroky proběhly", "kroků proběhlo"))}</p>
+          <div class="app-card-details">
+            ${group.results.map(result => `
+              <div class="app-detail-row">
+                <span>${escapeHtml(result.stepTitle || result.stepId || "Krok")}</span>
+                <span>${escapeHtml(getWorkflowResultLabel(result))}</span>
+              </div>
+            `).join("")}
+          </div>
+        </article>
+      `).join("")}
+      ${contextEntries.length > 0 ? `
+        <article class="app-card">
+          <strong>Uložené hodnoty</strong>
+          <p>Vybrané hodnoty z workflow kontextu.</p>
+          <div class="app-card-details">
+            ${contextEntries.map(([key, value]) => `
+              <div class="app-detail-row">
+                <span>${escapeHtml(key)}</span>
+                <span>${escapeHtml(formatWorkflowValue(value))}</span>
+              </div>
+            `).join("")}
+          </div>
+        </article>
+      ` : ""}
+    </div>
+  `;
+}
+
+function groupWorkflowResults(results) {
+  const groups = [];
+
+  for (const result of results) {
+    const key = `${result.projectId || ""}|${result.packId || ""}|${result.scenarioId || ""}`;
+    let group = groups.find(item => item.key === key);
+
+    if (!group) {
+      group = {
+        key,
+        title: result.scenarioTitle || result.scenarioId || "Scénář",
+        results: []
+      };
+      groups.push(group);
+    }
+
+    group.results.push(result);
+  }
+
+  return groups;
+}
+
+function getWorkflowResultLabel(result) {
+  const level = result.level === "ok"
+    ? "Hotovo"
+    : result.level === "warn"
+      ? "Upozornění"
+      : "Chyba";
+  const message = Array.isArray(result.messages) && result.messages.length > 0
+    ? result.messages[0]
+    : "";
+
+  return [level, message].filter(Boolean).join(" | ");
 }
 
 function buildWorkflowProgressLines() {
