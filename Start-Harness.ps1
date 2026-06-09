@@ -3,7 +3,8 @@ param(
     [string]$TargetBaseUrl = "http://localhost:5087",
     [int]$ProxyTimeoutSeconds = 30,
     [int]$RedisBridgePort = 5097,
-    [string]$RedisConnectionString = "localhost:6379,abortConnect=false"
+    [string]$RedisConnectionString = "localhost:6379,abortConnect=false",
+    [switch]$OpenBrowser
 )
 
 $ErrorActionPreference = "Stop"
@@ -680,11 +681,19 @@ try {
     }
     Write-Host "Stop with Ctrl+C."
 
+    if ($OpenBrowser) {
+        Start-Process "http://localhost:$Port"
+    }
+
     while ($true) {
         $client = $listener.AcceptTcpClient()
 
         try {
+            $client.ReceiveTimeout = 5000
+            $client.SendTimeout = ($ProxyTimeoutSeconds * 1000) + 5000
             $stream = $client.GetStream()
+            $stream.ReadTimeout = 5000
+            $stream.WriteTimeout = ($ProxyTimeoutSeconds * 1000) + 5000
             $request = Read-Request $stream
 
             if (-not $request) {
@@ -708,6 +717,9 @@ try {
             else {
                 Send-StaticResponse $stream $pathOnly
             }
+        }
+        catch {
+            Write-Host "Request skipped: $($_.Exception.Message)"
         }
         finally {
             $client.Close()
