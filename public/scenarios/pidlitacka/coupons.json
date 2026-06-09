@@ -182,12 +182,22 @@
           "title": "Provést přesun kupónů",
           "description": "Zavolá POST /v1/client/coupons/move. Business status může být Completed, Failed nebo PartiallyCompleted podle výsledků jednotlivých zdrojů v MOS.",
           "requiresContext": ["pidCouponMoveTargetIdentifierId"],
+          "readonlyContext": {
+            "kind": "couponMoveTargetIdentifier",
+            "title": "Vybraný cílový identifikátor",
+            "text": "Na tento identifikátor se přesunou kupóny ze všech ostatních identifikátorů aktuálního klienta.",
+            "idKey": "pidCouponMoveTargetIdentifierId",
+            "nameKey": "pidCouponMoveTargetIdentifierName",
+            "typeKey": "pidCouponMoveTargetIdentifierType",
+            "maskedValueKey": "pidCouponMoveTargetIdentifierMaskedValue"
+          },
           "fields": [
             {
               "name": "targetIdentifierId",
               "label": "Cílový identifierId",
               "type": "number",
-              "value": "{{context.pidCouponMoveTargetIdentifierId}}"
+              "value": "{{context.pidCouponMoveTargetIdentifierId}}",
+              "hidden": true
             }
           ],
           "request": {
@@ -231,28 +241,14 @@
         },
         {
           "id": "client-coupons-move-preview-after-execute",
-          "title": "Kontrolní preview po přesunu",
-          "description": "Znovu načte preview pro stejný cílový identifikátor. Po kompletním přesunu by už typicky neměly zbývat zdroje s kupóny.",
+          "title": "Přehled identifikátorů po přesunu",
+          "description": "Znovu načte stejný přehled identifikátorů a kupónů jako na začátku, aby byl na první pohled vidět stav po přesunu.",
           "requiresContext": ["pidCouponMoveTargetIdentifierId"],
-          "fields": [
-            {
-              "name": "targetIdentifierId",
-              "label": "Cílový identifierId",
-              "type": "number",
-              "value": "{{context.pidCouponMoveTargetIdentifierId}}"
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "path": "/v1/client/coupons/move-preview?targetIdentifierId={{form.targetIdentifierId}}"
-          },
+          "customAction": "couponMoveTargetOverview",
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.status", "equals": "Completed" },
-              { "path": "$.targetIdentifier.identifierId", "notEmpty": true },
-              { "path": "$.sources", "lengthAtLeast": 0 },
-              { "path": "$.warnings", "lengthAtLeast": 0 }
+              { "path": "$.identifiers", "lengthAtLeast": 1 }
             ]
           }
         }

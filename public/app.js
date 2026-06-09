@@ -3632,6 +3632,10 @@ function renderRequestPreviewCard(step) {
 }
 
 function renderNoInputStepCard(step) {
+  if (step?.readonlyContext?.kind === "couponMoveTargetIdentifier") {
+    return renderReadonlyCouponMoveTargetCard(step);
+  }
+
   const card = document.createElement("section");
   card.className = "request-preview";
 
@@ -3649,6 +3653,37 @@ function renderNoInputStepCard(step) {
     </div>
     <div class="request-preview-empty">
       Tento krok nevyžaduje žádné ruční zadání. Po spuštění proběhne ${escapeHtml(requestKind)} pomocí připravené metody.
+    </div>
+  `;
+
+  return card;
+}
+
+function renderReadonlyCouponMoveTargetCard(step) {
+  const card = document.createElement("section");
+  card.className = "app-card app-card-readonly-target";
+  const config = step.readonlyContext || {};
+  const identifierId = state.context?.[config.idKey] || "";
+  const identifier = {
+    identifierId,
+    name: state.context?.[config.nameKey] || "",
+    type: state.context?.[config.typeKey] || "",
+    maskedPan: state.context?.[config.maskedValueKey] || ""
+  };
+  const label = getKnownIdentifierLabel(identifierId) || getIdentifierDisplayName(identifier);
+  const value = identifier.maskedPan || identifier.name || "-";
+
+  card.innerHTML = `
+    <strong>${escapeHtml(config.title || "Vybraný identifikátor")}</strong>
+    <p>${escapeHtml(config.text || "Hodnota je převzatá z předchozího výběru a v tomto kroku se needituje.")}</p>
+    <div class="app-card-meta">
+      ${renderAppChip(getIdentifierTypeLabel(identifier))}
+      ${renderAppChip("readonly")}
+    </div>
+    <div class="app-card-details">
+      <div class="app-detail-row"><span>Cíl</span><span>${escapeHtml(label || "-")}</span></div>
+      <div class="app-detail-row"><span>ID</span><span>${escapeHtml(identifierId || "-")}</span></div>
+      <div class="app-detail-row"><span>Hodnota</span><span>${escapeHtml(value)}</span></div>
     </div>
   `;
 
