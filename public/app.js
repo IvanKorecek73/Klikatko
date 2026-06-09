@@ -5251,6 +5251,8 @@ function pauseWorkflow(message, level = "warn", extraLines = [], options = {}) {
     syncVisibleStepFromWorkflowRun();
     renderStep({ preserveValues: true });
     showWorkflowPauseResult(level, message, extraLines);
+  } else {
+    showWorkflowPauseNoticeInCurrentResult(level, message, extraLines);
   }
 }
 
@@ -5287,6 +5289,25 @@ function showWorkflowPauseResult(level, message, lines = []) {
     ${lines.length > 0 ? `<ul class="workflow-pause-lines">${lines.map(line => `<li>${escapeHtml(line)}</li>`).join("")}</ul>` : ""}
     <div class="workflow-pause-next">Po dokončení ruční akce klikněte na <strong>Pokračovat ve workflow</strong>.</div>
   `;
+}
+
+function showWorkflowPauseNoticeInCurrentResult(level, message, lines = []) {
+  const existing = elements.resultCard.querySelector("[data-workflow-pause-notice]");
+
+  if (existing) {
+    existing.remove();
+  }
+
+  const notice = document.createElement("section");
+  notice.dataset.workflowPauseNotice = "true";
+  notice.className = `workflow-pause-inline ${level}`;
+  notice.innerHTML = `
+    <strong>Workflow pozastaveno</strong>
+    <p>${escapeHtml(message)}</p>
+    ${lines.length > 0 ? `<ul>${lines.map(line => `<li>${escapeHtml(line)}</li>`).join("")}</ul>` : ""}
+    <div>Po dokončení ruční akce klikněte na <strong>Pokračovat ve workflow</strong>.</div>
+  `;
+  elements.resultCard.prepend(notice);
 }
 
 function finishWorkflow(workflow) {
@@ -9391,6 +9412,12 @@ function applySelection(index) {
       state.displayedResult.message,
       state.displayedResult.body,
       state.displayedResult.step);
+  }
+
+  if (state.workflowRun?.status === "paused") {
+    showWorkflowPauseNoticeInCurrentResult("ok", "Výběr byl uložen.", [
+      "Klikněte na Pokračovat ve workflow."
+    ]);
   }
 }
 

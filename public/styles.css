@@ -1490,6 +1490,42 @@ button:disabled {
   padding-top: 10px;
 }
 
+.workflow-pause-inline {
+  border: 1px solid rgba(176, 111, 0, 0.28);
+  border-left: 5px solid #d8891f;
+  border-radius: 8px;
+  background: #fff8e8;
+  color: var(--ink);
+  margin-bottom: 12px;
+  padding: 12px;
+}
+
+.workflow-pause-inline strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.workflow-pause-inline p {
+  color: currentColor;
+  font-size: 13px;
+  line-height: 1.35;
+  margin-bottom: 8px;
+}
+
+.workflow-pause-inline ul {
+  display: grid;
+  gap: 5px;
+  margin: 0 0 10px;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.workflow-pause-inline div {
+  border-top: 1px solid rgba(176, 111, 0, 0.22);
+  font-size: 13px;
+  padding-top: 9px;
+}
+
 .result-title {
   display: block;
   margin-bottom: 10px;
