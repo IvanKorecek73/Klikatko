@@ -1,9 +1,9 @@
 @coreMosUrl = https://pre-core.mos.oict.cz/services/mosservice.asmx
 @serviceKey = c8b76d63-3c39-46f2-ac12-887776070d45
-@userName = PUT_LOGIN_USERNAME_HERE
-@password = PUT_LOGIN_PASSWORD_HERE
-@sessionId = PUT_MOS_SESSION_ID_HERE
-@returnUrl = http://localhost:5096/analysis/html/GwResponsePage.html
+@userName = toknoboydi@necub.com
+@password = Test123+
+@sessionId = d368327c-519a-4c04-9903-1e841ac0d05c
+@returnUrl = pid-litacka://identifier-registration/
 
 ### Core MOS - AuthenticateLogin
 # Copy AuthenticateLoginResult/Session/SessionID from the response into @sessionId above.
