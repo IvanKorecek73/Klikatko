@@ -7036,6 +7036,21 @@ function buildAppCardsHtml(body, step = currentStep()) {
     );
   }
 
+  if (step?.selection?.sourcePath) {
+    const items = state.activeSelection?.stepId === step.id && Array.isArray(state.activeSelection.items)
+      ? state.activeSelection.items
+      : getSelectionItems(step, body);
+
+    if (Array.isArray(items) && items.length > 0) {
+      return renderSelectionItemsCardsHtml(step, items);
+    }
+
+    return renderEmptyAppCardHtml(
+      step.selection.emptyTitle || "Žádné položky",
+      step.selection.emptyText || "Odpověď neobsahuje žádné položky k výběru."
+    );
+  }
+
   if (!body || typeof body !== "object") {
     return "";
   }
