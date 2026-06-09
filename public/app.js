@@ -770,6 +770,26 @@ function saveAuthFormValues() {
   }
 }
 
+function syncAuthFormValuesFromDom() {
+  if (!elements.authForm) {
+    return;
+  }
+
+  const fields = elements.authForm.querySelectorAll("input[name], select[name], textarea[name]");
+  fields.forEach(field => {
+    if (!field.name) {
+      return;
+    }
+
+    if (field.type === "checkbox") {
+      state.authFormValues[field.name] = field.checked;
+      return;
+    }
+
+    state.authFormValues[field.name] = field.value;
+  });
+}
+
 function saveAuthCustomProfiles() {
   if (!state.currentProject?.id) {
     return;
@@ -1263,6 +1283,7 @@ async function executeAuthSessionRenew() {
     return;
   }
 
+  syncAuthFormValuesFromDom();
   const result = await renewMosSessionIfPossible();
 
   if (!result.ok) {
@@ -1280,7 +1301,23 @@ async function executeAuthSessionRenew() {
   if (state.authSession?.identityId) {
     state.redisIdentityId = state.authSession.identityId;
     state.redisIdentityManual = false;
-    await loadRedisSessionFromViewer();
+    const session = await loadRedisSessionFromViewer({ quiet: true });
+
+    if (!isUsableRedisSession(session)) {
+      const key = `mos:session:user:${state.authSession.identityId}`;
+      elements.authJwtStatus.textContent = `BE obnovu MOS session potvrdil, ale v Redis nebyl nalezen klíč ${key}.`;
+      elements.authJwtStatus.className = "auth-status error";
+      elements.authPanel.open = true;
+      showRedisResult(
+        "error",
+        "MOS session po obnově není v Redis.",
+        `Očekávaný klíč: ${key}`
+      );
+      return;
+    }
+
+    elements.authJwtStatus.textContent = `MOS session obnovena a nalezena v Redis pro ${state.authSession.identityId}.`;
+    elements.authJwtStatus.className = "auth-status ok";
   }
 }
 
@@ -2255,26 +2292,34 @@ async function checkRedisHealth() {
   }
 }
 
-async function loadRedisSessionFromViewer() {
+async function loadRedisSessionFromViewer(options = {}) {
   const identityId = getRedisViewerIdentityId();
 
   if (!identityId) {
+    if (options.quiet) {
+      return null;
+    }
     showRedisResult("error", "Chybí identityId.", "Přihlaste se do BE PidLitacka nebo identityId vyplňte ručně.");
-    return;
+    return null;
   }
 
   try {
-    showRedisResult("warn", "Načítám Redis session...", identityId);
+    if (!options.quiet) {
+      showRedisResult("warn", "Načítám Redis session...", identityId);
+    }
     await checkRedisHealth();
     const session = await fetchRedisSession(identityId);
     state.redisLastSession = session;
     renderRedisSession(session);
+    return session;
   } catch (error) {
     state.redisLastSession = null;
-    showRedisResult("error", "Redis bridge neodpověděl.", error instanceof Error ? error.message : String(error));
+    if (!options.quiet) {
+      showRedisResult("error", "Redis bridge neodpověděl.", error instanceof Error ? error.message : String(error));
+    }
+    return null;
   }
 
-  renderRedisViewer();
 }
 
 function useRedisSessionFromViewer() {
