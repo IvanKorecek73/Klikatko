@@ -2986,7 +2986,7 @@ function getMobileActionTitle(step) {
   const text = getStepSearchText(step);
   const path = step.request?.path || "";
   const pathLower = path.toLowerCase();
-  const method = step.request?.method || "GET";
+  const method = step.request?.method || (step.customAction ? "AKCE" : "GET");
 
   if (path.includes("/v1/parking/cards")) {
     return path.includes("last-used")
@@ -3473,7 +3473,7 @@ function renderMobileActionHeader(step) {
 
   const title = getMobileActionTitle(step);
   const subtitle = getMobileActionSubtitle(step);
-  const method = step.request?.method || "GET";
+  const method = step.request?.method || (step.customAction ? "AKCE" : "GET");
 
   wrapper.innerHTML = `
     <div>
@@ -3637,7 +3637,7 @@ function renderNoInputStepCard(step) {
 
   const method = step.request?.method || (step.customAction ? "AKCE" : "GET");
   const requestKind = step.customAction
-    ? "vlastnĂ­ akce KlikĂˇtka"
+    ? "vlastní akce Klikátka"
     : method === "GET"
     ? "načtení dat"
     : "odeslání požadavku";
@@ -4109,6 +4109,46 @@ async function runCustomStep(step, runningStepIndex) {
     return;
   }
 
+  if (step.customAction === "couponMoveTargetOverview") {
+    const startedAt = performance.now();
+    const overview = await loadCouponMoveTargetOverview(step);
+    const durationMs = Math.round(performance.now() - startedAt);
+    const level = overview.errors.length > 0 ? "warn" : "ok";
+    const result = {
+      level,
+      appMessage: overview.errors.length > 0
+        ? "Přehled identifikátorů a kupónů je částečný."
+        : "Přehled identifikátorů a kupónů byl načten.",
+      messages: overview.errors.length > 0
+        ? ["Některé preview volání se nepodařilo načíst.", ...overview.errors]
+        : [`Načteno ${overview.identifiers.length} identifikátorů a ${overview.totalCoupons} kupónů.`]
+    };
+
+    prepareSelection(step, overview, 200);
+    state.lastStepResult = result;
+    state.stepResults[runningStepIndex] = result;
+
+    addLog(level, `${step.title} -> přehled kupónů`, {
+      request: {
+        action: step.customAction,
+        previewRequests: overview.previewRequests
+      },
+      response: {
+        durationMs,
+        body: overview
+      },
+      expected: step.expected || null,
+      mode: state.dirty ? "exploratory" : "scenario",
+      notes: result.messages
+    });
+
+    showResult(level, result.appMessage, overview, step);
+    renderContext();
+    elements.nextStep.disabled = !canAdvanceFromCurrentStep();
+    elements.nextStep.classList.toggle("ready", !elements.nextStep.disabled);
+    return;
+  }
+
   throw new Error(`Neznámá vlastní akce kroku: ${step.customAction}`);
 }
 
@@ -4261,6 +4301,124 @@ async function loadMosTokenCouponsOverview(step) {
     totalCoupons: tokens.reduce((sum, token) => sum + token.coupons.length, 0),
     tokens,
     errors
+  };
+}
+
+async function loadCouponMoveTargetOverview(step) {
+  const identifiersResponse = await callPidLitackaJson("/v1/client/identifiers");
+  const identifiers = Array.isArray(identifiersResponse.body?.identifiers)
+    ? identifiersResponse.body.identifiers
+    : [];
+  const couponMap = new Map();
+  const previewByTarget = new Map();
+  const errors = [];
+
+  for (const identifier of identifiers) {
+    const targetIdentifierId = identifier.identifierId;
+
+    if (isEmpty(targetIdentifierId)) {
+      continue;
+    }
+
+    try {
+      const previewResponse = await callPidLitackaJson(`/v1/client/coupons/move-preview?targetIdentifierId=${encodeURIComponent(targetIdentifierId)}`);
+      const preview = previewResponse.body || {};
+      previewByTarget.set(String(targetIdentifierId), preview);
+
+      for (const source of preview.sources || []) {
+        const sourceIdentifier = source.identifier || {};
+        const sourceIdentifierId = sourceIdentifier.identifierId;
+
+        if (isEmpty(sourceIdentifierId)) {
+          continue;
+        }
+
+        const key = String(sourceIdentifierId);
+        const existing = couponMap.get(key) || {
+          identifier: sourceIdentifier,
+          coupons: []
+        };
+
+        existing.identifier = {
+          ...existing.identifier,
+          ...sourceIdentifier
+        };
+        existing.coupons = mergeCouponsById(existing.coupons, source.coupons || []);
+        couponMap.set(key, existing);
+      }
+    } catch (error) {
+      errors.push(`Target ${targetIdentifierId}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  const enrichedIdentifiers = identifiers.map(identifier => {
+    const key = String(identifier.identifierId);
+    const couponInfo = couponMap.get(key);
+    const preview = previewByTarget.get(key);
+
+    return {
+      ...identifier,
+      coupons: couponInfo?.coupons || [],
+      moveCandidateCouponCount: Number(preview?.couponCount || 0),
+      moveCandidateSourceCount: Array.isArray(preview?.sources) ? preview.sources.length : 0,
+      movePreviewStatus: preview?.status || "",
+      movePreviewWarnings: preview?.warnings || []
+    };
+  });
+  state.context.pidCouponIdentifierLabels = Object.fromEntries(
+    enrichedIdentifiers
+      .filter(identifier => !isEmpty(identifier.identifierId))
+      .map(identifier => [String(identifier.identifierId), getIdentifierDisplayName(identifier)])
+  );
+
+  return {
+    kind: "couponMoveTargetOverview",
+    identifiers: enrichedIdentifiers,
+    totalIdentifiers: enrichedIdentifiers.length,
+    totalCoupons: enrichedIdentifiers.reduce((sum, identifier) => sum + (identifier.coupons?.length || 0), 0),
+    previewRequests: previewByTarget.size,
+    errors
+  };
+}
+
+function mergeCouponsById(existing, incoming) {
+  const result = [...(existing || [])];
+  const keys = new Set(result.map(coupon => String(coupon.couponId ?? JSON.stringify(coupon))));
+
+  for (const coupon of incoming || []) {
+    const key = String(coupon.couponId ?? JSON.stringify(coupon));
+
+    if (!keys.has(key)) {
+      keys.add(key);
+      result.push(coupon);
+    }
+  }
+
+  return result;
+}
+
+async function callPidLitackaJson(path) {
+  const baseUrl = elements.baseUrl.value.replace(/\/$/, "");
+  const url = `${baseUrl}${path}`;
+  const headers = {};
+
+  if (state.authSession?.accessToken) {
+    headers.Authorization = `Bearer ${state.authSession.accessToken}`;
+  }
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers
+  });
+  const body = response.status === 204 ? null : await readResponseBody(response);
+
+  if (!response.ok) {
+    throw new Error(body?.detail || body?.title || `HTTP ${response.status}`);
+  }
+
+  return {
+    status: response.status,
+    body
   };
 }
 
@@ -6547,6 +6705,18 @@ function buildAppCardsHtml(body, step = currentStep()) {
     return renderMosTokenCouponsOverviewCardHtml(body);
   }
 
+  if (isCouponMoveTargetOverviewResponse(body)) {
+    return renderCouponMoveTargetOverviewCardHtml(body, step);
+  }
+
+  if (isCouponMovePreviewResponse(body)) {
+    return renderCouponMovePreviewCardHtml(body);
+  }
+
+  if (isMoveCouponsResponse(body)) {
+    return renderMoveCouponsReportCardHtml(body);
+  }
+
   if (step?.selection?.sourceRegex) {
     const items = state.activeSelection?.stepId === step.id && Array.isArray(state.activeSelection.items)
       ? state.activeSelection.items
@@ -7346,6 +7516,305 @@ function getMosCouponSummary(coupon) {
   ].filter(Boolean).join(", ") || "Kupón bez detailu.";
 }
 
+function renderCouponMoveTargetOverviewCardHtml(body, step = currentStep()) {
+  const identifiers = Array.isArray(body.identifiers) ? body.identifiers : [];
+  const selection = getSelectionDescriptor(step, identifiers);
+
+  if (identifiers.length === 0) {
+    return renderEmptyAppCardHtml(
+      "Žádné identifikátory",
+      "Aktuální klient nemá žádný identifikátor. Pro přesun kupónů je potřeba alespoň jeden cíl."
+    );
+  }
+
+  return buildCardListHtml(identifiers, identifier => {
+    const coupons = Array.isArray(identifier.coupons) ? identifier.coupons : [];
+    const moveCandidateCouponCount = Number(identifier.moveCandidateCouponCount || 0);
+
+    return {
+      title: getIdentifierDisplayName(identifier),
+      text: coupons.length > 0
+        ? `Na tomto identifikátoru jsou ${formatCount(coupons.length, "kupón", "kupóny", "kupónů")}.`
+        : "Na tomto identifikátoru nejsou žádné kupóny.",
+      chips: [
+        getIdentifierTypeLabel(identifier),
+        identifier.isPersonalized === true ? "personalizovaný" : identifier.isPersonalized === false ? "nepersonalizovaný" : null,
+        coupons.length > 0 ? formatCount(coupons.length, "kupón", "kupóny", "kupónů") : "bez kupónů",
+        moveCandidateCouponCount > 0 ? `po výběru cíle se přesune ${moveCandidateCouponCount}` : "po výběru cíle nic k přesunu",
+        identifier.movePreviewStatus || null
+      ],
+      details: [
+        { label: "Identifikátor", value: getIdentifierDisplayName(identifier) },
+        { label: "ID", value: identifier.identifierId },
+        { label: "Hodnota", value: identifier.maskedPan || identifier.name },
+        { label: "Kupóny na identifikátoru", value: coupons.length },
+        { label: "Kupóny k přesunu při volbě tohoto cíle", value: moveCandidateCouponCount },
+        { label: "Zdrojů při volbě tohoto cíle", value: identifier.moveCandidateSourceCount }
+      ].filter(item => !isEmpty(item.value)),
+      extraHtml: renderPidCouponSubformHtml(coupons, "Kupóny na tomto identifikátoru")
+    };
+  }, { selection });
+}
+
+function renderCouponMovePreviewCardHtml(body) {
+  const target = body.targetIdentifier || {};
+  const sources = Array.isArray(body.sources) ? body.sources : [];
+  const warnings = Array.isArray(body.warnings) ? body.warnings : [];
+  const couponCount = Number(body.couponCount || 0);
+
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>${escapeHtml(couponCount > 0 ? "Preview přesunu kupónů" : "Žádné kupóny k přesunu")}</strong>
+        <p>${escapeHtml(couponCount > 0
+          ? `Na cíl ${getIdentifierDisplayName(target)} se bude přesouvat ${formatCount(couponCount, "kupón", "kupóny", "kupónů")}.`
+          : `Pro cíl ${getIdentifierDisplayName(target)} nejsou na ostatních identifikátorech žádné kupóny k přesunu.`)}</p>
+        <div class="app-card-meta">
+          ${renderAppChip(body.status || "status neznámý")}
+          ${renderAppChip(formatCount(sources.length, "zdroj", "zdroje", "zdrojů"))}
+          ${renderAppChip(formatCount(couponCount, "kupón", "kupóny", "kupónů"))}
+          ${warnings.length > 0 ? renderAppChip(`${warnings.length} varování`) : ""}
+        </div>
+        <div class="app-card-details">
+          <div class="app-detail-row"><span>Cíl</span><span>${escapeHtml(getIdentifierDisplayName(target))}</span></div>
+          <div class="app-detail-row"><span>Cílové ID</span><span>${escapeHtml(target.identifierId || "-")}</span></div>
+          <div class="app-detail-row"><span>Kupóny k přesunu</span><span>${escapeHtml(couponCount)}</span></div>
+        </div>
+      </article>
+      ${sources.map(source => renderCouponMoveSourceCardHtml(source)).join("")}
+      ${warnings.length > 0 ? renderCouponMoveWarningsCardHtml(warnings) : ""}
+    </div>
+  `;
+}
+
+function renderMoveCouponsReportCardHtml(body) {
+  const moved = Array.isArray(body.moved) ? body.moved : [];
+  const failed = Array.isArray(body.failed) ? body.failed : [];
+  const steps = Array.isArray(body.steps) ? body.steps : [];
+  const skipped = steps.filter(step => String(step.status || "").toLowerCase() === "skipped");
+  const completed = String(body.status || "").toLowerCase() === "completed" && failed.length === 0;
+
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>${escapeHtml(completed ? "Přesun proběhl úspěšně" : "Výsledek přesunu kupónů")}</strong>
+        <p>${escapeHtml(getMoveCouponsSummaryText(body, moved, failed, skipped))}</p>
+        <div class="app-card-meta">
+          ${renderAppChip(body.status || "status neznámý")}
+          ${renderAppChip(`přesunuto: ${sumCouponCounts(moved)}`)}
+          ${renderAppChip(`selhalo: ${sumCouponCounts(failed)}`)}
+          ${skipped.length > 0 ? renderAppChip(`přeskočeno: ${skipped.length}`) : ""}
+        </div>
+        <div class="app-card-details">
+          <div class="app-detail-row"><span>Cílové ID</span><span>${escapeHtml(body.targetIdentifierId || "-")}</span></div>
+          <div class="app-detail-row"><span>Zdroje přesunuty</span><span>${escapeHtml(moved.length)}</span></div>
+          <div class="app-detail-row"><span>Zdroje selhaly</span><span>${escapeHtml(failed.length)}</span></div>
+          <div class="app-detail-row"><span>Kroky přeskočeny</span><span>${escapeHtml(skipped.length)}</span></div>
+        </div>
+      </article>
+      ${moved.length > 0 ? renderMoveCouponsResultListHtml("Přesunuto", moved) : ""}
+      ${failed.length > 0 ? renderMoveCouponsResultListHtml("Selhalo", failed) : ""}
+      ${renderMoveCouponsStepsCardHtml(steps)}
+    </div>
+  `;
+}
+
+function renderCouponMoveSourceCardHtml(source) {
+  const identifier = source.identifier || {};
+  const coupons = Array.isArray(source.coupons) ? source.coupons : [];
+
+  return `
+    <article class="app-card">
+      <strong>${escapeHtml(getIdentifierDisplayName(identifier))}</strong>
+      <p>${escapeHtml(formatCount(coupons.length, "kupón bude přesunut", "kupóny budou přesunuty", "kupónů bude přesunuto"))}</p>
+      <div class="app-card-meta">
+        ${renderAppChip(getIdentifierTypeLabel(identifier))}
+        ${renderAppChip(formatCount(coupons.length, "kupón", "kupóny", "kupónů"))}
+        ${identifier.isPersonalized === true ? renderAppChip("personalizovaný") : ""}
+      </div>
+      <div class="app-card-details">
+        <div class="app-detail-row"><span>Zdroj</span><span>${escapeHtml(getIdentifierDisplayName(identifier))}</span></div>
+        <div class="app-detail-row"><span>Zdrojové ID</span><span>${escapeHtml(identifier.identifierId || "-")}</span></div>
+      </div>
+      ${renderPidCouponSubformHtml(coupons)}
+    </article>
+  `;
+}
+
+function renderPidCouponSubformHtml(coupons, title = "Kupóny") {
+  if (!Array.isArray(coupons) || coupons.length === 0) {
+    return `
+      <div class="app-coupon-empty">
+        Na tomto identifikátoru nejsou žádné kupóny.
+      </div>
+    `;
+  }
+
+  return `
+    <div class="app-coupon-list">
+      <strong class="app-coupon-list-title">${escapeHtml(title)}</strong>
+      ${coupons.map(coupon => `
+        <section class="app-coupon-item">
+          <div class="app-coupon-item-head">
+            <strong>${escapeHtml(coupon.tariffName || coupon.name || (coupon.couponId ? `Kupón ${coupon.couponId}` : "Kupón"))}</strong>
+            <span>${escapeHtml(coupon.couponId ? `ID ${coupon.couponId}` : "")}</span>
+          </div>
+          <div class="app-coupon-item-meta">
+            ${[
+              coupon.zones ? `zóny ${coupon.zones}` : null,
+              coupon.price !== undefined ? `${coupon.price} Kč` : null,
+              coupon.customerProfileName || null
+            ].filter(Boolean).map(renderAppChip).join("")}
+          </div>
+          <div class="app-coupon-item-details">
+            <div><span>Platnost od</span><span>${escapeHtml(formatDate(coupon.validFrom || coupon.dateTimeFrom) || "-")}</span></div>
+            <div><span>Platnost do</span><span>${escapeHtml(formatDate(coupon.validTo || coupon.dateTimeTo) || "-")}</span></div>
+            <div><span>Tarif</span><span>${escapeHtml(coupon.tariffName || coupon.name || "-")}</span></div>
+          </div>
+        </section>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderCouponMoveWarningsCardHtml(warnings) {
+  return `
+    <article class="app-card">
+      <strong>Varování</strong>
+      <p>Backend vrátil doplňující upozornění k přesunu.</p>
+      <div class="app-card-details">
+        ${warnings.map((warning, index) => `
+          <div class="app-detail-row"><span>${escapeHtml(warning.code || `Varování ${index + 1}`)}</span><span>${escapeHtml(warning.message || JSON.stringify(warning))}</span></div>
+        `).join("")}
+      </div>
+    </article>
+  `;
+}
+
+function renderMoveCouponsResultListHtml(title, items) {
+  return `
+    <article class="app-card">
+      <strong>${escapeHtml(title)}</strong>
+      <p>${escapeHtml(formatCount(items.length, "zdroj", "zdroje", "zdrojů"))}</p>
+      <div class="app-card-details">
+        ${items.map(item => {
+          const sourceLabel = getKnownIdentifierLabel(item.sourceIdentifierId) || (item.sourceIdentifierId ? `Zdroj ${item.sourceIdentifierId}` : "Zdroj");
+
+          return `
+            <div class="app-detail-row">
+              <span>${escapeHtml(sourceLabel)}</span>
+              <span>${escapeHtml([
+              formatCount(Number(item.couponCount || 0), "kupón", "kupóny", "kupónů"),
+              item.resultText || item.reason || item.message || null,
+              item.resultType || null,
+              item.resultId !== undefined ? `Result ${item.resultId}` : null
+              ].filter(Boolean).join(" | "))}</span>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </article>
+  `;
+}
+
+function renderMoveCouponsStepsCardHtml(steps) {
+  if (!Array.isArray(steps) || steps.length === 0) {
+    return "";
+  }
+
+  return `
+    <article class="app-card">
+      <strong>Kroky BE/MOS</strong>
+      <p>Diagnostika jednotlivých částí operace.</p>
+      <div class="app-card-details">
+        ${steps.map(step => `
+          <div class="app-detail-row"><span>${escapeHtml(step.name || "Krok")}</span><span>${escapeHtml([
+            step.status || "-",
+            step.message || null,
+            step.resultType || null,
+            step.resultId !== undefined ? `Result ${step.resultId}` : null
+          ].filter(Boolean).join(" | "))}</span></div>
+        `).join("")}
+      </div>
+    </article>
+  `;
+}
+
+function getMoveCouponsSummaryText(body, moved, failed, skipped) {
+  if (String(body.status || "").toLowerCase() === "completed" && failed.length === 0) {
+    const movedCoupons = sumCouponCounts(moved);
+    return movedCoupons > 0
+      ? `Hotovo: přesunuto ${formatCount(movedCoupons, "kupón", "kupóny", "kupónů")} na cílový identifikátor ${body.targetIdentifierId}.`
+      : "Hotovo: nebyly nalezeny žádné kupóny k přesunu.";
+  }
+
+  if (failed.length > 0) {
+    return `Přesun není kompletní: selhalo ${formatCount(sumCouponCounts(failed), "kupón", "kupóny", "kupónů")} na ${formatCount(failed.length, "zdroji", "zdrojích", "zdrojích")}.`;
+  }
+
+  if (skipped.length > 0) {
+    return "Operace byla dokončena, ale některé kroky byly přeskočeny.";
+  }
+
+  return `Business status: ${body.status || "neznámý"}.`;
+}
+
+function sumCouponCounts(items) {
+  return (items || []).reduce((sum, item) => sum + Number(item.couponCount || 0), 0);
+}
+
+function getKnownIdentifierLabel(identifierId) {
+  if (isEmpty(identifierId)) {
+    return "";
+  }
+
+  return state.context?.pidCouponIdentifierLabels?.[String(identifierId)] || "";
+}
+
+function getIdentifierDisplayName(identifier) {
+  const typeLabel = getIdentifierTypeLabel(identifier);
+  const value = identifier?.maskedPan
+    || identifier?.name
+    || identifier?.tokenValue
+    || identifier?.guid
+    || identifier?.identifierGuid
+    || identifier?.tokenGuid
+    || identifier?.identifierId
+    || "";
+  const guid = identifier?.guid || identifier?.identifierGuid || identifier?.tokenGuid || "";
+
+  if (guid && String(value) !== String(guid)) {
+    return `${typeLabel} ${value} (${guid})`;
+  }
+
+  return value ? `${typeLabel} ${value}` : typeLabel;
+}
+
+function getIdentifierTypeLabel(identifier) {
+  const text = String(identifier?.type || identifier?.identifierType || identifier?.subtype || "").toLowerCase();
+
+  if (text.includes("mob") || text.includes("phone") || text.includes("telefon")) {
+    return "Telefon";
+  }
+
+  if (text.includes("bpk") || text.includes("card") || text.includes("karta")) {
+    return "Karta";
+  }
+
+  return "Identifikátor";
+}
+
+function formatCount(count, one, few, many) {
+  const value = Number(count || 0);
+  const label = value === 1
+    ? one
+    : value >= 2 && value <= 4
+      ? few
+      : many;
+
+  return `${value} ${label}`;
+}
+
 function renderClientStatusCardHtml(body) {
   const personalData = body.personalData || {};
   const photo = body.photo || {};
@@ -7623,9 +8092,7 @@ function renderClientIdentifiersCardHtml(body, step = currentStep()) {
   }
 
   return buildCardListHtml(identifiers, identifier => {
-    const title = identifier.name
-      || identifier.maskedPan
-      || (identifier.identifierId !== undefined ? `Identifikátor ${identifier.identifierId}` : "Identifikátor");
+    const title = getIdentifierDisplayName(identifier);
 
     const textParts = [
       identifier.maskedPan,
@@ -7638,6 +8105,7 @@ function renderClientIdentifiersCardHtml(body, step = currentStep()) {
         ? textParts.join(", ")
         : "Identifikátor dostupný pro služby klienta.",
       chips: [
+        getIdentifierTypeLabel(identifier),
         identifier.type || null,
         identifier.subtype || null,
         identifier.isActive ? "aktivní" : "neaktivní",
@@ -7646,6 +8114,7 @@ function renderClientIdentifiersCardHtml(body, step = currentStep()) {
         identifier.isActiveForTransportSystem ? "aktivní v dopravě" : null
       ],
       details: [
+        { label: "Identifikátor", value: getIdentifierDisplayName(identifier) },
         { label: "ID", value: identifier.identifierId },
         { label: "Název", value: identifier.name },
         { label: "Typ", value: identifier.type },
@@ -8074,6 +8543,7 @@ function buildCardListHtml(items, mapItem, options = {}) {
               <div class="app-detail-row"><span>${escapeHtml(row.label)}</span><span>${escapeHtml(row.value)}</span></div>
             `).join("")}
           </div>` : ""}
+        ${card.extraHtml || ""}
         ${selection ? `
           <div class="app-card-actions">
             <button type="button" class="app-card-select" data-selection-index="${index}">
@@ -8869,6 +9339,34 @@ function isMosTokenCouponsOverviewResponse(value) {
     && !Array.isArray(value)
     && value.kind === "mosTokenCouponsOverview"
     && Array.isArray(value.tokens);
+}
+
+function isCouponMoveTargetOverviewResponse(value) {
+  return value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && value.kind === "couponMoveTargetOverview"
+    && Array.isArray(value.identifiers);
+}
+
+function isCouponMovePreviewResponse(value) {
+  return value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && value.targetIdentifier
+    && Array.isArray(value.sources)
+    && Array.isArray(value.warnings)
+    && "couponCount" in value;
+}
+
+function isMoveCouponsResponse(value) {
+  return value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && "targetIdentifierId" in value
+    && Array.isArray(value.moved)
+    && Array.isArray(value.failed)
+    && Array.isArray(value.steps);
 }
 
 function isSavedVehiclesStep(step) {
