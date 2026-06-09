@@ -2531,6 +2531,7 @@ function createWorkflowCard(workflow) {
             <p>${escapeHtml(`${item.projectId} / ${item.packId} / ${item.scenarioId}`)}</p>
           </div>
           <div class="workflow-step-actions">
+            <button class="workflow-open-source" type="button" data-workflow-step-index="${index}" ${state.workflowRunning ? "disabled" : ""}>Otevřít</button>
             <button class="workflow-start-at" type="button" data-workflow-step-index="${index}" ${state.workflowRunning ? "disabled" : ""}>Pokra\u010dovat odtud</button>
           </div>
         </li>`;
@@ -2551,6 +2552,12 @@ function createWorkflowCard(workflow) {
     button.addEventListener("click", event => {
       event.stopPropagation();
       startWorkflowFromItem(workflow.id, Number(button.dataset.workflowStepIndex));
+    });
+  });
+  card.querySelectorAll(".workflow-open-source").forEach(button => {
+    button.addEventListener("click", event => {
+      event.stopPropagation();
+      openWorkflowSourceItem(workflow.id, Number(button.dataset.workflowStepIndex));
     });
   });
   card.classList.toggle("active", state.selectedWorkflowId === workflow.id);
@@ -2618,6 +2625,91 @@ function selectWorkflow(workflowId) {
   updateWorkflowControls();
 }
 
+async function openWorkflowSourceItem(workflowId, itemIndex) {
+  const workflow = (state.workflowIndex?.workflows || []).find(item => item.id === workflowId);
+  const item = workflow?.items?.[itemIndex];
+
+  if (!workflow || !item) {
+    showWorkflowSummary("error", "Workflow krok se nepodařilo otevřít.", [
+      workflowId || "Neznámé workflow",
+      `Krok ${Number.isFinite(itemIndex) ? itemIndex + 1 : "?"}`
+    ]);
+    return;
+  }
+
+  try {
+    state.selectedWorkflowId = workflow.id;
+    await loadWorkflowItemCatalog(item, { suppressLog: true });
+
+    const openedForm = openWorkflowItemForm(item);
+    if (openedForm) {
+      activateLeftTab("forms");
+      showWorkflowSummary("ok", "Otevřen formulář z workflow.", [
+        item.title || item.scenarioId,
+        `${item.projectId} / ${item.packId}`
+      ]);
+      renderWorkflowList();
+      return;
+    }
+
+    if (state.catalog.scenarios.some(scenario => scenario.id === item.scenarioId)) {
+      activateLeftTab("scenarios");
+      selectScenario(item.scenarioId, { preserveLog: true });
+      showWorkflowSummary("ok", "Otevřen scénář z workflow.", [
+        item.title || item.scenarioId,
+        `${item.projectId} / ${item.packId}`
+      ]);
+      renderWorkflowList();
+      return;
+    }
+
+    showWorkflowSummary("error", "Scénář z workflow nebyl nalezen.", [
+      `${item.projectId} / ${item.packId} / ${item.scenarioId}`
+    ]);
+  } catch (error) {
+    showWorkflowSummary("error", "Scénář z workflow se nepodařilo otevřít.", [
+      error.message || String(error)
+    ]);
+  } finally {
+    updateWorkflowControls();
+  }
+}
+
+async function loadWorkflowItemCatalog(item, options = {}) {
+  if (state.currentProject?.id !== item.projectId) {
+    await loadProject(item.projectId, {
+      packId: item.packId,
+      suppressLog: options.suppressLog
+    });
+  } else if (state.currentPackId !== item.packId) {
+    await loadScenarioPack(item.packId, {
+      suppressLog: options.suppressLog
+    });
+  }
+}
+
+function openWorkflowItemForm(item) {
+  const scenario = state.catalog.scenarios.find(candidate => candidate.id === item.scenarioId);
+  const preferForm = item.formId || item.stepId || scenario?.formsOnly === true || item.openAs === "form";
+
+  if (!preferForm) {
+    return false;
+  }
+
+  const form = state.forms.find(candidate =>
+    (item.formId && candidate.id === item.formId)
+    || (candidate.scenarioId === item.scenarioId && item.stepId && candidate.step?.id === item.stepId)
+    || (candidate.scenarioId === item.scenarioId && scenario?.formsOnly === true))
+    || state.forms.find(candidate => candidate.scenarioId === item.scenarioId);
+
+  if (!form) {
+    return false;
+  }
+
+  selectFreeForm(form.id, { preserveLog: true });
+  return true;
+}
+
 function selectScenario(scenarioId, options = {}) {
   const preserveLog = options.preserveLog === true;
   const suppressLog = options.suppressLog === true;
@@ -2659,7 +2751,9 @@ function selectScenario(scenarioId, options = {}) {
   renderStep();
 }
 
-function selectFreeForm(formId) {
+function selectFreeForm(formId, options = {}) {
+  const preserveLog = options.preserveLog === true;
+  const suppressLog = options.suppressLog === true;
   const form = state.forms.find(item => item.id === formId);
 
   if (!form) {
@@ -2684,17 +2778,21 @@ function selectFreeForm(formId) {
   state.stepResults = {};
   state.displayedResult = null;
   state.activeSelection = null;
-  state.log = [];
+  if (!preserveLog) {
+    state.log = [];
+  }
 
   document.querySelectorAll(".scenario-card").forEach(card => {
     card.classList.toggle("active", card.dataset.formId === formId);
   });
 
-  addLog("ok", "Formul\u00e1\u0159 vybr\u00e1n", {
-    title: form.step.title,
-    sourceScenario: form.scenarioId,
-    mode: "Voln\u00fd formul\u00e1\u0159"
-  });
+  if (!suppressLog) {
+    addLog("ok", "Formul\u00e1\u0159 vybr\u00e1n", {
+      title: form.step.title,
+      sourceScenario: form.scenarioId,
+      mode: "Voln\u00fd formul\u00e1\u0159"
+    });
+  }
   renderAutoRunOptions();
   clearAutoRunSummary();
   renderStep();

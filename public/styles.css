@@ -790,10 +790,13 @@ p {
 
 .workflow-step-actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   justify-content: flex-end;
 }
 
-.workflow-start-at {
+.workflow-start-at,
+.workflow-open-source {
   border: 1px solid var(--line);
   border-radius: 999px;
   background: #fff;
@@ -803,11 +806,17 @@ p {
   white-space: nowrap;
 }
 
-.workflow-start-at:hover {
+.workflow-open-source {
+  color: #415058;
+}
+
+.workflow-start-at:hover,
+.workflow-open-source:hover {
   background: #e6f4f1;
 }
 
-.workflow-start-at:disabled {
+.workflow-start-at:disabled,
+.workflow-open-source:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
