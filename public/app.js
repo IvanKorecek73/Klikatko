@@ -3996,10 +3996,21 @@ async function loadMosSessionFromRedisStep(step) {
     throw new Error("Chybí PidLitacka IdentityId pro načtení MOS SessionID z Redis. Nejdříve se přihlaste do projektu PidLitacka nebo spusťte workflow od kroku, který PidLitacka uživatele přihlásí.");
   }
 
-  const session = await fetchRedisSession(identityId);
+  let session = await fetchRedisSession(identityId);
 
   if (!isUsableRedisSession(session)) {
-    throw new Error(`Redis session pro identityId ${identityId} není použitelná: ${getRedisSessionProblem(session) || "UnknownRedisSessionProblem"}.`);
+    const renewResult = await renewPidLitackaMosSessionForWorkflow();
+
+    if (!renewResult.ok) {
+      throw new Error(`Redis session pro identityId ${identityId} není použitelná: ${getRedisSessionProblem(session) || "UnknownRedisSessionProblem"}. Obnova MOS session selhala: ${renewResult.message}`);
+    }
+
+    await delay(300);
+    session = await fetchRedisSession(identityId);
+
+    if (!isUsableRedisSession(session)) {
+      throw new Error(`Redis session pro identityId ${identityId} není použitelná ani po obnově: ${getRedisSessionProblem(session) || "UnknownRedisSessionProblem"}.`);
+    }
   }
 
   const sessionId = session.sessionId || session.payload?.sessionId || session.payload?.SessionId;
@@ -4603,8 +4614,7 @@ async function applyWorkflowRedisSession(item) {
   }
 
   try {
-    const session = await fetchRedisSession(identityId);
-    const sessionId = session.sessionId || session.payload?.sessionId || session.payload?.SessionId;
+    let session = await fetchRedisSession(identityId);
 
     if (!isUsableRedisSession(session)) {
       addLog("warn", "Redis MOS session not found", {
@@ -4613,9 +4623,31 @@ async function applyWorkflowRedisSession(item) {
         exists: session.exists,
         reason: getRedisSessionProblem(session)
       });
-      return;
+
+      const renewResult = await renewPidLitackaMosSessionForWorkflow();
+      if (!renewResult.ok) {
+        addLog("warn", "Redis MOS session renewal skipped", {
+          identityId,
+          message: renewResult.message
+        });
+        return;
+      }
+
+      await delay(300);
+      session = await fetchRedisSession(identityId);
+
+      if (!isUsableRedisSession(session)) {
+        addLog("warn", "Redis MOS session still missing after renewal", {
+          identityId,
+          key: session.key,
+          exists: session.exists,
+          reason: getRedisSessionProblem(session)
+        });
+        return;
+      }
     }
 
+    const sessionId = session.sessionId || session.payload?.sessionId || session.payload?.SessionId;
     const contextKey = config.contextKey || "mosCouponSessionId";
     state.workflowContext[contextKey] = sessionId;
     state.context[contextKey] = sessionId;
@@ -4631,6 +4663,46 @@ async function applyWorkflowRedisSession(item) {
       identityId,
       message: error instanceof Error ? error.message : String(error)
     });
+  }
+}
+
+async function renewPidLitackaMosSessionForWorkflow() {
+  const pidLitackaProject = state.projectIndex?.projects?.find(project => project.id === "pidlitacka");
+
+  if (!pidLitackaProject) {
+    return {
+      ok: false,
+      message: "Projekt PidLitacka neni v katalogu dostupny."
+    };
+  }
+
+  const environmentId = getSavedEnvironmentId(pidLitackaProject) || getDefaultEnvironmentId(pidLitackaProject);
+  const previous = {
+    currentProject: state.currentProject,
+    currentEnvironmentId: state.currentEnvironmentId,
+    authSession: state.authSession,
+    authFormValues: state.authFormValues,
+    authProfileNotes: state.authProfileNotes,
+    authCustomProfiles: state.authCustomProfiles
+  };
+
+  try {
+    state.currentProject = pidLitackaProject;
+    state.currentEnvironmentId = environmentId;
+    state.authFormValues = loadSavedAuthFormValues(pidLitackaProject);
+    state.authProfileNotes = loadSavedAuthProfileNotes(pidLitackaProject);
+    state.authCustomProfiles = loadSavedAuthCustomProfiles(pidLitackaProject);
+    applyAuthFieldDefaults(getProjectAuthConfig(pidLitackaProject));
+    state.authSession = loadSavedAuthSession(pidLitackaProject, environmentId);
+
+    return await renewMosSessionIfPossible();
+  } finally {
+    state.currentProject = previous.currentProject;
+    state.currentEnvironmentId = previous.currentEnvironmentId;
+    state.authSession = previous.authSession;
+    state.authFormValues = previous.authFormValues;
+    state.authProfileNotes = previous.authProfileNotes;
+    state.authCustomProfiles = previous.authCustomProfiles;
   }
 }
 
