@@ -8864,7 +8864,7 @@ function getSelectionDescriptor(step, collection) {
     return null;
   }
 
-  if (state.activeSelection.items !== collection) {
+  if (!isSelectionCollectionCompatible(state.activeSelection.items, collection)) {
     return null;
   }
 
@@ -8873,6 +8873,18 @@ function getSelectionDescriptor(step, collection) {
     selectedButtonLabel: step.selection.selectedButtonLabel,
     selectedIndex: state.activeSelection.selectedIndex
   };
+}
+
+function isSelectionCollectionCompatible(activeItems, renderedItems) {
+  if (activeItems === renderedItems) {
+    return true;
+  }
+
+  if (!Array.isArray(activeItems) || !Array.isArray(renderedItems) || activeItems.length !== renderedItems.length) {
+    return false;
+  }
+
+  return activeItems.every((item, index) => item === renderedItems[index]);
 }
 
 function prepareSelection(step, body, status) {
