@@ -39,6 +39,7 @@ const state = {
   authCustomProfiles: [],
   redisBridgeUrl: localStorage.getItem("demoHarness.redisBridgeUrl") || "/__redis",
   redisIdentityId: "",
+  redisIdentityManual: false,
   redisLastSession: null,
   displayedResult: null,
   activeSelection: null,
@@ -204,6 +205,7 @@ async function init() {
   });
   elements.redisIdentityId.addEventListener("input", event => {
     state.redisIdentityId = event.target.value.trim();
+    state.redisIdentityManual = true;
   });
   elements.redisLoadSession.addEventListener("click", loadRedisSessionFromViewer);
   elements.redisUseSession.addEventListener("click", useRedisSessionFromViewer);
@@ -2096,8 +2098,11 @@ function renderRedisViewer() {
 
   elements.redisBridgeUrl.value = state.redisBridgeUrl || "/__redis";
 
-  if (!state.redisIdentityId && state.authSession?.identityId) {
-    state.redisIdentityId = state.authSession.identityId;
+  const currentPidLitackaIdentityId = getCurrentPidLitackaIdentityId();
+  if (!state.redisIdentityManual && currentPidLitackaIdentityId) {
+    state.redisIdentityId = currentPidLitackaIdentityId;
+  } else if (!state.redisIdentityId && currentPidLitackaIdentityId) {
+    state.redisIdentityId = currentPidLitackaIdentityId;
   }
 
   elements.redisIdentityId.value = state.redisIdentityId || "";
@@ -2161,6 +2166,7 @@ async function scanRedisSessionsFromViewer() {
         const key = button.dataset.redisKey || "";
         const identityId = key.replace(/^mos:session:user:/, "");
         state.redisIdentityId = identityId;
+        state.redisIdentityManual = true;
         renderRedisViewer();
         loadRedisSessionFromViewer();
       });
@@ -2175,7 +2181,8 @@ async function fetchRedisSession(identityId) {
 }
 
 function getRedisViewerIdentityId() {
-  state.redisIdentityId = String(elements.redisIdentityId?.value || state.redisIdentityId || state.authSession?.identityId || "").trim();
+  const currentPidLitackaIdentityId = getCurrentPidLitackaIdentityId();
+  state.redisIdentityId = String(elements.redisIdentityId?.value || state.redisIdentityId || currentPidLitackaIdentityId || "").trim();
   return state.redisIdentityId;
 }
 
@@ -3942,15 +3949,28 @@ async function loadMosSessionFromRedisStep(step) {
 }
 
 function getPidLitackaIdentityIdForRedis(identityContextKey = "pidLitackaIdentityId") {
+  const currentPidLitackaIdentityId = getCurrentPidLitackaIdentityId();
+
   return String(
-    state.context?.[identityContextKey]
+    currentPidLitackaIdentityId
+    || state.context?.[identityContextKey]
     || state.workflowContext?.[identityContextKey]
     || state.context?.pidLitackaIdentityId
     || state.context?.authIdentityId
-    || state.authSession?.identityId
-    || loadLastPidLitackaAuthSession()?.identityId
     || ""
   ).trim();
+}
+
+function getCurrentPidLitackaIdentityId() {
+  return String(getCurrentPidLitackaAuthSession()?.identityId || "").trim();
+}
+
+function getCurrentPidLitackaAuthSession() {
+  if (state.currentProject?.id === "pidlitacka" && state.authSession?.identityId) {
+    return state.authSession;
+  }
+
+  return loadLastPidLitackaAuthSession();
 }
 
 function loadLastPidLitackaAuthSession() {
@@ -4314,6 +4334,10 @@ async function continueWorkflowRun() {
     }
 
     finishWorkflow(workflow);
+  } catch (error) {
+    pauseWorkflow("Workflow se zastavil na neočekávané chybě.", "error", [
+      error instanceof Error ? error.message : String(error)
+    ]);
   } finally {
     const paused = state.workflowRun?.status === "paused";
     state.workflowRunning = false;
@@ -4992,6 +5016,11 @@ function applyAuthSessionContext() {
   if (state.authSession.identityId) {
     state.context.authIdentityId = state.authSession.identityId;
     state.context.pidLitackaIdentityId = state.authSession.identityId;
+
+    if (state.currentProject?.id === "pidlitacka") {
+      state.redisIdentityId = state.authSession.identityId;
+      state.redisIdentityManual = false;
+    }
   }
 
   if (state.authSession.email) {
