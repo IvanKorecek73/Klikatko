@@ -2729,8 +2729,7 @@ function renderStep(options = {}) {
   elements.autoRun.disabled = !state.scenario || state.freeForm || state.batchRunning || scenarioRequiresManualInput || !hasRequiredAuthorizationFor(state.scenario);
   elements.autoRunTarget.disabled = !state.scenario || state.freeForm || state.batchRunning || scenarioRequiresManualInput || !hasRequiredAuthorizationFor(state.scenario);
   elements.runStep.textContent = currentStepResult ? "Zopakovat krok" : "Spustit krok";
-  elements.nextStep.disabled = !canAdvanceFromCurrentStep() || state.batchRunning;
-  elements.nextStep.classList.toggle("ready", !elements.nextStep.disabled);
+  updateNextStepControl();
 
   if (!step) {
     const app = getMobileAppConfig(step);
@@ -2748,7 +2747,7 @@ function renderStep(options = {}) {
     elements.stepForm.innerHTML = "";
     state.displayedResult = null;
     state.activeSelection = null;
-    elements.nextStep.classList.remove("ready");
+    updateNextStepControl();
     renderAppNav(step);
     showResult("ok", "Sc\u00e9n\u00e1\u0159 je dokon\u010den.");
     renderContext();
@@ -3905,8 +3904,7 @@ async function runCurrentStep() {
     });
     showResult("warn", result.appMessage || result.messages.join(" "), null, step);
     renderContext();
-    elements.nextStep.disabled = !canAdvanceFromCurrentStep();
-    elements.nextStep.classList.toggle("ready", !elements.nextStep.disabled);
+    updateNextStepControl();
     elements.runStep.textContent = "Zopakovat krok";
     elements.previousStep.disabled = !state.scenario || findPreviousRunnableStepIndex(state.stepIndex) === null;
     return;
@@ -3946,6 +3944,8 @@ async function runCurrentStep() {
   elements.runStep.textContent = "Pracuji...";
   elements.previousStep.disabled = true;
   elements.nextStep.disabled = true;
+  elements.nextStep.textContent = "Další";
+  elements.nextStep.title = "";
   elements.nextStep.classList.remove("ready");
   showResult("warn", "Pracuji na požadavku...");
   let request = null;
@@ -4038,8 +4038,7 @@ async function runCurrentStep() {
 
     showResult(result.level, result.appMessage || result.messages.join(" "), body, step);
     renderContext();
-    elements.nextStep.disabled = !canAdvanceFromCurrentStep();
-    elements.nextStep.classList.toggle("ready", !elements.nextStep.disabled);
+    updateNextStepControl();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     state.lastStepResult = { level: "error", messages: [message] };
@@ -4101,8 +4100,7 @@ async function runCustomStep(step, runningStepIndex) {
     });
     showResult("ok", result.appMessage, loaded, step);
     renderContext();
-    elements.nextStep.disabled = !canAdvanceFromCurrentStep();
-    elements.nextStep.classList.toggle("ready", !elements.nextStep.disabled);
+    updateNextStepControl();
     return;
   }
 
@@ -4141,8 +4139,7 @@ async function runCustomStep(step, runningStepIndex) {
 
     showResult(level, result.appMessage, overview, step);
     renderContext();
-    elements.nextStep.disabled = !canAdvanceFromCurrentStep();
-    elements.nextStep.classList.toggle("ready", !elements.nextStep.disabled);
+    updateNextStepControl();
     return;
   }
 
@@ -4181,8 +4178,7 @@ async function runCustomStep(step, runningStepIndex) {
 
     showResult(level, result.appMessage, overview, step);
     renderContext();
-    elements.nextStep.disabled = !canAdvanceFromCurrentStep();
-    elements.nextStep.classList.toggle("ready", !elements.nextStep.disabled);
+    updateNextStepControl();
     return;
   }
 
@@ -5407,8 +5403,14 @@ function clearWorkflowSummary() {
 function setAutoRunControls(isRunning) {
   elements.runStep.disabled = isRunning || !currentStep();
   elements.previousStep.disabled = isRunning || !state.scenario || findPreviousRunnableStepIndex(state.stepIndex) === null;
-  elements.nextStep.disabled = isRunning || !canAdvanceFromCurrentStep();
-  elements.nextStep.classList.toggle("ready", !elements.nextStep.disabled);
+  if (isRunning) {
+    elements.nextStep.disabled = true;
+    elements.nextStep.textContent = "Další";
+    elements.nextStep.title = "";
+    elements.nextStep.classList.remove("ready");
+  } else {
+    updateNextStepControl();
+  }
   elements.resetScenario.disabled = isRunning || !state.scenario;
   elements.autoRun.disabled = isRunning || !state.scenario || requiresManualInput(state.scenario);
   elements.autoRunTarget.disabled = isRunning || !state.scenario || requiresManualInput(state.scenario);
@@ -6431,6 +6433,37 @@ function canAdvanceFromCurrentStep() {
   }
 
   return getMissingContextKeys(next).length === 0;
+}
+
+function updateNextStepControl() {
+  const waitingForSelection = isCurrentStepWaitingForSelection();
+  const canAdvance = canAdvanceFromCurrentStep();
+  elements.nextStep.disabled = state.batchRunning || waitingForSelection || !canAdvance;
+  elements.nextStep.textContent = waitingForSelection
+    ? getSelectionNextButtonLabel()
+    : "Další";
+  elements.nextStep.title = waitingForSelection
+    ? "Nejdříve v mobilním náhledu vyberte položku tlačítkem u karty."
+    : "";
+  elements.nextStep.classList.toggle("ready", !elements.nextStep.disabled);
+}
+
+function isCurrentStepWaitingForSelection() {
+  const step = currentStep();
+  return Boolean(step
+    && state.activeSelection?.stepId === step.id
+    && state.activeSelection.selectedIndex === null);
+}
+
+function getSelectionNextButtonLabel() {
+  const buttonLabel = state.activeSelection?.config?.buttonLabel || "Vybrat";
+  const normalized = buttonLabel.toLowerCase();
+
+  if (normalized.includes("cíl")) {
+    return "Vyberte cíl";
+  }
+
+  return "Vyberte položku";
 }
 
 function clearStepResultsFrom(startIndex) {
@@ -9223,8 +9256,7 @@ function applySelection(index) {
 
   renderContext();
   renderModeBanner();
-  elements.nextStep.disabled = !canAdvanceFromCurrentStep();
-  elements.nextStep.classList.toggle("ready", !elements.nextStep.disabled);
+  updateNextStepControl();
 
   if (state.displayedResult) {
     showResult(
