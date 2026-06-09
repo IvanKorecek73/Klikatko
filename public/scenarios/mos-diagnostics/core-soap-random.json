@@ -68,6 +68,68 @@
       ]
     },
     {
+      "id": "mos-is-session-alive-current-user-soap",
+      "title": "MOS session - IsSessionAlive přihlášeného uživatele",
+      "description": "Read-only diagnostika aktuální MOS session: načte SessionID přihlášeného PidLitacka uživatele z Redis a ověří ji operací IsSessionAlive.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": false,
+      "tags": ["health", "session", "soap", "core-mos", "read-only", "diagnostics"],
+      "app": {
+        "section": "diagnostics",
+        "title": "MOS session",
+        "subtitle": "IsSessionAlive"
+      },
+      "instructions": [
+        "V panelu Přístup vložte Core MOS ServiceKey.",
+        "Před spuštěním musí být v Klikátku dostupné PidLitacka přihlášení s IdentityId, podle kterého se z Redis načte MOS SessionID.",
+        "První krok načte SessionID z Redis. Pokud session chybí nebo je prázdná, Klikátko se pokusí zavolat obnovu MOS session přes PidLitacka BE.",
+        "Druhý krok volá IsSessionAlive. Očekávaný výsledek je MOS Result.ID = 0."
+      ],
+      "steps": [
+        {
+          "id": "mos-diagnostics-load-session-from-redis",
+          "title": "Načíst MOS SessionID z Redis",
+          "description": "Načte MOS SessionID z Redis podle PidLitacka IdentityId a uloží ho do kontextu jako mosDiagnosticsSessionId.",
+          "customAction": "loadMosSessionFromRedis",
+          "redisSession": {
+            "identityContextKey": "pidLitackaIdentityId",
+            "contextKey": "mosDiagnosticsSessionId"
+          },
+          "expected": {
+            "status": 200
+          },
+          "skipWhen": {
+            "contextExists": "mosDiagnosticsSessionId"
+          }
+        },
+        {
+          "id": "mos-diagnostics-is-session-alive",
+          "title": "Ověřit, že MOS session žije",
+          "description": "Zavolá IsSessionAlive s MOS SessionID načteným z Redis pro aktuálně přihlášeného uživatele.",
+          "requiresContext": ["mosDiagnosticsSessionId"],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/IsSessionAlive\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <IsSessionAlive xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosDiagnosticsSessionId}}</SessionID>\n    </IsSessionAlive>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "regex": "<IsSessionAliveResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "mos-idol-permitted-ways-soap",
       "title": "MOS IDOL - povolené cesty superzón",
       "description": "Diagnostická read-only kontrola IDOL číselníků přes GetIDOLPermittedWaysForSuperZones. Pokud vrátí Result.ID = 300, ServiceKey prošel, ale selhala konkrétní MOS operace GetIDOLCustomPermittedWays.",
