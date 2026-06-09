@@ -6697,6 +6697,103 @@ async function savePhoneScreenshot() {
 }
 
 async function renderPhoneToPngBlob(phone) {
+  const html2canvas = await loadHtml2Canvas();
+
+  if (typeof html2canvas === "function") {
+    return renderPhoneToPngBlobWithHtml2Canvas(phone, html2canvas);
+  }
+
+  return renderPhoneToPngBlobWithSvg(phone);
+}
+
+async function loadHtml2Canvas() {
+  if (typeof window.html2canvas === "function") {
+    return window.html2canvas;
+  }
+
+  await new Promise((resolve, reject) => {
+    const existingScript = document.querySelector("script[data-html2canvas-loader]");
+
+    if (existingScript) {
+      existingScript.addEventListener("load", resolve, { once: true });
+      existingScript.addEventListener("error", reject, { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "/vendor/html2canvas.min.js?v=1.4.1";
+    script.async = true;
+    script.dataset.html2canvasLoader = "true";
+    script.addEventListener("load", resolve, { once: true });
+    script.addEventListener("error", () => reject(new Error("html2canvas se nepodařilo načíst.")), { once: true });
+    document.head.appendChild(script);
+  }).catch(error => {
+    addLog("warn", "Načtení html2canvas selhalo", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+  });
+
+  return typeof window.html2canvas === "function" ? window.html2canvas : null;
+}
+
+async function renderPhoneToPngBlobWithHtml2Canvas(phone, html2canvas) {
+  const capture = preparePhoneScreenshotClone(phone);
+
+  try {
+    if (document.fonts?.ready) {
+      await document.fonts.ready;
+    }
+
+    await nextAnimationFrame();
+    const clone = capture.clone;
+    const width = Math.ceil(clone.getBoundingClientRect().width);
+    const height = Math.ceil(clone.scrollHeight);
+    const canvas = await html2canvas(clone, {
+      backgroundColor: null,
+      scale: Math.min(window.devicePixelRatio || 1, 2),
+      width,
+      height,
+      windowWidth: width,
+      windowHeight: height,
+      scrollX: 0,
+      scrollY: 0,
+      useCORS: true,
+      logging: false
+    });
+
+    return await canvasToPngBlob(canvas);
+  } finally {
+    capture.cleanup();
+  }
+}
+
+async function renderPhoneToPngBlobWithSvg(phone) {
+  const capture = preparePhoneScreenshotClone(phone);
+
+  try {
+    if (document.fonts?.ready) {
+      await document.fonts.ready;
+    }
+
+    await nextAnimationFrame();
+    const clone = capture.clone;
+    const width = Math.ceil(clone.getBoundingClientRect().width);
+    const height = Math.ceil(clone.scrollHeight);
+    const styleText = `${collectDocumentCssText()}\n${capture.overrideCss}`;
+    const html = serializePhoneScreenshotMarkup(clone, styleText, width, height);
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+        <foreignObject width="100%" height="100%">${html}</foreignObject>
+      </svg>
+    `;
+
+    return await svgToPngBlob(svg, width, height);
+  } finally {
+    capture.cleanup();
+  }
+}
+
+function preparePhoneScreenshotClone(phone) {
   const overrideCss = `
     .phone.phone-screenshot-capture {
       height: auto !important;
@@ -6743,27 +6840,14 @@ async function renderPhoneToPngBlob(phone) {
   offscreen.appendChild(clone);
   document.body.appendChild(offscreen);
 
-  try {
-    if (document.fonts?.ready) {
-      await document.fonts.ready;
+  return {
+    clone,
+    overrideCss,
+    cleanup() {
+      offscreen.remove();
+      tempStyle.remove();
     }
-
-    await nextAnimationFrame();
-    const width = Math.ceil(clone.getBoundingClientRect().width);
-    const height = Math.ceil(clone.scrollHeight);
-    const styleText = `${collectDocumentCssText()}\n${overrideCss}`;
-    const html = serializePhoneScreenshotMarkup(clone, styleText, width, height);
-    const svg = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-        <foreignObject width="100%" height="100%">${html}</foreignObject>
-      </svg>
-    `;
-
-    return await svgToPngBlob(svg, width, height);
-  } finally {
-    offscreen.remove();
-    tempStyle.remove();
-  }
+  };
 }
 
 function serializePhoneScreenshotMarkup(phoneClone, styleText, width, height) {
@@ -6795,8 +6879,7 @@ function collectDocumentCssText() {
 
 function svgToPngBlob(svg, width, height) {
   return new Promise((resolve, reject) => {
-    const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-    const svgUrl = URL.createObjectURL(svgBlob);
+    const svgUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     const image = new Image();
     const scale = Math.min(window.devicePixelRatio || 1, 2);
 
@@ -6813,26 +6896,32 @@ function svgToPngBlob(svg, width, height) {
 
         context.scale(scale, scale);
         context.drawImage(image, 0, 0, width, height);
-        canvas.toBlob(blob => {
-          URL.revokeObjectURL(svgUrl);
-
-          if (!blob) {
-            reject(new Error("PNG se nepodařilo vytvořit."));
-            return;
-          }
-
-          resolve(blob);
-        }, "image/png");
+        canvasToPngBlob(canvas).then(resolve, reject);
       } catch (error) {
-        URL.revokeObjectURL(svgUrl);
         reject(error);
       }
     };
     image.onerror = () => {
-      URL.revokeObjectURL(svgUrl);
       reject(new Error("SVG náhled obrazovky se nepodařilo načíst."));
     };
     image.src = svgUrl;
+  });
+}
+
+function canvasToPngBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    try {
+      canvas.toBlob(blob => {
+        if (!blob) {
+          reject(new Error("PNG se nepodařilo vytvořit."));
+          return;
+        }
+
+        resolve(blob);
+      }, "image/png");
+    } catch (error) {
+      reject(error);
+    }
   });
 }
 
