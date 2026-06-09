@@ -3602,7 +3602,7 @@ function renderRequestPreviewCard(step) {
   const card = document.createElement("section");
   card.className = "request-preview";
 
-  const method = step.request.method || "GET";
+  const method = step.request?.method || (step.customAction ? "AKCE" : "GET");
   const targetUrl = preview.resolvedUrl || preview.url || step.request.path;
   const hasHeaders = Object.keys(preview.visibleHeaders || {}).length > 0;
   const hasBody = preview.visibleBody !== null && preview.visibleBody !== undefined && preview.visibleBody !== "";
@@ -3635,8 +3635,10 @@ function renderNoInputStepCard(step) {
   const card = document.createElement("section");
   card.className = "request-preview";
 
-  const method = step.request.method || "GET";
-  const requestKind = method === "GET"
+  const method = step.request?.method || (step.customAction ? "AKCE" : "GET");
+  const requestKind = step.customAction
+    ? "vlastnĂ­ akce KlikĂˇtka"
+    : method === "GET"
     ? "načtení dat"
     : "odeslání požadavku";
 
@@ -5588,6 +5590,10 @@ function buildSmokeDetailLines(stepResults) {
 }
 
 function buildRequest(step) {
+  if (!step?.request) {
+    throw new Error(`Krok '${step?.title || step?.id || "bez nazvu"}' nema HTTP request. Pokud jde o vlastni akci, musi byt obslouzena pres customAction.`);
+  }
+
   const method = step.request.method || "GET";
   const baseUrl = elements.baseUrl.value.replace(/\/$/, "");
   const path = resolveTemplate(step.request.path, { fieldValues: state.values });
