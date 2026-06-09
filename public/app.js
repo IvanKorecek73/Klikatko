@@ -82,6 +82,7 @@ const elements = {
   authJwtDetails: document.querySelector("#authJwtDetails"),
   authLoginAction: document.querySelector("#authLoginAction"),
   authRefreshAction: document.querySelector("#authRefreshAction"),
+  authSessionRenewAction: document.querySelector("#authSessionRenewAction"),
   authLogoutAction: document.querySelector("#authLogoutAction"),
   authResetAction: document.querySelector("#authResetAction"),
   brandTitle: document.querySelector("#brandTitle"),
@@ -255,6 +256,7 @@ function bindEventHandlers() {
   elements.authForm.addEventListener("click", handleAuthFormClick);
   elements.authLoginAction.addEventListener("click", executeAuthLogin);
   elements.authRefreshAction.addEventListener("click", executeAuthRefresh);
+  elements.authSessionRenewAction.addEventListener("click", executeAuthSessionRenew);
   elements.authLogoutAction.addEventListener("click", executeAuthLogout);
   elements.authResetAction.addEventListener("click", resetAuthState);
   elements.redisBridgeUrl.addEventListener("input", event => {
@@ -950,10 +952,12 @@ function renderAuthPanel() {
   renderAuthPanelStatus();
   elements.authLoginAction.textContent = activeLoginConfig?.buttonText || authConfig.login?.buttonText || (authConfig.type === "login" ? "Přihlásit" : "Uložit");
   elements.authRefreshAction.textContent = authConfig.refresh?.buttonText || "Obnovit";
+  elements.authSessionRenewAction.textContent = authConfig.sessionRenew?.buttonText || "Obnovit MOS session";
   elements.authLogoutAction.textContent = authConfig.logout?.buttonText || "Odhlásit";
   elements.authResetAction.textContent = authConfig.type === "login" ? "Vymazat" : "Vyčistit";
   elements.authLoginAction.disabled = !["login", "jwt", "apiKey"].includes(authConfig.type);
   elements.authRefreshAction.disabled = !(authConfig.type === "login" && authConfig.refresh && state.authSession?.refreshToken);
+  elements.authSessionRenewAction.disabled = !(authConfig.type === "login" && authConfig.sessionRenew && state.authSession?.accessToken && !state.authSession?.isAnonymous);
   elements.authLogoutAction.disabled = !(authConfig.type === "login" && authConfig.logout && state.authSession?.accessToken);
 }
 
@@ -1251,6 +1255,33 @@ async function executeAuthRefresh() {
   }
 
   await performAuthRequest("refresh", authConfig.refresh);
+}
+
+async function executeAuthSessionRenew() {
+  const authConfig = getProjectAuthConfig();
+  if (authConfig.type !== "login" || !authConfig.sessionRenew) {
+    return;
+  }
+
+  const result = await renewMosSessionIfPossible();
+
+  if (!result.ok) {
+    elements.authJwtStatus.textContent = result.message || "MOS session se nepodarilo obnovit.";
+    elements.authJwtStatus.className = "auth-status error";
+    elements.authPanel.open = true;
+    return;
+  }
+
+  elements.authJwtStatus.textContent = "MOS session obnovena. Kontroluji Redis...";
+  elements.authJwtStatus.className = "auth-status ok";
+  renderAuthPanelStatus();
+  renderRedisViewer();
+
+  if (state.authSession?.identityId) {
+    state.redisIdentityId = state.authSession.identityId;
+    state.redisIdentityManual = false;
+    await loadRedisSessionFromViewer();
+  }
 }
 
 async function executeAuthLogout() {
