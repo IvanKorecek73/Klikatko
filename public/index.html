@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Klik&aacute;tko</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=20260610-user-identity-summary">
+  <link rel="stylesheet" href="/styles.css?v=20260610-user-actions">
 </head>
 <body>
   <main class="shell">
@@ -139,6 +139,12 @@
             </div>
             <p class="identity-panel-intro">Stav testovac&iacute; identity: BE PidLitacka JWT, MOS SessionID a vazba na Redis.</p>
             <div id="identitySummary" class="identity-summary"></div>
+            <div class="identity-actions">
+              <button id="identityLoginAction" type="button">P&#345;ihl&aacute;sit do BE</button>
+              <button id="identityRefreshAction" type="button">Obnovit JWT</button>
+              <button id="identityRenewMosAction" type="button">Obnovit MOS session</button>
+              <button id="identityLogoutAction" type="button">Odhl&aacute;sit</button>
+            </div>
             <label class="base-url">
               Redis bridge pro MOS session
               <input id="redisBridgeUrl" value="/__redis" spellcheck="false">
@@ -243,6 +249,6 @@
   </main>
 
   <script src="/vendor/html2canvas.min.js?v=1.4.1"></script>
-  <script src="/app.js?v=20260610-user-identity-summary" type="module"></script>
+  <script src="/app.js?v=20260610-user-actions" type="module"></script>
 </body>
 </html>

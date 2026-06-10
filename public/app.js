@@ -133,6 +133,10 @@ const elements = {
   redisIdentityId: document.querySelector("#redisIdentityId"),
   redisStatus: document.querySelector("#redisStatus"),
   identitySummary: document.querySelector("#identitySummary"),
+  identityLoginAction: document.querySelector("#identityLoginAction"),
+  identityRefreshAction: document.querySelector("#identityRefreshAction"),
+  identityRenewMosAction: document.querySelector("#identityRenewMosAction"),
+  identityLogoutAction: document.querySelector("#identityLogoutAction"),
   redisLoadSession: document.querySelector("#redisLoadSession"),
   redisUseSession: document.querySelector("#redisUseSession"),
   redisScanSessions: document.querySelector("#redisScanSessions"),
@@ -262,6 +266,10 @@ function bindEventHandlers() {
   elements.authSessionRenewAction.addEventListener("click", executeAuthSessionRenew);
   elements.authLogoutAction.addEventListener("click", executeAuthLogout);
   elements.authResetAction.addEventListener("click", resetAuthState);
+  elements.identityLoginAction.addEventListener("click", executeAuthLogin);
+  elements.identityRefreshAction.addEventListener("click", executeAuthRefresh);
+  elements.identityRenewMosAction.addEventListener("click", executeAuthSessionRenew);
+  elements.identityLogoutAction.addEventListener("click", executeAuthLogout);
   elements.redisBridgeUrl.addEventListener("input", event => {
     state.redisBridgeUrl = event.target.value.trim() || "http://127.0.0.1:5097";
     localStorage.setItem("demoHarness.redisBridgeUrl", state.redisBridgeUrl);
@@ -1003,6 +1011,18 @@ function renderAuthPanel() {
   elements.authRefreshAction.disabled = !(authConfig.type === "login" && authConfig.refresh && state.authSession?.refreshToken);
   elements.authSessionRenewAction.disabled = !(authConfig.type === "login" && authConfig.sessionRenew && state.authSession?.accessToken && !state.authSession?.isAnonymous);
   elements.authLogoutAction.disabled = !(authConfig.type === "login" && authConfig.logout && state.authSession?.accessToken);
+  renderIdentityActions(authConfig);
+}
+
+function renderIdentityActions(authConfig = getProjectAuthConfig()) {
+  if (!elements.identityLoginAction) {
+    return;
+  }
+
+  elements.identityLoginAction.disabled = !["login", "jwt", "apiKey"].includes(authConfig.type);
+  elements.identityRefreshAction.disabled = !(authConfig.type === "login" && authConfig.refresh && state.authSession?.refreshToken);
+  elements.identityRenewMosAction.disabled = !(authConfig.type === "login" && authConfig.sessionRenew && state.authSession?.accessToken && !state.authSession?.isAnonymous);
+  elements.identityLogoutAction.disabled = !(authConfig.type === "login" && authConfig.logout && state.authSession?.accessToken);
 }
 
 function renderAuthPanelStatus() {
