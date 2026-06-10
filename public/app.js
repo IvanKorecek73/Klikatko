@@ -1224,6 +1224,36 @@ function getIdentityProfileLabel(profile, values = {}) {
   return device ? `${email} / ${device}` : email;
 }
 
+function getPidLitackaIdentityProfileNote(profile) {
+  if (!profile) {
+    return "";
+  }
+
+  if (profile.isNewProfile) {
+    return state.identityFormValues?.__newProfileNote || "";
+  }
+
+  const project = getPidLitackaProject();
+  const notes = project ? loadSavedAuthProfileNotes(project) : {};
+  return notes?.[profile.id] ?? profile.note ?? "";
+}
+
+function savePidLitackaIdentityProfileNote(profile, note) {
+  const project = getPidLitackaProject();
+
+  if (!project || !profile?.id || profile.isNewProfile) {
+    return;
+  }
+
+  const notes = loadSavedAuthProfileNotes(project);
+  notes[profile.id] = String(note || "");
+  localStorage.setItem(getAuthProfileNotesStorageKey(project.id), JSON.stringify(notes));
+
+  if (state.currentProject?.id === project.id) {
+    state.authProfileNotes = notes;
+  }
+}
+
 function handleIdentityProfileFieldInput(event) {
   const target = event.target;
 
@@ -1235,6 +1265,12 @@ function handleIdentityProfileFieldInput(event) {
     ...getPidLitackaIdentityValues(),
     [target.name]: target.value
   };
+
+  if (target.name === "__profileNote") {
+    savePidLitackaIdentityProfileNote(getSelectedPidLitackaProfile(), target.value);
+    renderIdentityProfileActions();
+    return;
+  }
 
   saveIdentityFormValues();
   renderIdentitySummary();
@@ -1254,7 +1290,7 @@ function saveCurrentIdentityProfile() {
 
   const session = loadSavedAuthSession(project, getPidLitackaEnvironmentId(project));
   const selectedProfile = getSelectedPidLitackaProfile();
-  const note = String(values.__newProfileNote || selectedProfile?.note || "").trim();
+  const note = String(values.__newProfileNote || getPidLitackaIdentityProfileNote(selectedProfile) || "").trim();
   const profile = {
     id: selectedProfile?.custom
       ? selectedProfile.id
@@ -2835,6 +2871,19 @@ function renderIdentityProfileFields() {
   }
 
   const fields = (authConfig.login?.fields || []).filter(field => isAuthFieldVisibleForProfile(field, profile));
+
+  if (!profile.noteDisabled && !profile.isNewProfile) {
+    elements.identityAccountFields.appendChild(createIdentityProfileField({
+      name: "__profileNote",
+      label: "Poznamka",
+      placeholder: "Napr. vhodny pro presun kuponu, ma tokenizovanou kartu...",
+      type: "textarea",
+      rows: 3
+    }, {
+      ...values,
+      __profileNote: getPidLitackaIdentityProfileNote(profile)
+    }));
+  }
 
   if (profile.isNewProfile) {
     const noteField = createIdentityProfileField({
