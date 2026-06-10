@@ -132,6 +132,7 @@ const elements = {
   redisBridgeUrl: document.querySelector("#redisBridgeUrl"),
   redisIdentityId: document.querySelector("#redisIdentityId"),
   redisStatus: document.querySelector("#redisStatus"),
+  identitySummary: document.querySelector("#identitySummary"),
   redisLoadSession: document.querySelector("#redisLoadSession"),
   redisUseSession: document.querySelector("#redisUseSession"),
   redisScanSessions: document.querySelector("#redisScanSessions"),
@@ -2290,8 +2291,62 @@ function renderRedisViewer() {
 
   elements.redisIdentityId.value = state.redisIdentityId || "";
   elements.redisUseSession.disabled = !isUsableRedisSession(state.redisLastSession);
+  renderIdentitySummary();
   renderRedisHealthStatus();
   checkRedisHealth();
+}
+
+function renderIdentitySummary() {
+  if (!elements.identitySummary) {
+    return;
+  }
+
+  const profile = getSelectedAuthProfile();
+  const session = state.authSession;
+  const tokenInfo = getAuthorizationInfo();
+  const identityId = String(session?.identityId || state.redisIdentityId || "").trim();
+  const redisSession = state.redisLastSession;
+  const hasMosSession = isUsableRedisSession(redisSession);
+  const mosSessionId = String(redisSession?.sessionId || redisSession?.payload?.sessionId || redisSession?.payload?.SessionId || "").trim();
+  const ttl = Number(redisSession?.ttlSeconds);
+  const ttlText = Number.isFinite(ttl) && ttl >= 0 ? `${ttl} s` : "-";
+  const expiresAtText = session?.expiresAt ? formatDate(session.expiresAt) : "-";
+  const profileLabel = profile?.isNewProfile
+    ? "Novy uzivatel"
+    : profile?.label || session?.email || "Nezvoleno";
+  const authState = tokenInfo.valid
+    ? (session?.isAnonymous ? "Anonymni session" : "BE JWT aktivni")
+    : tokenInfo.message || "Neprihlasen";
+  const mosState = hasMosSession
+    ? `MOS SessionID aktivni, TTL ${ttlText}`
+    : `MOS SessionID chybi${redisSession ? ` (${getRedisSessionProblem(redisSession) || "nepouzitelne"})` : ""}`;
+
+  elements.identitySummary.innerHTML = `
+    <div class="identity-summary-row">
+      <span>Ucet</span>
+      <strong>${escapeHtml(profileLabel)}</strong>
+    </div>
+    <div class="identity-summary-row">
+      <span>BE PidLitacka</span>
+      <strong class="${tokenInfo.valid ? "ok" : "warn"}">${escapeHtml(authState)}</strong>
+    </div>
+    <div class="identity-summary-row">
+      <span>Platnost JWT</span>
+      <code>${escapeHtml(expiresAtText)}</code>
+    </div>
+    <div class="identity-summary-row">
+      <span>IdentityId</span>
+      <code>${escapeHtml(identityId || "-")}</code>
+    </div>
+    <div class="identity-summary-row">
+      <span>MOS</span>
+      <strong class="${hasMosSession ? "ok" : "warn"}">${escapeHtml(mosState)}</strong>
+    </div>
+    <div class="identity-summary-row">
+      <span>SessionID</span>
+      <code>${escapeHtml(mosSessionId ? maskSessionId(mosSessionId) : "-")}</code>
+    </div>
+  `;
 }
 
 function renderRedisHealthStatus() {
@@ -2575,6 +2630,7 @@ function renderRedisSession(session, note = "") {
   const ttlText = ttl < 0 ? "bez TTL / nenalezeno" : `${ttl} s`;
   elements.redisStatus.textContent = exists ? "Session nalezena" : "Redis připojeno, session nenalezena";
   elements.redisUseSession.disabled = !exists;
+  renderIdentitySummary();
 
   showRedisResult(exists ? "ok" : "error", exists ? "MOS session v Redis" : "MOS session nebyla nalezena", `
     ${note ? `<p>${escapeHtml(note)}</p>` : ""}

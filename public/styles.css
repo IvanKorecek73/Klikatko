@@ -1954,6 +1954,49 @@ button:disabled {
   line-height: 1.45;
 }
 
+.identity-summary {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.identity-summary-row {
+  display: grid;
+  grid-template-columns: 94px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.identity-summary-row span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.identity-summary-row strong,
+.identity-summary-row code {
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.identity-summary-row code {
+  font-family: Consolas, monospace;
+}
+
+.identity-summary-row .ok {
+  color: #2f8f62;
+}
+
+.identity-summary-row .warn {
+  color: #9a5d00;
+}
+
 .redis-result {
   display: grid;
   gap: 10px;
