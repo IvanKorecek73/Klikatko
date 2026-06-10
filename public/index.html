@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Klik&aacute;tko</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=20260610-identity-only-auth">
+  <link rel="stylesheet" href="/styles.css?v=20260610-workflow-environment-profile">
 </head>
 <body>
   <main class="shell">
@@ -24,15 +24,15 @@
         <button id="workflowsTab" type="button" role="tab" aria-selected="false" aria-controls="workflowsPane">Workflow</button>
         <button id="redisTab" type="button" role="tab" aria-selected="false" aria-controls="redisPane">U&#382;ivatel</button>
       </div>
-      <label class="base-url">
+      <label class="base-url project-control">
         Projekt
         <select id="projectSelect"></select>
       </label>
-      <label class="base-url">
+      <label class="base-url pack-control">
         Test pack
         <select id="scenarioPack"></select>
       </label>
-      <label class="base-url">
+      <label class="base-url environment-control">
         Prost&#345;ed&iacute;
         <select id="environmentSelect"></select>
       </label>
@@ -116,6 +116,11 @@
               <strong>Workflow runner</strong>
               <span id="workflowStatus">P&#345;ipraven</span>
             </div>
+            <label class="workflow-profile-select">
+              Profil prost&#345;ed&iacute;
+              <select id="workflowEnvironmentProfileSelect"></select>
+              <small id="workflowEnvironmentProfileHint"></small>
+            </label>
             <label class="workflow-option">
               <input id="workflowAutoStop" type="checkbox" checked>
               Zastavit jen p&#345;i nutn&eacute; ru&#269;n&iacute; interakci
@@ -288,6 +293,6 @@
   </main>
 
   <script src="/vendor/html2canvas.min.js?v=1.4.1"></script>
-  <script src="/app.js?v=20260610-identity-only-auth" type="module"></script>
+  <script src="/app.js?v=20260610-workflow-environment-profile" type="module"></script>
 </body>
 </html>

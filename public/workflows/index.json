@@ -1,6 +1,29 @@
 {
   "version": 1,
   "defaultWorkflowId": "pidlitacka-client-with-phone-and-card",
+  "defaultEnvironmentProfileId": "be-local-mos-pre",
+  "environmentProfiles": [
+    {
+      "id": "be-local-mos-pre",
+      "name": "BE LOCAL + MOS PRE",
+      "description": "PidLitacka běží lokálně, Core MOS SOAP běží na PRE-CORE.",
+      "environments": {
+        "pidlitacka": "pidlitacka-local",
+        "mos-coupons": "mos-pre-core",
+        "mos-diagnostics": "mos-pre-core"
+      }
+    },
+    {
+      "id": "be-integration-mos-pre",
+      "name": "BE INTEGRACE + MOS PRE",
+      "description": "PidLitacka běží na integračním backendu, Core MOS SOAP běží na PRE-CORE.",
+      "environments": {
+        "pidlitacka": "pidlitacka-integration",
+        "mos-coupons": "mos-pre-core",
+        "mos-diagnostics": "mos-pre-core"
+      }
+    }
+  ],
   "workflows": [
     {
       "id": "pidlitacka-client-with-phone-and-card",

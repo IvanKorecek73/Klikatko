@@ -33,6 +33,7 @@ const state = {
   workflowRunning: false,
   workflowStopRequested: false,
   workflowLastReport: null,
+  selectedWorkflowEnvironmentProfileId: localStorage.getItem("demoHarness.workflowEnvironmentProfile") || "",
   harnessMeta: null,
   authSession: null,
   authFormValues: {},
@@ -55,6 +56,7 @@ const state = {
 
 const NEW_AUTH_PROFILE_ID = "__new_auth_profile__";
 const LAST_SELECTION_STORAGE_KEY = "demoHarness.lastSelection.v1";
+const WORKFLOW_ENVIRONMENT_PROFILE_STORAGE_KEY = "demoHarness.workflowEnvironmentProfile";
 const IDENTITY_DEVICE_FIELD_NAMES = new Set([
   "deviceId",
   "deviceName",
@@ -137,6 +139,8 @@ const elements = {
   redisPane: document.querySelector("#redisPane"),
   workflowList: document.querySelector("#workflowList"),
   workflowStatus: document.querySelector("#workflowStatus"),
+  workflowEnvironmentProfileSelect: document.querySelector("#workflowEnvironmentProfileSelect"),
+  workflowEnvironmentProfileHint: document.querySelector("#workflowEnvironmentProfileHint"),
   workflowAutoStop: document.querySelector("#workflowAutoStop"),
   runWorkflow: document.querySelector("#runWorkflow"),
   continueWorkflow: document.querySelector("#continueWorkflow"),
@@ -244,6 +248,12 @@ function bindEventHandlers() {
   elements.runWorkflow.addEventListener("click", startSelectedWorkflow);
   elements.continueWorkflow.addEventListener("click", continueWorkflowRun);
   elements.stopWorkflow.addEventListener("click", requestStopWorkflowRun);
+  elements.workflowEnvironmentProfileSelect.addEventListener("change", event => {
+    state.selectedWorkflowEnvironmentProfileId = event.target.value;
+    localStorage.setItem(WORKFLOW_ENVIRONMENT_PROFILE_STORAGE_KEY, state.selectedWorkflowEnvironmentProfileId);
+    renderWorkflowEnvironmentProfileHint();
+    renderWorkflowList();
+  });
   elements.scenarioSearch.addEventListener("input", event => {
     state.scenarioSearch = event.target.value.trim().toLowerCase();
     renderScenarioList();
@@ -354,16 +364,111 @@ async function loadWorkflowIndex() {
     state.selectedWorkflowId = state.workflowIndex.defaultWorkflowId
       || state.workflowIndex.workflows?.[0]?.id
       || null;
+    populateWorkflowEnvironmentProfileOptions();
     renderWorkflowList();
     updateWorkflowControls();
   } catch (error) {
     state.workflowIndex = { version: 1, workflows: [] };
     state.selectedWorkflowId = null;
+    populateWorkflowEnvironmentProfileOptions();
     renderWorkflowList();
     showWorkflowSummary("error", "Workflow katalog se nepodařilo načíst.", [
       error instanceof Error ? error.message : String(error)
     ]);
   }
+}
+
+function populateWorkflowEnvironmentProfileOptions() {
+  if (!elements.workflowEnvironmentProfileSelect) {
+    return;
+  }
+
+  const profiles = getWorkflowEnvironmentProfiles();
+  elements.workflowEnvironmentProfileSelect.innerHTML = "";
+
+  for (const profile of profiles) {
+    const option = document.createElement("option");
+    option.value = profile.id;
+    option.textContent = profile.name;
+    elements.workflowEnvironmentProfileSelect.appendChild(option);
+  }
+
+  const selectedProfileId = getSelectedWorkflowEnvironmentProfileId();
+  state.selectedWorkflowEnvironmentProfileId = selectedProfileId;
+  elements.workflowEnvironmentProfileSelect.value = selectedProfileId;
+  elements.workflowEnvironmentProfileSelect.disabled = profiles.length <= 1;
+  renderWorkflowEnvironmentProfileHint();
+}
+
+function getWorkflowEnvironmentProfiles() {
+  const configured = state.workflowIndex?.environmentProfiles || [];
+
+  if (configured.length > 0) {
+    return configured;
+  }
+
+  return [
+    {
+      id: "saved-project-environments",
+      name: "Aktuální uložená prostředí",
+      description: "Workflow použije pro každý projekt naposledy zvolené nebo výchozí prostředí.",
+      environments: {}
+    }
+  ];
+}
+
+function getSelectedWorkflowEnvironmentProfileId() {
+  const profiles = getWorkflowEnvironmentProfiles();
+  const selected = state.selectedWorkflowEnvironmentProfileId
+    || localStorage.getItem(WORKFLOW_ENVIRONMENT_PROFILE_STORAGE_KEY)
+    || state.workflowIndex?.defaultEnvironmentProfileId
+    || profiles[0]?.id
+    || "";
+
+  return profiles.some(profile => profile.id === selected)
+    ? selected
+    : profiles[0]?.id || "";
+}
+
+function getSelectedWorkflowEnvironmentProfile() {
+  const selectedId = getSelectedWorkflowEnvironmentProfileId();
+  return getWorkflowEnvironmentProfiles().find(profile => profile.id === selectedId) || null;
+}
+
+function renderWorkflowEnvironmentProfileHint() {
+  if (!elements.workflowEnvironmentProfileHint) {
+    return;
+  }
+
+  const profile = getSelectedWorkflowEnvironmentProfile();
+
+  if (!profile) {
+    elements.workflowEnvironmentProfileHint.textContent = "";
+    return;
+  }
+
+  const mappings = Object.entries(profile.environments || {})
+    .map(([projectId, environmentId]) => `${projectId}: ${getProjectEnvironmentLabel(projectId, environmentId)}`);
+
+  elements.workflowEnvironmentProfileHint.textContent = [
+    profile.description || "",
+    mappings.length > 0 ? mappings.join(", ") : "Bez explicitního mapování, použijí se uložená/výchozí prostředí."
+  ].filter(Boolean).join(" ");
+}
+
+function getProjectEnvironmentLabel(projectId, environmentId) {
+  const project = (state.projectIndex?.projects || []).find(item => item.id === projectId);
+  const environment = (project?.environments || []).find(item => item.id === environmentId);
+  return environment?.name || environmentId || "výchozí";
+}
+
+function getWorkflowItemEnvironmentId(item) {
+  if (item?.environmentId) {
+    return item.environmentId;
+  }
+
+  const profile = getSelectedWorkflowEnvironmentProfile();
+  return profile?.environments?.[item?.projectId] || null;
 }
 
 function populateScenarioPackOptions() {
@@ -499,7 +604,11 @@ async function loadProject(projectId, options = {}) {
   populateScenarioPackOptions();
   applyProjectBranding(project);
   applyProjectBaseUrl(project);
-  await applyProjectEnvironment(project, getSavedEnvironmentId(project) || getDefaultEnvironmentId(project));
+  await applyProjectEnvironment(
+    project,
+    options.environmentId || getSavedEnvironmentId(project) || getDefaultEnvironmentId(project),
+    { persist: options.environmentPersist !== false }
+  );
   loadProjectAuth(project);
   await loadScenarioPack(getRestoredPackId(options.packId), {
     scenarioId: options.scenarioId,
@@ -1065,7 +1174,7 @@ function applyAuthProfileSelection(profileId, options = {}) {
   saveAuthFormValues();
 }
 
-async function applyProjectEnvironment(project, environmentId) {
+async function applyProjectEnvironment(project, environmentId, options = {}) {
   if (!project) {
     return;
   }
@@ -1082,7 +1191,9 @@ async function applyProjectEnvironment(project, environmentId) {
     return;
   }
 
-  localStorage.setItem(getEnvironmentStorageKey(project.id), environment.id);
+  if (options.persist !== false) {
+    localStorage.setItem(getEnvironmentStorageKey(project.id), environment.id);
+  }
 
   try {
     await updateHarnessProxyTarget(environment.targetBaseUrl);
@@ -2579,7 +2690,9 @@ function activateLeftTab(tab) {
   const showForms = tab === "forms";
   const showWorkflows = tab === "workflows";
   const showRedis = tab === "redis";
-  document.querySelector(".scenario-panel")?.classList.toggle("identity-tab-active", showRedis);
+  const scenarioPanel = document.querySelector(".scenario-panel");
+  scenarioPanel?.classList.toggle("identity-tab-active", showRedis);
+  scenarioPanel?.classList.toggle("workflow-tab-active", showWorkflows);
 
   elements.scenariosTab.classList.toggle("active", showScenarios);
   elements.smokeTab.classList.toggle("active", showSmoke);
@@ -3645,16 +3758,34 @@ async function openWorkflowSourceItem(workflowId, itemIndex) {
 }
 
 async function loadWorkflowItemCatalog(item, options = {}) {
+  const environmentId = getWorkflowItemEnvironmentId(item);
+
   if (state.currentProject?.id !== item.projectId) {
     await loadProject(item.projectId, {
       packId: item.packId,
+      environmentId,
+      environmentPersist: false,
       suppressLog: options.suppressLog
     });
-  } else if (state.currentPackId !== item.packId) {
+  } else {
+    await applyWorkflowItemProjectEnvironment(item);
+  }
+
+  if (state.currentProject?.id === item.projectId && state.currentPackId !== item.packId) {
     await loadScenarioPack(item.packId, {
       suppressLog: options.suppressLog
     });
   }
+}
+
+async function applyWorkflowItemProjectEnvironment(item) {
+  const environmentId = getWorkflowItemEnvironmentId(item);
+
+  if (!environmentId || state.currentProject?.id !== item.projectId || state.currentEnvironmentId === environmentId) {
+    return;
+  }
+
+  await applyProjectEnvironment(state.currentProject, environmentId, { persist: false });
 }
 
 function openWorkflowItemForm(item) {
@@ -5951,13 +6082,21 @@ function requestStopWorkflowRun() {
 }
 
 async function openWorkflowItem(item) {
+  const environmentId = getWorkflowItemEnvironmentId(item);
+
   if (state.currentProject?.id !== item.projectId) {
     await loadProject(item.projectId, {
       packId: item.packId,
       scenarioId: item.scenarioId,
+      environmentId,
+      environmentPersist: false,
       suppressLog: true
     });
-  } else if (state.currentPackId !== item.packId) {
+  } else {
+    await applyWorkflowItemProjectEnvironment(item);
+  }
+
+  if (state.currentProject?.id === item.projectId && state.currentPackId !== item.packId) {
     await loadScenarioPack(item.packId, {
       scenarioId: item.scenarioId,
       suppressLog: true
@@ -5976,6 +6115,8 @@ async function openWorkflowItem(item) {
     projectId: item.projectId,
     packId: item.packId,
     scenarioId: item.scenarioId,
+    environmentId: state.currentEnvironmentId,
+    environmentProfileId: getSelectedWorkflowEnvironmentProfileId(),
     title: item.title || state.scenario?.title
   });
 }
@@ -6644,6 +6785,9 @@ function updateWorkflowControls() {
   elements.runWorkflow.disabled = !hasWorkflow || state.workflowRunning || hasPausedRun;
   elements.continueWorkflow.disabled = !hasWorkflow || !hasPausedRun || state.workflowRunning;
   elements.stopWorkflow.disabled = !state.workflowRunning;
+  if (elements.workflowEnvironmentProfileSelect) {
+    elements.workflowEnvironmentProfileSelect.disabled = state.workflowRunning || getWorkflowEnvironmentProfiles().length <= 1;
+  }
   updateWorkflowStatus(state.workflowRunning
     ? "Běží"
     : hasPausedRun
