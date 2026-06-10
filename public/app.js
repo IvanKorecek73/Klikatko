@@ -38,6 +38,7 @@ const state = {
   authFormValues: {},
   authProfileNotes: {},
   authCustomProfiles: [],
+  identityFormValues: {},
   redisBridgeUrl: localStorage.getItem("demoHarness.redisBridgeUrl") || "/__redis",
   redisIdentityId: "",
   redisIdentityManual: false,
@@ -134,6 +135,7 @@ const elements = {
   redisStatus: document.querySelector("#redisStatus"),
   identitySummary: document.querySelector("#identitySummary"),
   identityProfileSelect: document.querySelector("#identityProfileSelect"),
+  identityProfileFields: document.querySelector("#identityProfileFields"),
   identityLoginAction: document.querySelector("#identityLoginAction"),
   identityRefreshAction: document.querySelector("#identityRefreshAction"),
   identityRenewMosAction: document.querySelector("#identityRenewMosAction"),
@@ -273,6 +275,7 @@ function bindEventHandlers() {
     renderRedisViewer();
     renderModeBanner();
   });
+  elements.identityProfileFields.addEventListener("input", handleIdentityProfileFieldInput);
   elements.identityLoginAction.addEventListener("click", () => executeIdentityAuthAction("login"));
   elements.identityRefreshAction.addEventListener("click", () => executeIdentityAuthAction("refresh"));
   elements.identityRenewMosAction.addEventListener("click", () => executeIdentityAuthAction("mos"));
@@ -699,7 +702,8 @@ function getPidLitackaAuthProfiles() {
   return [
     ...regularProfiles,
     ...customProfiles,
-    ...anonymousProfiles
+    ...anonymousProfiles,
+    createNewAuthProfile()
   ];
 }
 
@@ -717,6 +721,43 @@ function getSelectedPidLitackaProfileId() {
 function getSelectedPidLitackaProfile() {
   const selectedId = getSelectedPidLitackaProfileId();
   return getPidLitackaAuthProfiles().find(profile => profile.id === selectedId) || null;
+}
+
+function getPidLitackaIdentityValues() {
+  const project = getPidLitackaProject();
+  const authConfig = getProjectAuthConfig(project);
+  const selectedProfile = getSelectedPidLitackaProfile();
+  const savedValues = project ? loadSavedAuthFormValues(project) : {};
+
+  if (!project || authConfig.type !== "login" || !selectedProfile) {
+    return {};
+  }
+
+  if (selectedProfile.isNewProfile) {
+    if (state.identityFormValues.__selectedProfileId !== selectedProfile.id) {
+      state.identityFormValues = {
+        __selectedProfileId: selectedProfile.id,
+        ...createNewAuthProfileDraftValues()
+      };
+    }
+
+    return { ...state.identityFormValues };
+  }
+
+  if (state.identityFormValues.__selectedProfileId !== selectedProfile.id) {
+    state.identityFormValues = {
+      ...savedValues,
+      ...(selectedProfile.values || {}),
+      __selectedProfileId: selectedProfile.id
+    };
+  }
+
+  return {
+    ...savedValues,
+    ...(selectedProfile.values || {}),
+    ...state.identityFormValues,
+    __selectedProfileId: selectedProfile.id
+  };
 }
 
 function findAuthProfileByIdentityId(identityId, authConfig = getProjectAuthConfig()) {
@@ -1099,6 +1140,10 @@ async function applyIdentityProfileSelection(profileId) {
 
   if (state.currentProject?.id === project.id) {
     applyAuthProfileSelection(profile.id, { overwrite: true });
+    state.identityFormValues = {
+      ...state.authFormValues,
+      __selectedProfileId: profile.id
+    };
     return;
   }
 
@@ -1106,7 +1151,9 @@ async function applyIdentityProfileSelection(profileId) {
   const formValues = loadSavedAuthFormValues(project);
   formValues.__selectedProfileId = profile.id;
 
-  if (!profile.isNewProfile) {
+  if (profile.isNewProfile) {
+    Object.assign(formValues, createNewAuthProfileDraftValues());
+  } else {
     for (const [name, value] of Object.entries(profile.values || {})) {
       if (value !== undefined) {
         formValues[name] = value;
@@ -1114,6 +1161,7 @@ async function applyIdentityProfileSelection(profileId) {
     }
   }
 
+  state.identityFormValues = { ...formValues };
   saveAuthFormValuesForProject(project, authConfig, formValues);
 }
 
@@ -1135,6 +1183,43 @@ function saveAuthFormValuesForProject(project, authConfig, formValues) {
   }
 
   localStorage.setItem(getAuthFormStorageKey(project.id), JSON.stringify(persistedValues));
+}
+
+function saveIdentityFormValues() {
+  const project = getPidLitackaProject();
+
+  if (!project) {
+    return;
+  }
+
+  saveAuthFormValuesForProject(project, getProjectAuthConfig(project), state.identityFormValues);
+}
+
+function getIdentityProfileLabel(profile, values = {}) {
+  const email = String(values.email || profile?.label || "").trim();
+  const device = String(values.deviceName || values.deviceId || "").trim();
+
+  if (!email) {
+    return profile?.label || "Novy uzivatel";
+  }
+
+  return device ? `${email} / ${device}` : email;
+}
+
+function handleIdentityProfileFieldInput(event) {
+  const target = event.target;
+
+  if (!target?.name) {
+    return;
+  }
+
+  state.identityFormValues = {
+    ...getPidLitackaIdentityValues(),
+    [target.name]: target.value
+  };
+
+  saveIdentityFormValues();
+  renderIdentitySummary();
 }
 
 async function executeIdentityAuthAction(action) {
@@ -1195,7 +1280,10 @@ async function withPidLitackaIdentityContext(action) {
   try {
     state.currentProject = project;
     state.currentEnvironmentId = environmentId;
-    state.authFormValues = loadSavedAuthFormValues(project);
+    state.authFormValues = {
+      ...loadSavedAuthFormValues(project),
+      ...getPidLitackaIdentityValues()
+    };
     state.authProfileNotes = loadSavedAuthProfileNotes(project);
     state.authCustomProfiles = loadSavedAuthCustomProfiles(project);
     applyAuthFieldDefaults(getProjectAuthConfig(project));
@@ -1676,7 +1764,9 @@ function saveNewAuthProfileAfterSuccessfulLogin(options = {}) {
   }
 
   const note = String(options.note ?? state.authFormValues?.__newProfileNote ?? "").trim();
-  const id = `custom-${email.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${Date.now()}`;
+  const deviceId = String(state.authFormValues?.deviceId || "").trim();
+  const idParts = [email, deviceId || String(Date.now())].join("-");
+  const id = `custom-${idParts.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${Date.now()}`;
   const profile = {
     id,
     label: email,
@@ -1696,8 +1786,9 @@ function saveNewAuthProfileAfterSuccessfulLogin(options = {}) {
     }
   };
 
+  const nextProfileKey = getAuthProfilePersistenceKey(profile);
   state.authCustomProfiles = [
-    ...(state.authCustomProfiles || []).filter(item => item.label?.toLowerCase() !== email.toLowerCase()),
+    ...(state.authCustomProfiles || []).filter(item => getAuthProfilePersistenceKey(item) !== nextProfileKey),
     profile
   ];
   state.authProfileNotes[profile.id] = note;
@@ -1711,8 +1802,21 @@ function saveNewAuthProfileAfterSuccessfulLogin(options = {}) {
 function updateCustomAuthProfilePasswordAfterSuccessfulLogin(selectedProfile) {
   const password = String(state.authFormValues?.password || "");
   const identityId = String(state.authSession?.identityId || state.authFormValues?.identityId || "").trim();
+  const persistedFields = [
+    "email",
+    "deviceId",
+    "deviceName",
+    "platform",
+    "osVersion",
+    "appVersion",
+    "model",
+    "deviceLanguage",
+    "deviceMessagingToken"
+  ];
 
-  if (!password && !identityId) {
+  const hasPersistedFieldValue = persistedFields.some(field => state.authFormValues?.[field] !== undefined);
+
+  if (!password && !identityId && !hasPersistedFieldValue) {
     return;
   }
 
@@ -1735,6 +1839,14 @@ function updateCustomAuthProfilePasswordAfterSuccessfulLogin(selectedProfile) {
     if (identityId && nextValues.identityId !== identityId) {
       nextValues.identityId = identityId;
       profileChanged = true;
+    }
+
+    for (const field of persistedFields) {
+      const value = state.authFormValues?.[field];
+      if (value !== undefined && nextValues[field] !== value) {
+        nextValues[field] = value;
+        profileChanged = true;
+      }
     }
 
     if (!profileChanged) {
@@ -1816,6 +1928,12 @@ function updateSessionFromAuthResponse(body, config, kind = "login") {
   };
 
   applyAuthSessionContext();
+}
+
+function getAuthProfilePersistenceKey(profile) {
+  const email = String(profile?.values?.email || profile?.label || "").trim().toLowerCase();
+  const deviceId = String(profile?.values?.deviceId || "").trim().toLowerCase();
+  return `${email}|${deviceId}`;
 }
 
 function resolveAuthTemplate(template) {
@@ -2537,13 +2655,77 @@ function renderIdentityProfileSelect() {
   for (const profile of profiles) {
     const option = document.createElement("option");
     option.value = profile.id;
+    const label = getIdentityProfileLabel(profile, profile.values || {});
     option.textContent = profile.custom
-      ? `${profile.label || profile.id} (ulozeny)`
-      : profile.label || profile.id;
+      ? `${label} (ulozeny)`
+      : label;
     elements.identityProfileSelect.appendChild(option);
   }
 
   elements.identityProfileSelect.value = getSelectedPidLitackaProfileId();
+  renderIdentityProfileFields();
+}
+
+function renderIdentityProfileFields() {
+  if (!elements.identityProfileFields) {
+    return;
+  }
+
+  const project = getPidLitackaProject();
+  const authConfig = getProjectAuthConfig(project);
+  const profile = getSelectedPidLitackaProfile();
+  const values = getPidLitackaIdentityValues();
+
+  elements.identityProfileFields.innerHTML = "";
+
+  if (!project || authConfig.type !== "login" || !profile) {
+    return;
+  }
+
+  const fields = (authConfig.login?.fields || []).filter(field => isAuthFieldVisibleForProfile(field, profile));
+
+  if (profile.isNewProfile) {
+    const noteField = createIdentityProfileField({
+      name: "__newProfileNote",
+      label: "Poznamka",
+      placeholder: "Např. nový účet pro test přesunu kupónů"
+    }, values);
+    elements.identityProfileFields.appendChild(noteField);
+  }
+
+  for (const field of fields) {
+    elements.identityProfileFields.appendChild(createIdentityProfileField(field, values));
+  }
+}
+
+function createIdentityProfileField(field, values) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "base-url identity-profile-field";
+  wrapper.textContent = field.label;
+
+  let input;
+  if (field.type === "textarea") {
+    input = document.createElement("textarea");
+    input.rows = field.rows || 3;
+  } else if (field.type === "select") {
+    input = document.createElement("select");
+    for (const option of field.options || []) {
+      const optionElement = document.createElement("option");
+      optionElement.value = String(option.value);
+      optionElement.textContent = option.text;
+      input.appendChild(optionElement);
+    }
+  } else {
+    input = document.createElement("input");
+    input.type = field.type || "text";
+  }
+
+  input.name = field.name;
+  input.spellcheck = false;
+  input.placeholder = field.placeholder || "";
+  input.value = String(values?.[field.name] ?? field.value ?? "");
+  wrapper.appendChild(input);
+  return wrapper;
 }
 
 function renderIdentitySummary() {
@@ -2553,6 +2735,7 @@ function renderIdentitySummary() {
 
   const project = getPidLitackaProject();
   const profile = getSelectedPidLitackaProfile();
+  const values = getPidLitackaIdentityValues();
   const session = project ? loadSavedAuthSession(project, getPidLitackaEnvironmentId(project)) : null;
   const tokenInfo = session?.accessToken ? getJwtInfo(session.accessToken) : { valid: false, message: "Nejste prihlasen." };
   const identityId = String(session?.identityId || state.redisIdentityId || "").trim();
@@ -2564,7 +2747,7 @@ function renderIdentitySummary() {
   const expiresAtText = session?.expiresAt ? formatDate(session.expiresAt) : "-";
   const profileLabel = profile?.isNewProfile
     ? "Novy uzivatel"
-    : profile?.label || session?.email || "Nezvoleno";
+    : getIdentityProfileLabel(profile, values) || session?.email || "Nezvoleno";
   const authState = tokenInfo.valid
     ? (session?.isAnonymous ? "Anonymni session" : "BE JWT aktivni")
     : tokenInfo.message || "Neprihlasen";
@@ -2588,6 +2771,14 @@ function renderIdentitySummary() {
     <div class="identity-summary-row">
       <span>IdentityId</span>
       <code>${escapeHtml(identityId || "-")}</code>
+    </div>
+    <div class="identity-summary-row">
+      <span>Zarizeni</span>
+      <code>${escapeHtml(values.deviceName || "-")}</code>
+    </div>
+    <div class="identity-summary-row">
+      <span>Device ID</span>
+      <code>${escapeHtml(values.deviceId || "-")}</code>
     </div>
     <div class="identity-summary-row">
       <span>MOS</span>

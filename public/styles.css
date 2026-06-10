@@ -2001,6 +2001,15 @@ button:disabled {
   margin-bottom: 0;
 }
 
+.identity-profile-fields {
+  display: grid;
+  gap: 8px;
+}
+
+.identity-profile-field {
+  margin-bottom: 0;
+}
+
 .identity-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
