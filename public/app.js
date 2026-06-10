@@ -1425,7 +1425,7 @@ function updateAuthProfileAfterSuccessfulLogin() {
   }
 }
 
-function saveNewAuthProfileAfterSuccessfulLogin() {
+function saveNewAuthProfileAfterSuccessfulLogin(options = {}) {
   const email = String(state.authFormValues?.email || "").trim();
   const password = String(state.authFormValues?.password || "");
 
@@ -1433,7 +1433,7 @@ function saveNewAuthProfileAfterSuccessfulLogin() {
     return;
   }
 
-  const note = String(state.authFormValues?.__newProfileNote || "").trim();
+  const note = String(options.note ?? state.authFormValues?.__newProfileNote ?? "").trim();
   const id = `custom-${email.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${Date.now()}`;
   const profile = {
     id,
@@ -5711,6 +5711,11 @@ function applyAuthSessionFromStep(step, body, result) {
 
   updateSessionFromAuthResponse(body, sessionConfig, "login");
   applyAuthSessionContext();
+  if (sessionConfig.sessionKind !== "anonymous" && step.authSession.saveProfile !== false) {
+    saveNewAuthProfileAfterSuccessfulLogin({
+      note: step.authSession.profileNote || "Ulozeno po prihlaseni ze scenare."
+    });
+  }
   saveAuthFormValues();
   saveAuthSession();
   renderAuthPanel();
