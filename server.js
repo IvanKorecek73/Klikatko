@@ -3,6 +3,7 @@ const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
+const { handleRedisBridgeRequest } = require("./tools/redis-bridge/src/server");
 
 const port = Number(process.env.PORT || 5096);
 let targetBaseUrl = process.env.TICKET_SERVICE_BASE_URL || "http://localhost:5087";
@@ -30,6 +31,11 @@ const server = http.createServer((request, response) => {
 
   if (request.url.startsWith("/api/")) {
     proxyApi(request, response);
+    return;
+  }
+
+  if (request.url.startsWith("/__redis/")) {
+    handleRedisBridgeRequest(request, response, { pathPrefix: "/__redis" });
     return;
   }
 

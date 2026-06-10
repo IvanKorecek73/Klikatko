@@ -8,7 +8,11 @@ loadDotEnv();
 const port = Number(process.env.REDIS_BRIDGE_PORT || process.env.PORT || 5097);
 const redisConfig = parseRedisConfig(process.env.REDIS_URL || process.env.REDIS_CONNECTION_STRING || "localhost:6379");
 
-const server = http.createServer(async (request, response) => {
+function createRedisBridgeServer(options = {}) {
+  return http.createServer((request, response) => handleRedisBridgeRequest(request, response, options));
+}
+
+async function handleRedisBridgeRequest(request, response, options = {}) {
   if (request.method === "OPTIONS") {
     sendJson(response, 204, null);
     return;
@@ -16,6 +20,11 @@ const server = http.createServer(async (request, response) => {
 
   try {
     const url = new URL(request.url, `http://127.0.0.1:${port}`);
+    const pathPrefix = String(options.pathPrefix || "").replace(/\/$/, "");
+
+    if (pathPrefix && url.pathname.startsWith(`${pathPrefix}/`)) {
+      url.pathname = url.pathname.slice(pathPrefix.length) || "/";
+    }
 
     if (request.method === "GET" && url.pathname === "/health") {
       const pong = await withRedis(client => client.command(["PING"]));
@@ -58,12 +67,16 @@ const server = http.createServer(async (request, response) => {
       message: error instanceof Error ? error.message : String(error)
     });
   }
-});
+}
 
-server.listen(port, "127.0.0.1", () => {
-  console.log(`Klikatko Redis bridge: http://127.0.0.1:${port}`);
-  console.log(`Redis target: ${publicRedisConfig().host}:${publicRedisConfig().port}`);
-});
+const server = createRedisBridgeServer();
+
+if (require.main === module) {
+  server.listen(port, "127.0.0.1", () => {
+    console.log(`Klikatko Redis bridge: http://127.0.0.1:${port}`);
+    console.log(`Redis target: ${publicRedisConfig().host}:${publicRedisConfig().port}`);
+  });
+}
 
 async function readSessionKey(key) {
   const data = await readAnyKey(key);
@@ -366,3 +379,8 @@ function loadDotEnv() {
     if (!process.env[key]) process.env[key] = value;
   }
 }
+
+module.exports = {
+  createRedisBridgeServer,
+  handleRedisBridgeRequest
+};

@@ -3040,7 +3040,14 @@ async function fetchRedisBridgeJson(path) {
 
     try {
       const response = await fetch(url, { signal: controller.signal });
-      const body = await response.json();
+      const text = await response.text();
+      let body = null;
+
+      try {
+        body = text ? JSON.parse(text) : null;
+      } catch {
+        throw new Error(`HTTP ${response.status}: Redis bridge nevratil JSON (${text.slice(0, 120) || "prazdna odpoved"}).`);
+      }
 
       if (!response.ok) {
         throw new Error(body.message || body.error || `HTTP ${response.status}`);
