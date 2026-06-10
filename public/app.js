@@ -1156,6 +1156,8 @@ async function applyIdentityProfileSelection(profileId) {
     return;
   }
 
+  resetRedisIdentityForSelectedProfile(profile);
+
   if (state.currentProject?.id === project.id) {
     applyAuthProfileSelection(profile.id, { overwrite: true });
     state.identityFormValues = {
@@ -1181,6 +1183,22 @@ async function applyIdentityProfileSelection(profileId) {
 
   state.identityFormValues = { ...formValues };
   saveAuthFormValuesForProject(project, authConfig, formValues);
+}
+
+function resetRedisIdentityForSelectedProfile(profile) {
+  state.redisIdentityManual = false;
+  state.redisAutoSessionIdentityId = "";
+  const profileIdentityId = getAuthProfileIdentityId(profile);
+  state.redisIdentityId = profileIdentityId || "";
+
+  if (state.redisLastSession) {
+    const loadedIdentityId = getIdentityIdFromRedisSession(state.redisLastSession);
+    if (loadedIdentityId && profileIdentityId && loadedIdentityId.toLowerCase() === profileIdentityId.toLowerCase()) {
+      return;
+    }
+  }
+
+  state.redisLastSession = null;
 }
 
 function saveAuthFormValuesForProject(project, authConfig, formValues) {
