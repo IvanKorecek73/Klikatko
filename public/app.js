@@ -5407,7 +5407,12 @@ async function continueWorkflowRun() {
       }
 
       const item = workflow.items[state.workflowRun.itemIndex];
-      await applyWorkflowRedisSession(item);
+      const redisSessionReady = await applyWorkflowRedisSession(item);
+      if (redisSessionReady?.ok === false) {
+        pauseWorkflow(redisSessionReady.message, "error", redisSessionReady.lines);
+        return;
+      }
+
       await openWorkflowItem(item);
       const scenario = state.scenario;
 
@@ -5680,18 +5685,26 @@ async function applyWorkflowRedisSession(item) {
   const config = item?.redisSession;
 
   if (!config || !isEmpty(state.workflowContext?.[config.contextKey || "mosCouponSessionId"])) {
-    return;
+    return { ok: true };
   }
 
   const identityContextKey = config.identityContextKey || "pidLitackaIdentityId";
   const identityId = getPidLitackaIdentityIdForRedis(identityContextKey);
 
   if (!identityId) {
-    addLog("warn", "Redis MOS session skipped", {
+    const message = "Workflow potrebuje MOS SessionID z Redis, ale chybi PidLitacka IdentityId.";
+    addLog("error", "Redis MOS session blocked", {
       reason: "MissingIdentityId",
       identityContextKey
     });
-    return;
+    return {
+      ok: false,
+      message,
+      lines: [
+        "Nejdrive se prihlaste jako PidLitacka uzivatel nebo spustte workflow od kroku, ktery uzivatele prihlasi.",
+        `Ocekavany kontext: ${identityContextKey}.`
+      ]
+    };
   }
 
   try {
@@ -5707,24 +5720,45 @@ async function applyWorkflowRedisSession(item) {
 
       const renewResult = await renewPidLitackaMosSessionForWorkflow();
       if (!renewResult.ok) {
-        addLog("warn", "Redis MOS session renewal skipped", {
+        const problem = getRedisSessionProblem(session) || "UnknownRedisSessionProblem";
+        const message = `Workflow potrebuje platne MOS SessionID, ale Redis session pro identityId ${identityId} neni pouzitelna (${problem}).`;
+        addLog("error", "Redis MOS session renewal failed", {
           identityId,
+          key: session.key,
+          reason: problem,
           message: renewResult.message
         });
-        return;
+        return {
+          ok: false,
+          message,
+          lines: [
+            `Redis key: ${session.key || `mos:session:user:${identityId}`}`,
+            `Obnova MOS session pres BE PidLitacka selhala: ${renewResult.message}`,
+            "Zkuste se znovu prihlasit v zalozce Uzivatel, pripadne obnovit MOS session."
+          ]
+        };
       }
 
       await delay(300);
       session = await fetchRedisSession(identityId);
 
       if (!isUsableRedisSession(session)) {
-        addLog("warn", "Redis MOS session still missing after renewal", {
+        const problem = getRedisSessionProblem(session) || "UnknownRedisSessionProblem";
+        const message = `Workflow obnovu MOS session zkusil, ale Redis stale neobsahuje platne SessionID (${problem}).`;
+        addLog("error", "Redis MOS session still missing after renewal", {
           identityId,
           key: session.key,
           exists: session.exists,
-          reason: getRedisSessionProblem(session)
+          reason: problem
         });
-        return;
+        return {
+          ok: false,
+          message,
+          lines: [
+            `Redis key: ${session.key || `mos:session:user:${identityId}`}`,
+            "Scenar nebude pokracovat, aby nevznikl falesne chybny MOS vysledek."
+          ]
+        };
       }
     }
 
@@ -5739,11 +5773,21 @@ async function applyWorkflowRedisSession(item) {
       ttlSeconds: session.ttlSeconds,
       contextKey
     });
+    return { ok: true };
   } catch (error) {
-    addLog("warn", "Redis MOS session failed", {
+    const message = "Workflow nedokazal nacist MOS SessionID z Redis.";
+    addLog("error", "Redis MOS session failed", {
       identityId,
       message: error instanceof Error ? error.message : String(error)
     });
+    return {
+      ok: false,
+      message,
+      lines: [
+        error instanceof Error ? error.message : String(error),
+        "Zkontrolujte Redis bridge v zalozce Uzivatel."
+      ]
+    };
   }
 }
 
