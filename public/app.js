@@ -133,6 +133,7 @@ const elements = {
   redisIdentityId: document.querySelector("#redisIdentityId"),
   redisStatus: document.querySelector("#redisStatus"),
   identitySummary: document.querySelector("#identitySummary"),
+  identityProfileSelect: document.querySelector("#identityProfileSelect"),
   identityLoginAction: document.querySelector("#identityLoginAction"),
   identityRefreshAction: document.querySelector("#identityRefreshAction"),
   identityRenewMosAction: document.querySelector("#identityRenewMosAction"),
@@ -266,6 +267,12 @@ function bindEventHandlers() {
   elements.authSessionRenewAction.addEventListener("click", executeAuthSessionRenew);
   elements.authLogoutAction.addEventListener("click", executeAuthLogout);
   elements.authResetAction.addEventListener("click", resetAuthState);
+  elements.identityProfileSelect.addEventListener("change", event => {
+    applyAuthProfileSelection(event.target.value, { overwrite: true });
+    renderAuthPanel();
+    renderRedisViewer();
+    renderModeBanner();
+  });
   elements.identityLoginAction.addEventListener("click", executeAuthLogin);
   elements.identityRefreshAction.addEventListener("click", executeAuthRefresh);
   elements.identityRenewMosAction.addEventListener("click", executeAuthSessionRenew);
@@ -2311,9 +2318,38 @@ function renderRedisViewer() {
 
   elements.redisIdentityId.value = state.redisIdentityId || "";
   elements.redisUseSession.disabled = !isUsableRedisSession(state.redisLastSession);
+  renderIdentityProfileSelect();
   renderIdentitySummary();
   renderRedisHealthStatus();
   checkRedisHealth();
+}
+
+function renderIdentityProfileSelect() {
+  if (!elements.identityProfileSelect) {
+    return;
+  }
+
+  const authConfig = getProjectAuthConfig();
+
+  if (authConfig.type !== "login") {
+    elements.identityProfileSelect.innerHTML = "";
+    elements.identityProfileSelect.disabled = true;
+    return;
+  }
+
+  elements.identityProfileSelect.disabled = false;
+  elements.identityProfileSelect.innerHTML = "";
+
+  for (const profile of getAuthProfiles(authConfig)) {
+    const option = document.createElement("option");
+    option.value = profile.id;
+    option.textContent = profile.custom
+      ? `${profile.label || profile.id} (ulozeny)`
+      : profile.label || profile.id;
+    elements.identityProfileSelect.appendChild(option);
+  }
+
+  elements.identityProfileSelect.value = getSelectedAuthProfileId(authConfig);
 }
 
 function renderIdentitySummary() {
