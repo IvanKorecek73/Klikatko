@@ -2988,9 +2988,13 @@ function renderIdentitySummary() {
     ? "Novy uzivatel"
     : getIdentityProfileLabel(profile, values) || session?.email || "Nezvoleno";
   const profileType = getIdentityProfileTypeLabel(profile);
+  const selectedEmail = String(values.email || "").trim();
+  const sessionEmail = String(session?.email || "").trim();
+  const sessionMatchesProfile = doesSessionMatchSelectedIdentity(session, selectedEmail);
   const authState = tokenInfo.valid
-    ? (session?.isAnonymous ? "Anonymni session" : "BE JWT aktivni")
+    ? getIdentityAuthStateText(session, selectedEmail, sessionMatchesProfile)
     : tokenInfo.message || "Neprihlasen";
+  const authLevel = tokenInfo.valid && sessionMatchesProfile ? "ok" : "warn";
   const mosState = hasMosSession
     ? `MOS SessionID aktivni, TTL ${ttlText}`
     : getIdentityMosStateText(identityId, redisSession, loadedRedisIdentityId);
@@ -3006,7 +3010,11 @@ function renderIdentitySummary() {
     </div>
     <div class="identity-summary-row">
       <span>BE PidLitacka</span>
-      <strong class="${tokenInfo.valid ? "ok" : "warn"}">${escapeHtml(authState)}</strong>
+      <strong class="${authLevel}">${escapeHtml(authState)}</strong>
+    </div>
+    <div class="identity-summary-row">
+      <span>BE ucet</span>
+      <code>${escapeHtml(sessionEmail || "-")}</code>
     </div>
     <div class="identity-summary-row">
       <span>Platnost JWT</span>
@@ -3033,6 +3041,30 @@ function renderIdentitySummary() {
       <code>${escapeHtml(mosSessionId ? maskSessionId(mosSessionId) : "-")}</code>
     </div>
   `;
+}
+
+function doesSessionMatchSelectedIdentity(session, selectedEmail) {
+  if (!session?.accessToken) {
+    return false;
+  }
+
+  if (session.isAnonymous || !selectedEmail || !session.email) {
+    return true;
+  }
+
+  return String(session.email).trim().toLowerCase() === String(selectedEmail).trim().toLowerCase();
+}
+
+function getIdentityAuthStateText(session, selectedEmail, sessionMatchesProfile) {
+  if (session?.isAnonymous) {
+    return "Anonymni session";
+  }
+
+  if (!sessionMatchesProfile && session?.email && selectedEmail) {
+    return `BE JWT patri jinemu uctu: ${session.email}`;
+  }
+
+  return "BE JWT aktivni";
 }
 
 function getIdentityProfileTypeLabel(profile) {
