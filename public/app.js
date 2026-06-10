@@ -2432,7 +2432,7 @@ async function ensureAuthorizationReady() {
       if (requiresAnonymousAuthForStep(currentStep()) && !state.authSession.isAnonymous) {
         return {
           ok: false,
-          message: "Tento scénář vyžaduje anonymní přihlášení. V panelu Přihlášení vyberte Anonymní uživatel."
+          message: "Tento scénář vyžaduje anonymní přihlášení. V záložce Uživatel vyberte Anonymní uživatel."
         };
       }
 
@@ -2445,7 +2445,7 @@ async function ensureAuthorizationReady() {
         if (requiresAnonymousAuthForStep(currentStep()) && !state.authSession?.isAnonymous) {
           return {
             ok: false,
-            message: "Tento scénář vyžaduje anonymní přihlášení. V panelu Přihlášení vyberte Anonymní uživatel."
+            message: "Tento scénář vyžaduje anonymní přihlášení. V záložce Uživatel vyberte Anonymní uživatel."
           };
         }
 
@@ -2512,7 +2512,7 @@ async function renewMosSessionIfPossible() {
   if (!email || !password) {
     return {
       ok: false,
-      message: "MOS session vypršela. Pro její obnovu je potřeba e-mail a heslo v panelu Přihlášení."
+      message: "MOS session vypršela. Pro její obnovu je potřeba e-mail a heslo v záložce Uživatel."
     };
   }
 
@@ -7886,7 +7886,7 @@ function renderModeBanner() {
   }
 
   if (requiresAnonymousAuth(state.scenario) && hasUsableAuthorization() && !state.authSession?.isAnonymous) {
-    elements.modeBanner.textContent = "Tento scénář vyžaduje anonymní přihlášení. V panelu Přihlášení vyberte Anonymní uživatel.";
+    elements.modeBanner.textContent = "Tento scénář vyžaduje anonymní přihlášení. V záložce Uživatel vyberte Anonymní uživatel.";
     elements.modeBanner.className = "mode-banner";
     return;
   }

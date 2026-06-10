@@ -70,9 +70,9 @@ select {
   overflow: hidden;
 }
 
+.scenario-panel > .auth-panel,
 .scenario-panel.identity-tab-active > label.base-url,
 .scenario-panel.identity-tab-active > .target-info,
-.scenario-panel.identity-tab-active > .auth-panel,
 .scenario-panel.identity-tab-active > .advanced-settings {
   display: none;
 }
