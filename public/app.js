@@ -2906,6 +2906,7 @@ function renderIdentitySummary() {
   const profileLabel = profile?.isNewProfile
     ? "Novy uzivatel"
     : getIdentityProfileLabel(profile, values) || session?.email || "Nezvoleno";
+  const profileType = getIdentityProfileTypeLabel(profile);
   const authState = tokenInfo.valid
     ? (session?.isAnonymous ? "Anonymni session" : "BE JWT aktivni")
     : tokenInfo.message || "Neprihlasen";
@@ -2917,6 +2918,10 @@ function renderIdentitySummary() {
     <div class="identity-summary-row">
       <span>Ucet</span>
       <strong>${escapeHtml(profileLabel)}</strong>
+    </div>
+    <div class="identity-summary-row">
+      <span>Typ uctu</span>
+      <code>${escapeHtml(profileType)}</code>
     </div>
     <div class="identity-summary-row">
       <span>BE PidLitacka</span>
@@ -2947,6 +2952,26 @@ function renderIdentitySummary() {
       <code>${escapeHtml(mosSessionId ? maskSessionId(mosSessionId) : "-")}</code>
     </div>
   `;
+}
+
+function getIdentityProfileTypeLabel(profile) {
+  if (!profile) {
+    return "-";
+  }
+
+  if (profile.isNewProfile) {
+    return "Novy lokalni ucet";
+  }
+
+  if (profile.custom) {
+    return "Lokalne ulozeny ucet";
+  }
+
+  if (profile.authRequest === "anonymous" || profile.noteDisabled) {
+    return "Vestaveny anonymni profil";
+  }
+
+  return "Vestaveny profil z konfigurace";
 }
 
 function getIdentityMosStateText(identityId, redisSession, loadedRedisIdentityId) {
