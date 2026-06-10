@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Klik&aacute;tko</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=20260610-identity-tab-controls">
+  <link rel="stylesheet" href="/styles.css?v=20260610-identity-profile-actions">
 </head>
 <body>
   <main class="shell">
@@ -155,6 +155,10 @@
                 <select id="identityProfileSelect"></select>
               </label>
               <div id="identityAccountFields" class="identity-profile-fields"></div>
+              <div class="identity-account-actions">
+                <button id="identitySaveProfileAction" type="button">Ulo&#382;it &uacute;&#269;et</button>
+                <button id="identityRemoveProfileAction" type="button">Odebrat ulo&#382;en&yacute;</button>
+              </div>
             </div>
             <div class="identity-section">
               <div class="identity-section-head">
@@ -285,6 +289,6 @@
   </main>
 
   <script src="/vendor/html2canvas.min.js?v=1.4.1"></script>
-  <script src="/app.js?v=20260610-auto-redis-session-cache" type="module"></script>
+  <script src="/app.js?v=20260610-identity-profile-actions" type="module"></script>
 </body>
 </html>

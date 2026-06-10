@@ -149,6 +149,8 @@ const elements = {
   identityProfileSelect: document.querySelector("#identityProfileSelect"),
   identityAccountFields: document.querySelector("#identityAccountFields"),
   identityDeviceFields: document.querySelector("#identityDeviceFields"),
+  identitySaveProfileAction: document.querySelector("#identitySaveProfileAction"),
+  identityRemoveProfileAction: document.querySelector("#identityRemoveProfileAction"),
   identityLoginAction: document.querySelector("#identityLoginAction"),
   identityRefreshAction: document.querySelector("#identityRefreshAction"),
   identityRenewMosAction: document.querySelector("#identityRenewMosAction"),
@@ -290,6 +292,8 @@ function bindEventHandlers() {
   });
   elements.identityAccountFields.addEventListener("input", handleIdentityProfileFieldInput);
   elements.identityDeviceFields.addEventListener("input", handleIdentityProfileFieldInput);
+  elements.identitySaveProfileAction.addEventListener("click", saveCurrentIdentityProfile);
+  elements.identityRemoveProfileAction.addEventListener("click", removeCurrentIdentityProfile);
   elements.identityLoginAction.addEventListener("click", () => executeIdentityAuthAction("login"));
   elements.identityRefreshAction.addEventListener("click", () => executeIdentityAuthAction("refresh"));
   elements.identityRenewMosAction.addEventListener("click", () => executeIdentityAuthAction("mos"));
@@ -1234,6 +1238,109 @@ function handleIdentityProfileFieldInput(event) {
 
   saveIdentityFormValues();
   renderIdentitySummary();
+  renderIdentityProfileActions();
+}
+
+function saveCurrentIdentityProfile() {
+  const project = getPidLitackaProject();
+  const values = getPidLitackaIdentityValues();
+  const email = String(values.email || "").trim();
+  const password = String(values.password || "");
+
+  if (!project || !email || !password) {
+    showRedisResult("error", "Ucet nelze ulozit.", "Vyplnte alespon e-mail a heslo.");
+    return;
+  }
+
+  const session = loadSavedAuthSession(project, getPidLitackaEnvironmentId(project));
+  const selectedProfile = getSelectedPidLitackaProfile();
+  const note = String(values.__newProfileNote || selectedProfile?.note || "").trim();
+  const profile = {
+    id: selectedProfile?.custom
+      ? selectedProfile.id
+      : createCustomAuthProfileId(email, values.deviceId),
+    label: email,
+    note,
+    values: {
+      email,
+      password,
+      identityId: values.identityId || session?.identityId || "",
+      deviceId: values.deviceId || "",
+      deviceName: values.deviceName || "",
+      platform: values.platform || "",
+      osVersion: values.osVersion || "",
+      appVersion: values.appVersion || "",
+      model: values.model || "",
+      deviceLanguage: values.deviceLanguage || "",
+      deviceMessagingToken: values.deviceMessagingToken || ""
+    }
+  };
+
+  const savedProfiles = loadSavedAuthCustomProfiles(project);
+  const nextProfileKey = getAuthProfilePersistenceKey(profile);
+  const nextProfiles = [
+    ...savedProfiles.filter(item => item.id !== profile.id && getAuthProfilePersistenceKey(item) !== nextProfileKey),
+    profile
+  ];
+  const notes = loadSavedAuthProfileNotes(project);
+  notes[profile.id] = note;
+
+  localStorage.setItem(getAuthCustomProfilesStorageKey(project.id), JSON.stringify(nextProfiles));
+  localStorage.setItem(getAuthProfileNotesStorageKey(project.id), JSON.stringify(notes));
+
+  const formValues = {
+    ...loadSavedAuthFormValues(project),
+    ...profile.values,
+    __selectedProfileId: profile.id
+  };
+  saveAuthFormValuesForProject(project, getProjectAuthConfig(project), formValues);
+  state.identityFormValues = { ...formValues };
+
+  if (state.currentProject?.id === project.id) {
+    state.authCustomProfiles = nextProfiles;
+    state.authProfileNotes = notes;
+    state.authFormValues = { ...formValues };
+  }
+
+  renderRedisViewer();
+  showRedisResult("ok", "Ucet ulozen.", `${email} je ulozeny v lokalnim seznamu Klikatka.`);
+}
+
+function removeCurrentIdentityProfile() {
+  const project = getPidLitackaProject();
+  const profile = getSelectedPidLitackaProfile();
+
+  if (!project || !profile?.custom) {
+    showRedisResult("warn", "Ucet nelze odebrat.", "Odebrat lze jen lokalne ulozeny ucet Klikatka.");
+    return;
+  }
+
+  const nextProfiles = loadSavedAuthCustomProfiles(project).filter(item => item.id !== profile.id);
+  const notes = loadSavedAuthProfileNotes(project);
+  delete notes[profile.id];
+  localStorage.setItem(getAuthCustomProfilesStorageKey(project.id), JSON.stringify(nextProfiles));
+  localStorage.setItem(getAuthProfileNotesStorageKey(project.id), JSON.stringify(notes));
+
+  const nextProfile = getPidLitackaAuthProfiles().find(item => !item.custom && !item.isNewProfile)
+    || createNewAuthProfile();
+  const formValues = loadSavedAuthFormValues(project);
+  formValues.__selectedProfileId = nextProfile.id;
+  saveAuthFormValuesForProject(project, getProjectAuthConfig(project), formValues);
+  state.identityFormValues = { ...formValues };
+
+  if (state.currentProject?.id === project.id) {
+    state.authCustomProfiles = nextProfiles;
+    state.authProfileNotes = notes;
+    state.authFormValues = { ...formValues };
+  }
+
+  renderRedisViewer();
+  showRedisResult("ok", "Ucet odebran.", `${profile.label || profile.id} byl odebran jen z lokalniho seznamu Klikatka.`);
+}
+
+function createCustomAuthProfileId(email, deviceId) {
+  const idParts = [email, deviceId || String(Date.now())].join("-");
+  return `custom-${idParts.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${Date.now()}`;
 }
 
 async function executeIdentityAuthAction(action) {
@@ -2681,6 +2788,19 @@ function renderIdentityProfileSelect() {
 
   elements.identityProfileSelect.value = getSelectedPidLitackaProfileId();
   renderIdentityProfileFields();
+  renderIdentityProfileActions();
+}
+
+function renderIdentityProfileActions() {
+  if (!elements.identitySaveProfileAction || !elements.identityRemoveProfileAction) {
+    return;
+  }
+
+  const profile = getSelectedPidLitackaProfile();
+  const values = getPidLitackaIdentityValues();
+  const canSave = Boolean(String(values.email || "").trim() && String(values.password || "").trim());
+  elements.identitySaveProfileAction.disabled = !canSave;
+  elements.identityRemoveProfileAction.disabled = !profile?.custom;
 }
 
 function renderIdentityProfileFields() {

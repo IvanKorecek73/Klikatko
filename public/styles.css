@@ -2056,6 +2056,18 @@ button:disabled {
   margin-bottom: 0;
 }
 
+.identity-account-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.identity-account-actions button {
+  min-width: 0;
+  justify-content: center;
+  padding-inline: 9px;
+}
+
 .identity-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
