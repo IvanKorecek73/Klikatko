@@ -224,6 +224,12 @@ p {
   padding: 10px 12px;
 }
 
+.scenario-panel.identity-tab-active > label.base-url,
+.scenario-panel.identity-tab-active > .target-info,
+.scenario-panel.identity-tab-active > .advanced-settings {
+  display: none;
+}
+
 .target-info-head {
   display: flex;
   align-items: center;
@@ -1939,6 +1945,13 @@ button:disabled {
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+.identity-panel-intro {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .redis-result {

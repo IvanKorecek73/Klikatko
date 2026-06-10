@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Klik&aacute;tko</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=20260610-redis-profile-link">
+  <link rel="stylesheet" href="/styles.css?v=20260610-user-panel-clean">
 </head>
 <body>
   <main class="shell">
@@ -22,7 +22,7 @@
         <button id="smokeTab" type="button" role="tab" aria-selected="false" aria-controls="smokePane">Smoke</button>
         <button id="formsTab" type="button" role="tab" aria-selected="false" aria-controls="formsPane">Formul&aacute;&#345;e</button>
         <button id="workflowsTab" type="button" role="tab" aria-selected="false" aria-controls="workflowsPane">Workflow</button>
-        <button id="redisTab" type="button" role="tab" aria-selected="false" aria-controls="redisPane">Redis</button>
+        <button id="redisTab" type="button" role="tab" aria-selected="false" aria-controls="redisPane">U&#382;ivatel</button>
       </div>
       <label class="base-url">
         Projekt
@@ -134,11 +134,12 @@
         <div class="catalog-tools">
           <div class="redis-viewer">
             <div class="batch-runner-head">
-              <strong>Redis Viewer</strong>
+              <strong>U&#382;ivatel</strong>
               <span id="redisStatus">Nep&#345;ipojeno</span>
             </div>
+            <p class="identity-panel-intro">Stav testovac&iacute; identity: BE PidLitacka JWT, MOS SessionID a vazba na Redis.</p>
             <label class="base-url">
-              Redis bridge
+              Redis bridge pro MOS session
               <input id="redisBridgeUrl" value="/__redis" spellcheck="false">
             </label>
             <label class="base-url">
@@ -146,9 +147,9 @@
               <input id="redisIdentityId" placeholder="identityId z aktu&aacute;ln&iacute; BE session" spellcheck="false">
             </label>
             <div class="batch-runner-actions">
-              <button id="redisLoadSession" type="button">Na&#269;&iacute;st session</button>
+              <button id="redisLoadSession" type="button">Na&#269;&iacute;st MOS session</button>
               <button id="redisUseSession" type="button" disabled>Pou&#382;&iacute;t pro MOS</button>
-              <button id="redisScanSessions" type="button">Naj&iacute;t sessions</button>
+              <button id="redisScanSessions" type="button">Naj&iacute;t session v Redis</button>
             </div>
             <div id="redisResult" class="redis-result empty-state">Zadejte identityId nebo pou&#382;ijte aktu&aacute;ln&#283; p&#345;ihl&aacute;&scaron;en&eacute;ho u&#382;ivatele.</div>
           </div>
@@ -241,6 +242,6 @@
   </main>
 
   <script src="/vendor/html2canvas.min.js?v=1.4.1"></script>
-  <script src="/app.js?v=20260610-redis-login-guard" type="module"></script>
+  <script src="/app.js?v=20260610-user-panel-clean" type="module"></script>
 </body>
 </html>

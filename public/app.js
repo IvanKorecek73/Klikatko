@@ -2062,6 +2062,7 @@ function activateLeftTab(tab) {
   const showForms = tab === "forms";
   const showWorkflows = tab === "workflows";
   const showRedis = tab === "redis";
+  document.querySelector(".scenario-panel")?.classList.toggle("identity-tab-active", showRedis);
 
   elements.scenariosTab.classList.toggle("active", showScenarios);
   elements.smokeTab.classList.toggle("active", showSmoke);
