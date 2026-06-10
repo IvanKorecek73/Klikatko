@@ -650,6 +650,26 @@ function getAuthProfiles(authConfig = getProjectAuthConfig()) {
   ];
 }
 
+function getAuthProfileIdentityId(profile) {
+  return String(profile?.values?.identityId || profile?.identityId || "").trim();
+}
+
+function findAuthProfileByIdentityId(identityId, authConfig = getProjectAuthConfig()) {
+  const normalizedIdentityId = String(identityId || "").trim().toLowerCase();
+
+  if (!normalizedIdentityId) {
+    return null;
+  }
+
+  return getAuthProfiles(authConfig).find(profile => {
+    if (profile.isNewProfile || profile.authRequest === "anonymous") {
+      return false;
+    }
+
+    return getAuthProfileIdentityId(profile).toLowerCase() === normalizedIdentityId;
+  }) || null;
+}
+
 function getSelectedAuthProfileId(authConfig = getProjectAuthConfig()) {
   const profiles = getAuthProfiles(authConfig);
 
@@ -1442,6 +1462,7 @@ function saveNewAuthProfileAfterSuccessfulLogin(options = {}) {
     values: {
       email,
       password,
+      identityId: state.authSession?.identityId || state.authFormValues?.identityId || "",
       deviceId: state.authFormValues?.deviceId || "",
       deviceName: state.authFormValues?.deviceName || "",
       platform: state.authFormValues?.platform || "",
@@ -1467,24 +1488,41 @@ function saveNewAuthProfileAfterSuccessfulLogin(options = {}) {
 
 function updateCustomAuthProfilePasswordAfterSuccessfulLogin(selectedProfile) {
   const password = String(state.authFormValues?.password || "");
+  const identityId = String(state.authSession?.identityId || state.authFormValues?.identityId || "").trim();
 
-  if (!password) {
+  if (!password && !identityId) {
     return;
   }
 
   let changed = false;
   state.authCustomProfiles = (state.authCustomProfiles || []).map(profile => {
-    if (profile.id !== selectedProfile.id || profile.values?.password === password) {
+    if (profile.id !== selectedProfile.id) {
+      return profile;
+    }
+
+    const nextValues = {
+      ...(profile.values || {})
+    };
+    let profileChanged = false;
+
+    if (password && nextValues.password !== password) {
+      nextValues.password = password;
+      profileChanged = true;
+    }
+
+    if (identityId && nextValues.identityId !== identityId) {
+      nextValues.identityId = identityId;
+      profileChanged = true;
+    }
+
+    if (!profileChanged) {
       return profile;
     }
 
     changed = true;
     return {
       ...profile,
-      values: {
-        ...(profile.values || {}),
-        password
-      }
+      values: nextValues
     };
   });
 
@@ -2314,7 +2352,7 @@ async function loadRedisSessionFromViewer(options = {}) {
     await checkRedisHealth();
     const session = await fetchRedisSession(identityId);
     state.redisLastSession = session;
-    renderRedisSession(session);
+    renderRedisSession(session, options.note || "");
     return session;
   } catch (error) {
     state.redisLastSession = null;
@@ -2350,10 +2388,29 @@ async function scanRedisSessionsFromViewer() {
     showRedisResult("warn", "Hledám MOS session klíče...", "pattern: mos:session:user:*");
     await checkRedisHealth();
     const body = await fetchRedisBridgeJson(`/scan?pattern=${encodeURIComponent("mos:session:user:*")}&count=50`);
+    const items = await Promise.all((body.keys || []).map(async key => {
+      const identityId = getIdentityIdFromRedisKey(key);
+      let session = null;
+      let error = "";
+
+      try {
+        session = identityId ? await fetchRedisSession(identityId) : null;
+      } catch (sessionError) {
+        error = sessionError instanceof Error ? sessionError.message : String(sessionError);
+      }
+
+      return {
+        key,
+        identityId,
+        session,
+        error,
+        profile: findAuthProfileByIdentityId(identityId)
+      };
+    }));
 
     showRedisResult("ok", `Nalezeno ${body.keys?.length || 0} session klíčů`, `
       <div class="redis-key-list">
-        ${(body.keys || []).map(key => `<button type="button" data-redis-key="${escapeHtml(key)}">${escapeHtml(key)}</button>`).join("")}
+        ${items.map(renderRedisSessionSearchItem).join("")}
       </div>
     `, { html: true });
 
@@ -2361,11 +2418,27 @@ async function scanRedisSessionsFromViewer() {
     elements.redisResult.querySelectorAll("[data-redis-key]").forEach(button => {
       button.addEventListener("click", () => {
         const key = button.dataset.redisKey || "";
-        const identityId = key.replace(/^mos:session:user:/, "");
+        const identityId = getIdentityIdFromRedisKey(key);
         state.redisIdentityId = identityId;
         state.redisIdentityManual = true;
         renderRedisViewer();
         loadRedisSessionFromViewer();
+      });
+    });
+    elements.redisResult.querySelectorAll("[data-auth-profile-id]").forEach(button => {
+      button.addEventListener("click", () => {
+        const profileId = button.dataset.authProfileId || "";
+        const identityId = button.dataset.identityId || "";
+        const key = button.dataset.redisProfileKey || "";
+        state.redisIdentityId = identityId;
+        state.redisIdentityManual = true;
+        applyAuthProfileSelection(profileId, { overwrite: true });
+        renderAuthPanel();
+        renderRedisViewer();
+        loadRedisSessionFromViewer({
+          quiet: true,
+          note: `Zvolen ulozeny ucet pro ${key}. Pro BE scenare se prihlaste tlacitkem Prihlasit.`
+        });
       });
     });
   } catch (error) {
@@ -2375,6 +2448,39 @@ async function scanRedisSessionsFromViewer() {
 
 async function fetchRedisSession(identityId) {
   return await fetchRedisBridgeJson(`/session/${encodeURIComponent(identityId)}`);
+}
+
+function renderRedisSessionSearchItem(item) {
+  const session = item.session || {};
+  const usable = isUsableRedisSession(session);
+  const problem = item.error || getRedisSessionProblem(session);
+  const ttl = Number(session.ttlSeconds);
+  const ttlText = Number.isFinite(ttl) && ttl >= 0 ? `${ttl} s` : "bez TTL / nenalezeno";
+  const sessionId = String(session.sessionId || session.payload?.sessionId || session.payload?.SessionId || "");
+  const mosLoginId = session.payload?.mosLoginId ?? session.payload?.MosLoginId ?? "-";
+  const profile = item.profile;
+
+  return `
+    <div class="redis-session-item ${usable ? "ok" : "warn"}">
+      <button type="button" data-redis-key="${escapeHtml(item.key)}">
+        <strong>${escapeHtml(profile?.label || item.identityId || item.key)}</strong>
+        <span>${escapeHtml(item.key)}</span>
+      </button>
+      <div class="redis-session-meta">
+        <span>${usable ? "MOS session OK" : escapeHtml(problem || "MOS session neni pouzitelna")}</span>
+        <span>TTL ${escapeHtml(ttlText)}</span>
+        <span>MOS LoginID ${escapeHtml(mosLoginId)}</span>
+        <span>SessionID ${escapeHtml(sessionId || "-")}</span>
+      </div>
+      ${profile
+        ? `<button class="redis-profile-action" type="button" data-auth-profile-id="${escapeHtml(profile.id)}" data-identity-id="${escapeHtml(item.identityId)}" data-redis-profile-key="${escapeHtml(item.key)}">Zvolit ucet</button>`
+        : `<div class="redis-profile-missing">Neznamy ucet v Klikatku. Pouzitelne jen pro prime MOS volani.</div>`}
+    </div>
+  `;
+}
+
+function getIdentityIdFromRedisKey(key) {
+  return String(key || "").replace(/^mos:session:user:/, "").trim();
 }
 
 function getRedisViewerIdentityId() {
@@ -2455,6 +2561,8 @@ function renderRedisSession(session, note = "") {
   const payload = session.payload || {};
   const sessionId = session.sessionId || "";
   const exists = isUsableRedisSession(session);
+  const identityId = getIdentityIdFromRedisKey(session.key || state.redisIdentityId || "");
+  const profile = findAuthProfileByIdentityId(identityId);
   const ttl = Number(session.ttlSeconds);
   const ttlText = ttl < 0 ? "bez TTL / nenalezeno" : `${ttl} s`;
   elements.redisStatus.textContent = exists ? "Session nalezena" : "Redis připojeno, session nenalezena";
@@ -2465,6 +2573,7 @@ function renderRedisSession(session, note = "") {
     ${!exists ? `<p>${escapeHtml(getRedisSessionProblem(session) || "Session nelze pouzit pro prime MOS volani.")}</p>` : ""}
     <div class="redis-detail-row"><span>Key</span><code>${escapeHtml(session.key || "")}</code></div>
     <div class="redis-detail-row"><span>TTL</span><code>${escapeHtml(ttlText)}</code></div>
+    <div class="redis-detail-row"><span>Ulozeny ucet</span><code>${escapeHtml(profile?.label || "nenalezen v Klikatku")}</code></div>
     <div class="redis-detail-row"><span>SessionID</span><code>${escapeHtml(sessionId || "-")}</code></div>
     <div class="redis-detail-row"><span>MOS LoginID</span><code>${escapeHtml(payload.mosLoginId ?? payload.MosLoginId ?? "-")}</code></div>
     <pre>${escapeHtml(JSON.stringify(payload, null, 2))}</pre>

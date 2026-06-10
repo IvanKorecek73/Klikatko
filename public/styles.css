@@ -2001,6 +2001,23 @@ button:disabled {
   gap: 8px;
 }
 
+.redis-session-item {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(16, 24, 32, 0.12);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.redis-session-item.ok {
+  border-left: 4px solid #2f8f62;
+}
+
+.redis-session-item.warn {
+  border-left: 4px solid #d38b21;
+}
+
 .redis-key-list button {
   justify-content: flex-start;
   width: 100%;
@@ -2011,6 +2028,37 @@ button:disabled {
   font-size: 12px;
   overflow-wrap: anywhere;
   text-align: left;
+}
+
+.redis-key-list button span,
+.redis-key-list button strong {
+  display: block;
+}
+
+.redis-key-list button span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.redis-session-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.redis-session-meta span,
+.redis-profile-missing {
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: rgba(16, 24, 32, 0.06);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.redis-profile-action {
+  font-family: inherit;
 }
 
 .log-entries {
