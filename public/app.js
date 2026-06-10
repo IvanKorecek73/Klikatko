@@ -267,16 +267,16 @@ function bindEventHandlers() {
   elements.authSessionRenewAction.addEventListener("click", executeAuthSessionRenew);
   elements.authLogoutAction.addEventListener("click", executeAuthLogout);
   elements.authResetAction.addEventListener("click", resetAuthState);
-  elements.identityProfileSelect.addEventListener("change", event => {
-    applyAuthProfileSelection(event.target.value, { overwrite: true });
+  elements.identityProfileSelect.addEventListener("change", async event => {
+    await applyIdentityProfileSelection(event.target.value);
     renderAuthPanel();
     renderRedisViewer();
     renderModeBanner();
   });
-  elements.identityLoginAction.addEventListener("click", executeAuthLogin);
-  elements.identityRefreshAction.addEventListener("click", executeAuthRefresh);
-  elements.identityRenewMosAction.addEventListener("click", executeAuthSessionRenew);
-  elements.identityLogoutAction.addEventListener("click", executeAuthLogout);
+  elements.identityLoginAction.addEventListener("click", () => executeIdentityAuthAction("login"));
+  elements.identityRefreshAction.addEventListener("click", () => executeIdentityAuthAction("refresh"));
+  elements.identityRenewMosAction.addEventListener("click", () => executeIdentityAuthAction("mos"));
+  elements.identityLogoutAction.addEventListener("click", () => executeIdentityAuthAction("logout"));
   elements.redisBridgeUrl.addEventListener("input", event => {
     state.redisBridgeUrl = event.target.value.trim() || "http://127.0.0.1:5097";
     localStorage.setItem("demoHarness.redisBridgeUrl", state.redisBridgeUrl);
@@ -670,6 +670,55 @@ function getAuthProfileIdentityId(profile) {
   return String(profile?.values?.identityId || profile?.identityId || "").trim();
 }
 
+function getPidLitackaProject() {
+  return state.projectIndex?.projects?.find(project => project.id === "pidlitacka") || null;
+}
+
+function getPidLitackaEnvironmentId(project = getPidLitackaProject()) {
+  return project
+    ? (getSavedEnvironmentId(project) || getDefaultEnvironmentId(project))
+    : "";
+}
+
+function getPidLitackaAuthProfiles() {
+  const project = getPidLitackaProject();
+  const authConfig = getProjectAuthConfig(project);
+
+  if (!project || authConfig.type !== "login") {
+    return [];
+  }
+
+  const staticProfiles = authConfig.login?.profiles || [];
+  const anonymousProfiles = staticProfiles.filter(profile => profile.authRequest === "anonymous");
+  const regularProfiles = staticProfiles.filter(profile => profile.authRequest !== "anonymous");
+  const customProfiles = loadSavedAuthCustomProfiles(project).map(profile => ({
+    ...profile,
+    custom: true
+  }));
+
+  return [
+    ...regularProfiles,
+    ...customProfiles,
+    ...anonymousProfiles
+  ];
+}
+
+function getSelectedPidLitackaProfileId() {
+  const project = getPidLitackaProject();
+  const profiles = getPidLitackaAuthProfiles();
+  const formValues = project ? loadSavedAuthFormValues(project) : {};
+  const selectedId = formValues.__selectedProfileId || "";
+
+  return profiles.some(profile => profile.id === selectedId)
+    ? selectedId
+    : profiles[0]?.id || "";
+}
+
+function getSelectedPidLitackaProfile() {
+  const selectedId = getSelectedPidLitackaProfileId();
+  return getPidLitackaAuthProfiles().find(profile => profile.id === selectedId) || null;
+}
+
 function findAuthProfileByIdentityId(identityId, authConfig = getProjectAuthConfig()) {
   const normalizedIdentityId = String(identityId || "").trim().toLowerCase();
 
@@ -677,7 +726,11 @@ function findAuthProfileByIdentityId(identityId, authConfig = getProjectAuthConf
     return null;
   }
 
-  return getAuthProfiles(authConfig).find(profile => {
+  const profiles = authConfig?.type === "login"
+    ? getAuthProfiles(authConfig)
+    : getPidLitackaAuthProfiles();
+
+  return profiles.find(profile => {
     if (profile.isNewProfile || profile.authRequest === "anonymous") {
       return false;
     }
@@ -1026,10 +1079,151 @@ function renderIdentityActions(authConfig = getProjectAuthConfig()) {
     return;
   }
 
-  elements.identityLoginAction.disabled = !["login", "jwt", "apiKey"].includes(authConfig.type);
-  elements.identityRefreshAction.disabled = !(authConfig.type === "login" && authConfig.refresh && state.authSession?.refreshToken);
-  elements.identityRenewMosAction.disabled = !(authConfig.type === "login" && authConfig.sessionRenew && state.authSession?.accessToken && !state.authSession?.isAnonymous);
-  elements.identityLogoutAction.disabled = !(authConfig.type === "login" && authConfig.logout && state.authSession?.accessToken);
+  const project = getPidLitackaProject();
+  const pidAuthConfig = getProjectAuthConfig(project);
+  const session = project ? loadSavedAuthSession(project, getPidLitackaEnvironmentId(project)) : null;
+
+  elements.identityLoginAction.disabled = !(project && pidAuthConfig.type === "login");
+  elements.identityRefreshAction.disabled = !(project && pidAuthConfig.refresh && session?.refreshToken);
+  elements.identityRenewMosAction.disabled = !(project && pidAuthConfig.sessionRenew && session?.accessToken && !session?.isAnonymous);
+  elements.identityLogoutAction.disabled = !(project && pidAuthConfig.logout && session?.accessToken);
+}
+
+async function applyIdentityProfileSelection(profileId) {
+  const project = getPidLitackaProject();
+  const profile = getPidLitackaAuthProfiles().find(item => item.id === profileId);
+
+  if (!project || !profile) {
+    return;
+  }
+
+  if (state.currentProject?.id === project.id) {
+    applyAuthProfileSelection(profile.id, { overwrite: true });
+    return;
+  }
+
+  const authConfig = getProjectAuthConfig(project);
+  const formValues = loadSavedAuthFormValues(project);
+  formValues.__selectedProfileId = profile.id;
+
+  if (!profile.isNewProfile) {
+    for (const [name, value] of Object.entries(profile.values || {})) {
+      if (value !== undefined) {
+        formValues[name] = value;
+      }
+    }
+  }
+
+  saveAuthFormValuesForProject(project, authConfig, formValues);
+}
+
+function saveAuthFormValuesForProject(project, authConfig, formValues) {
+  const persistedValues = { ...(formValues || {}) };
+
+  if (authConfig.type === "login") {
+    const nonPersisted = new Set(
+      (authConfig.login?.fields || [])
+        .filter(field => field.persist === false || field.type === "password")
+        .map(field => field.name));
+
+    for (const name of nonPersisted) {
+      delete persistedValues[name];
+    }
+
+    delete persistedValues.__profileNote;
+    delete persistedValues.__newProfileNote;
+  }
+
+  localStorage.setItem(getAuthFormStorageKey(project.id), JSON.stringify(persistedValues));
+}
+
+async function executeIdentityAuthAction(action) {
+  const project = getPidLitackaProject();
+
+  if (!project) {
+    showRedisResult("error", "PidLitacka projekt neni dostupny.", "Nelze provest prihlaseni testovaci identity.");
+    return;
+  }
+
+  if (state.currentProject?.id === project.id) {
+    if (action === "login") {
+      await executeAuthLogin();
+    } else if (action === "refresh") {
+      await executeAuthRefresh();
+    } else if (action === "mos") {
+      await executeAuthSessionRenew();
+    } else if (action === "logout") {
+      await executeAuthLogout();
+    }
+    renderRedisViewer();
+    return;
+  }
+
+  await withPidLitackaIdentityContext(async authConfig => {
+    if (action === "login") {
+      await performAuthRequest("login", getActiveLoginRequestConfig(authConfig));
+    } else if (action === "refresh") {
+      await performAuthRequest("refresh", authConfig.refresh);
+    } else if (action === "mos") {
+      const result = await renewMosSessionIfPossible();
+      if (!result.ok) {
+        throw new Error(result.message);
+      }
+    } else if (action === "logout") {
+      await executeAuthLogout();
+    }
+  });
+
+  renderRedisViewer();
+}
+
+async function withPidLitackaIdentityContext(action) {
+  const project = getPidLitackaProject();
+  const environmentId = getPidLitackaEnvironmentId(project);
+  const environment = project?.environments?.find(item => item.id === environmentId) || project?.environments?.[0] || null;
+  const previous = {
+    currentProject: state.currentProject,
+    currentEnvironmentId: state.currentEnvironmentId,
+    authSession: state.authSession,
+    authFormValues: state.authFormValues,
+    authProfileNotes: state.authProfileNotes,
+    authCustomProfiles: state.authCustomProfiles,
+    proxyTarget: state.harnessMeta?.proxyTarget || "",
+    baseUrl: elements.baseUrl.value
+  };
+
+  try {
+    state.currentProject = project;
+    state.currentEnvironmentId = environmentId;
+    state.authFormValues = loadSavedAuthFormValues(project);
+    state.authProfileNotes = loadSavedAuthProfileNotes(project);
+    state.authCustomProfiles = loadSavedAuthCustomProfiles(project);
+    applyAuthFieldDefaults(getProjectAuthConfig(project));
+    state.authSession = loadSavedAuthSession(project, environmentId);
+    elements.baseUrl.value = project.defaultBaseUrl || "/api";
+
+    if (environment?.targetBaseUrl) {
+      await updateHarnessProxyTarget(environment.targetBaseUrl);
+      await loadHarnessMeta();
+    }
+
+    return await action(getProjectAuthConfig(project));
+  } finally {
+    if (previous.proxyTarget) {
+      await updateHarnessProxyTarget(previous.proxyTarget);
+      await loadHarnessMeta();
+    }
+
+    state.currentProject = previous.currentProject;
+    state.currentEnvironmentId = previous.currentEnvironmentId;
+    state.authSession = previous.authSession;
+    state.authFormValues = previous.authFormValues;
+    state.authProfileNotes = previous.authProfileNotes;
+    state.authCustomProfiles = previous.authCustomProfiles;
+    elements.baseUrl.value = previous.baseUrl;
+    renderAuthPanel();
+    renderModeBanner();
+  }
 }
 
 function renderAuthPanelStatus() {
@@ -2329,9 +2523,9 @@ function renderIdentityProfileSelect() {
     return;
   }
 
-  const authConfig = getProjectAuthConfig();
+  const profiles = getPidLitackaAuthProfiles();
 
-  if (authConfig.type !== "login") {
+  if (profiles.length === 0) {
     elements.identityProfileSelect.innerHTML = "";
     elements.identityProfileSelect.disabled = true;
     return;
@@ -2340,7 +2534,7 @@ function renderIdentityProfileSelect() {
   elements.identityProfileSelect.disabled = false;
   elements.identityProfileSelect.innerHTML = "";
 
-  for (const profile of getAuthProfiles(authConfig)) {
+  for (const profile of profiles) {
     const option = document.createElement("option");
     option.value = profile.id;
     option.textContent = profile.custom
@@ -2349,7 +2543,7 @@ function renderIdentityProfileSelect() {
     elements.identityProfileSelect.appendChild(option);
   }
 
-  elements.identityProfileSelect.value = getSelectedAuthProfileId(authConfig);
+  elements.identityProfileSelect.value = getSelectedPidLitackaProfileId();
 }
 
 function renderIdentitySummary() {
@@ -2357,9 +2551,10 @@ function renderIdentitySummary() {
     return;
   }
 
-  const profile = getSelectedAuthProfile();
-  const session = state.authSession;
-  const tokenInfo = getAuthorizationInfo();
+  const project = getPidLitackaProject();
+  const profile = getSelectedPidLitackaProfile();
+  const session = project ? loadSavedAuthSession(project, getPidLitackaEnvironmentId(project)) : null;
+  const tokenInfo = session?.accessToken ? getJwtInfo(session.accessToken) : { valid: false, message: "Nejste prihlasen." };
   const identityId = String(session?.identityId || state.redisIdentityId || "").trim();
   const redisSession = state.redisLastSession;
   const hasMosSession = isUsableRedisSession(redisSession);
