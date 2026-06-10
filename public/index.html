@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Klik&aacute;tko</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=20260610-user-device-profiles">
+  <link rel="stylesheet" href="/styles.css?v=20260610-user-sections">
 </head>
 <body>
   <main class="shell">
@@ -138,32 +138,63 @@
               <span id="redisStatus">Nep&#345;ipojeno</span>
             </div>
             <p class="identity-panel-intro">Stav testovac&iacute; identity: BE PidLitacka JWT, MOS SessionID a vazba na Redis.</p>
-            <div id="identitySummary" class="identity-summary"></div>
-            <label class="base-url identity-profile-select">
-              Testovac&iacute; &uacute;&#269;et
-              <select id="identityProfileSelect"></select>
-            </label>
-            <div id="identityProfileFields" class="identity-profile-fields"></div>
-            <div class="identity-actions">
-              <button id="identityLoginAction" type="button">P&#345;ihl&aacute;sit do BE</button>
-              <button id="identityRefreshAction" type="button">Obnovit JWT</button>
-              <button id="identityRenewMosAction" type="button">Obnovit MOS session</button>
-              <button id="identityLogoutAction" type="button">Odhl&aacute;sit</button>
+            <div class="identity-section">
+              <div class="identity-section-head">
+                <strong>Stav</strong>
+                <span>aktu&aacute;ln&iacute; kontext</span>
+              </div>
+              <div id="identitySummary" class="identity-summary"></div>
             </div>
-            <label class="base-url">
-              Redis bridge pro MOS session
-              <input id="redisBridgeUrl" value="/__redis" spellcheck="false">
-            </label>
-            <label class="base-url">
-              IdentityId
-              <input id="redisIdentityId" placeholder="identityId z aktu&aacute;ln&iacute; BE session" spellcheck="false">
-            </label>
-            <div class="batch-runner-actions">
-              <button id="redisLoadSession" type="button">Na&#269;&iacute;st MOS session</button>
-              <button id="redisUseSession" type="button" disabled>Pou&#382;&iacute;t pro MOS</button>
-              <button id="redisScanSessions" type="button">Naj&iacute;t session v Redis</button>
+            <div class="identity-section">
+              <div class="identity-section-head">
+                <strong>&Uacute;&#269;et</strong>
+                <span>username a heslo</span>
+              </div>
+              <label class="base-url identity-profile-select">
+                Testovac&iacute; &uacute;&#269;et
+                <select id="identityProfileSelect"></select>
+              </label>
+              <div id="identityAccountFields" class="identity-profile-fields"></div>
             </div>
-            <div id="redisResult" class="redis-result empty-state">Zadejte identityId nebo pou&#382;ijte aktu&aacute;ln&#283; p&#345;ihl&aacute;&scaron;en&eacute;ho u&#382;ivatele.</div>
+            <div class="identity-section">
+              <div class="identity-section-head">
+                <strong>Za&#345;&iacute;zen&iacute;</strong>
+                <span>device kontext</span>
+              </div>
+              <div id="identityDeviceFields" class="identity-profile-fields"></div>
+            </div>
+            <div class="identity-section">
+              <div class="identity-section-head">
+                <strong>BE PidLitacka</strong>
+                <span>JWT a MOS session</span>
+              </div>
+              <div class="identity-actions">
+                <button id="identityLoginAction" type="button">P&#345;ihl&aacute;sit do BE</button>
+                <button id="identityRefreshAction" type="button">Obnovit JWT</button>
+                <button id="identityRenewMosAction" type="button">Obnovit MOS session</button>
+                <button id="identityLogoutAction" type="button">Odhl&aacute;sit</button>
+              </div>
+            </div>
+            <div class="identity-section">
+              <div class="identity-section-head">
+                <strong>MOS / Redis</strong>
+                <span>SessionID bridge</span>
+              </div>
+              <label class="base-url">
+                Redis bridge pro MOS session
+                <input id="redisBridgeUrl" value="/__redis" spellcheck="false">
+              </label>
+              <label class="base-url">
+                IdentityId
+                <input id="redisIdentityId" placeholder="identityId z aktu&aacute;ln&iacute; BE session" spellcheck="false">
+              </label>
+              <div class="batch-runner-actions">
+                <button id="redisLoadSession" type="button">Na&#269;&iacute;st MOS session</button>
+                <button id="redisUseSession" type="button" disabled>Pou&#382;&iacute;t pro MOS</button>
+                <button id="redisScanSessions" type="button">Naj&iacute;t session v Redis</button>
+              </div>
+              <div id="redisResult" class="redis-result empty-state">Zadejte identityId nebo pou&#382;ijte aktu&aacute;ln&#283; p&#345;ihl&aacute;&scaron;en&eacute;ho u&#382;ivatele.</div>
+            </div>
           </div>
         </div>
       </section>
@@ -254,6 +285,6 @@
   </main>
 
   <script src="/vendor/html2canvas.min.js?v=1.4.1"></script>
-  <script src="/app.js?v=20260610-redis-same-origin-node" type="module"></script>
+  <script src="/app.js?v=20260610-user-sections" type="module"></script>
 </body>
 </html>

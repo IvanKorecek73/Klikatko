@@ -53,6 +53,16 @@ const state = {
 
 const NEW_AUTH_PROFILE_ID = "__new_auth_profile__";
 const LAST_SELECTION_STORAGE_KEY = "demoHarness.lastSelection.v1";
+const IDENTITY_DEVICE_FIELD_NAMES = new Set([
+  "deviceId",
+  "deviceName",
+  "platform",
+  "osVersion",
+  "appVersion",
+  "model",
+  "deviceLanguage",
+  "deviceMessagingToken"
+]);
 
 const elements = {
   scenarioList: document.querySelector("#scenarioList"),
@@ -135,7 +145,8 @@ const elements = {
   redisStatus: document.querySelector("#redisStatus"),
   identitySummary: document.querySelector("#identitySummary"),
   identityProfileSelect: document.querySelector("#identityProfileSelect"),
-  identityProfileFields: document.querySelector("#identityProfileFields"),
+  identityAccountFields: document.querySelector("#identityAccountFields"),
+  identityDeviceFields: document.querySelector("#identityDeviceFields"),
   identityLoginAction: document.querySelector("#identityLoginAction"),
   identityRefreshAction: document.querySelector("#identityRefreshAction"),
   identityRenewMosAction: document.querySelector("#identityRenewMosAction"),
@@ -275,7 +286,8 @@ function bindEventHandlers() {
     renderRedisViewer();
     renderModeBanner();
   });
-  elements.identityProfileFields.addEventListener("input", handleIdentityProfileFieldInput);
+  elements.identityAccountFields.addEventListener("input", handleIdentityProfileFieldInput);
+  elements.identityDeviceFields.addEventListener("input", handleIdentityProfileFieldInput);
   elements.identityLoginAction.addEventListener("click", () => executeIdentityAuthAction("login"));
   elements.identityRefreshAction.addEventListener("click", () => executeIdentityAuthAction("refresh"));
   elements.identityRenewMosAction.addEventListener("click", () => executeIdentityAuthAction("mos"));
@@ -2667,7 +2679,7 @@ function renderIdentityProfileSelect() {
 }
 
 function renderIdentityProfileFields() {
-  if (!elements.identityProfileFields) {
+  if (!elements.identityAccountFields || !elements.identityDeviceFields) {
     return;
   }
 
@@ -2676,7 +2688,8 @@ function renderIdentityProfileFields() {
   const profile = getSelectedPidLitackaProfile();
   const values = getPidLitackaIdentityValues();
 
-  elements.identityProfileFields.innerHTML = "";
+  elements.identityAccountFields.innerHTML = "";
+  elements.identityDeviceFields.innerHTML = "";
 
   if (!project || authConfig.type !== "login" || !profile) {
     return;
@@ -2690,11 +2703,14 @@ function renderIdentityProfileFields() {
       label: "Poznamka",
       placeholder: "Např. nový účet pro test přesunu kupónů"
     }, values);
-    elements.identityProfileFields.appendChild(noteField);
+    elements.identityAccountFields.appendChild(noteField);
   }
 
   for (const field of fields) {
-    elements.identityProfileFields.appendChild(createIdentityProfileField(field, values));
+    const target = IDENTITY_DEVICE_FIELD_NAMES.has(field.name)
+      ? elements.identityDeviceFields
+      : elements.identityAccountFields;
+    target.appendChild(createIdentityProfileField(field, values));
   }
 }
 
