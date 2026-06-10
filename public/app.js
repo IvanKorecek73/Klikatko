@@ -2816,15 +2816,29 @@ function renderIdentityProfileSelect() {
     const option = document.createElement("option");
     option.value = profile.id;
     const label = getIdentityProfileLabel(profile, profile.values || {});
-    option.textContent = profile.custom
-      ? `${label} (ulozeny)`
-      : label;
+    option.textContent = getIdentityProfileOptionLabel(profile, label);
     elements.identityProfileSelect.appendChild(option);
   }
 
   elements.identityProfileSelect.value = getSelectedPidLitackaProfileId();
   renderIdentityProfileFields();
   renderIdentityProfileActions();
+}
+
+function getIdentityProfileOptionLabel(profile, label) {
+  if (profile?.isNewProfile) {
+    return label;
+  }
+
+  if (profile?.custom) {
+    return `${label} (ulozeny)`;
+  }
+
+  if (profile?.authRequest === "anonymous" || profile?.noteDisabled) {
+    return `${label} (anonymni)`;
+  }
+
+  return `${label} (vestaveny)`;
 }
 
 function renderIdentityProfileActions() {
