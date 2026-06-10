@@ -104,6 +104,41 @@ select {
   color: var(--ink);
 }
 
+#redisTab {
+  position: relative;
+  padding-right: 28px;
+}
+
+#redisTab::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #9aa6b2;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.12);
+  transform: translateY(-50%);
+}
+
+#redisTab.identity-tab-status-ok::after {
+  background: #148a4a;
+}
+
+#redisTab.identity-tab-status-warn::after {
+  background: #d18a00;
+}
+
+#redisTab.identity-tab-status-error::after {
+  background: #c7352d;
+}
+
+#redisTab.identity-tab-status-neutral::after {
+  background: #9aa6b2;
+}
+
 .left-tabs button.active,
 .right-tabs button.active {
   border-color: var(--accent);

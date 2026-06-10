@@ -187,6 +187,7 @@ async function init() {
       suppressLog: true
     });
     renderRedisViewer();
+    renderIdentityTabStatus();
   } catch (error) {
     const recovered = await recoverStartupFromStoredSelection(error);
     if (!recovered) {
@@ -207,6 +208,7 @@ async function recoverStartupFromStoredSelection(originalError) {
       suppressLog: true
     });
     renderRedisViewer();
+    renderIdentityTabStatus();
     showBatchRunSummary("warn", "Klikatko ignorovalo ulozeny posledni vyber.", [
       originalError instanceof Error ? originalError.message : String(originalError),
       "Aplikace byla nactena z vychoziho projektu."
@@ -1609,6 +1611,7 @@ function renderAuthPanelStatus() {
   elements.authJwtDetails.textContent = describeAuthorizationInfo(info);
   elements.authSummaryStatus.textContent = getAuthorizationSummary(info);
   elements.authSummaryStatus.className = `auth-summary-status ${info.level}`;
+  renderIdentityTabStatus();
 }
 
 function getAuthorizationSummary(info) {
@@ -2709,6 +2712,7 @@ function activateLeftTab(tab) {
   elements.formsPane.classList.toggle("active", showForms);
   elements.workflowsPane.classList.toggle("active", showWorkflows);
   elements.redisPane.classList.toggle("active", showRedis);
+  renderIdentityTabStatus();
 }
 
 function activateRightTab(tab) {
@@ -3154,6 +3158,116 @@ function renderIdentitySummary() {
       <code>${escapeHtml(mosSessionId ? maskSessionId(mosSessionId) : "-")}</code>
     </div>
   `;
+  renderIdentityTabStatus();
+}
+
+function renderIdentityTabStatus() {
+  if (!elements.redisTab) {
+    return;
+  }
+
+  const status = getIdentityTabStatus();
+  elements.redisTab.classList.remove(
+    "identity-tab-status-neutral",
+    "identity-tab-status-ok",
+    "identity-tab-status-warn",
+    "identity-tab-status-error"
+  );
+  elements.redisTab.classList.add(`identity-tab-status-${status.level}`);
+  elements.redisTab.title = status.title;
+  elements.redisTab.setAttribute("aria-label", `Uživatel - ${status.title}`);
+}
+
+function getIdentityTabStatus() {
+  const project = getPidLitackaProject();
+
+  if (!project) {
+    return {
+      level: "neutral",
+      title: "PidLitacka projekt není dostupný."
+    };
+  }
+
+  const profile = getSelectedPidLitackaProfile();
+  const values = getPidLitackaIdentityValues();
+  const selectedEmail = String(values.email || "").trim();
+  const session = loadSavedAuthSession(project, getPidLitackaEnvironmentId(project));
+
+  if (!session?.accessToken) {
+    return {
+      level: "neutral",
+      title: "Nepřihlášeno."
+    };
+  }
+
+  const tokenInfo = getJwtInfo(session.accessToken);
+
+  if (!tokenInfo.valid) {
+    return {
+      level: "error",
+      title: tokenInfo.expired ? "Přihlášení expirovalo." : "Přihlášení není platné."
+    };
+  }
+
+  if (!doesSessionMatchSelectedIdentity(session, selectedEmail)) {
+    return {
+      level: "error",
+      title: `BE JWT patří jinému účtu: ${session.email || "neznámý účet"}.`
+    };
+  }
+
+  if (session.isAnonymous || profile?.authRequest === "anonymous") {
+    return {
+      level: "warn",
+      title: "Aktivní anonymní session."
+    };
+  }
+
+  const identityId = String(session.identityId || state.redisIdentityId || "").trim();
+
+  if (!identityId) {
+    return {
+      level: "warn",
+      title: "Přihlášeno, ale chybí identityId pro kontrolu MOS session."
+    };
+  }
+
+  if (state.redisAutoSessionLoading && state.redisAutoSessionIdentityId === identityId) {
+    return {
+      level: "warn",
+      title: "Přihlášeno, MOS session se ověřuje v Redis."
+    };
+  }
+
+  const loadedRedisIdentityId = getIdentityIdFromRedisSession(state.redisLastSession);
+  const sessionMatchesIdentity = Boolean(state.redisLastSession)
+    && (!loadedRedisIdentityId || loadedRedisIdentityId.toLowerCase() === identityId.toLowerCase());
+
+  if (sessionMatchesIdentity) {
+    if (isUsableRedisSession(state.redisLastSession)) {
+      return {
+        level: "ok",
+        title: "Přihlášeno, BE JWT i MOS SessionID jsou použitelné."
+      };
+    }
+
+    return {
+      level: "error",
+      title: `Přihlášeno, ale MOS SessionID není použitelná (${getRedisSessionProblem(state.redisLastSession) || "nepoužitelné"}).`
+    };
+  }
+
+  if (state.redisLastSession && loadedRedisIdentityId && loadedRedisIdentityId.toLowerCase() !== identityId.toLowerCase()) {
+    return {
+      level: "error",
+      title: `Přihlášeno, ale načtená MOS session patří jiné identityId: ${loadedRedisIdentityId}.`
+    };
+  }
+
+  return {
+    level: "warn",
+    title: "Přihlášeno, MOS session zatím není ověřená."
+  };
 }
 
 function doesSessionMatchSelectedIdentity(session, selectedEmail) {
