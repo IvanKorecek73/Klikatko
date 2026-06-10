@@ -45,6 +45,8 @@ const state = {
   redisLastSession: null,
   redisHealth: null,
   redisHealthCheckRunning: false,
+  redisAutoSessionIdentityId: "",
+  redisAutoSessionLoading: false,
   displayedResult: null,
   activeSelection: null,
   resultCountdownTimer: null,
@@ -1252,6 +1254,7 @@ async function executeIdentityAuthAction(action) {
     } else if (action === "logout") {
       await executeAuthLogout();
     }
+    state.redisAutoSessionIdentityId = "";
     renderRedisViewer();
     return;
   }
@@ -1271,6 +1274,7 @@ async function executeIdentityAuthAction(action) {
     }
   });
 
+  state.redisAutoSessionIdentityId = "";
   renderRedisViewer();
 }
 
@@ -2646,6 +2650,7 @@ function renderRedisViewer() {
   renderIdentitySummary();
   renderRedisHealthStatus();
   checkRedisHealth();
+  refreshRedisSessionForCurrentIdentity();
 }
 
 function renderIdentityProfileSelect() {
@@ -2755,7 +2760,10 @@ function renderIdentitySummary() {
   const session = project ? loadSavedAuthSession(project, getPidLitackaEnvironmentId(project)) : null;
   const tokenInfo = session?.accessToken ? getJwtInfo(session.accessToken) : { valid: false, message: "Nejste prihlasen." };
   const identityId = String(session?.identityId || state.redisIdentityId || "").trim();
-  const redisSession = state.redisLastSession;
+  const loadedRedisIdentityId = getIdentityIdFromRedisSession(state.redisLastSession);
+  const redisSessionMatchesIdentity = Boolean(state.redisLastSession)
+    && (!identityId || !loadedRedisIdentityId || loadedRedisIdentityId.toLowerCase() === identityId.toLowerCase());
+  const redisSession = redisSessionMatchesIdentity ? state.redisLastSession : null;
   const hasMosSession = isUsableRedisSession(redisSession);
   const mosSessionId = String(redisSession?.sessionId || redisSession?.payload?.sessionId || redisSession?.payload?.SessionId || "").trim();
   const ttl = Number(redisSession?.ttlSeconds);
@@ -2769,7 +2777,7 @@ function renderIdentitySummary() {
     : tokenInfo.message || "Neprihlasen";
   const mosState = hasMosSession
     ? `MOS SessionID aktivni, TTL ${ttlText}`
-    : `MOS SessionID chybi${redisSession ? ` (${getRedisSessionProblem(redisSession) || "nepouzitelne"})` : ""}`;
+    : getIdentityMosStateText(identityId, redisSession, loadedRedisIdentityId);
 
   elements.identitySummary.innerHTML = `
     <div class="identity-summary-row">
@@ -2805,6 +2813,47 @@ function renderIdentitySummary() {
       <code>${escapeHtml(mosSessionId ? maskSessionId(mosSessionId) : "-")}</code>
     </div>
   `;
+}
+
+function getIdentityMosStateText(identityId, redisSession, loadedRedisIdentityId) {
+  if (state.redisAutoSessionLoading && identityId) {
+    return "MOS SessionID overuji v Redis...";
+  }
+
+  if (state.redisLastSession && loadedRedisIdentityId && identityId && loadedRedisIdentityId.toLowerCase() !== identityId.toLowerCase()) {
+    return `MOS SessionID neovereno pro aktualni ucet (naposledy nacteno pro ${loadedRedisIdentityId})`;
+  }
+
+  return `MOS SessionID chybi${redisSession ? ` (${getRedisSessionProblem(redisSession) || "nepouzitelne"})` : ""}`;
+}
+
+function getIdentityIdFromRedisSession(session) {
+  return getIdentityIdFromRedisKey(session?.key || "");
+}
+
+function refreshRedisSessionForCurrentIdentity() {
+  const identityId = String(state.redisIdentityId || getCurrentPidLitackaIdentityId() || "").trim();
+
+  if (!identityId || state.redisIdentityManual || state.redisAutoSessionLoading) {
+    return;
+  }
+
+  const loadedIdentityId = getIdentityIdFromRedisSession(state.redisLastSession);
+  if (loadedIdentityId && loadedIdentityId.toLowerCase() === identityId.toLowerCase() && state.redisAutoSessionIdentityId === identityId) {
+    return;
+  }
+
+  state.redisAutoSessionIdentityId = identityId;
+  state.redisAutoSessionLoading = true;
+  renderIdentitySummary();
+
+  loadRedisSessionFromViewer({
+    quiet: true,
+    note: "MOS session automaticky nactena pro aktualni identitu."
+  }).finally(() => {
+    state.redisAutoSessionLoading = false;
+    renderIdentitySummary();
+  });
 }
 
 function renderRedisHealthStatus() {
