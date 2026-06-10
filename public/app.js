@@ -2426,7 +2426,7 @@ async function scanRedisSessionsFromViewer() {
       });
     });
     elements.redisResult.querySelectorAll("[data-auth-profile-id]").forEach(button => {
-      button.addEventListener("click", () => {
+      button.addEventListener("click", async () => {
         const profileId = button.dataset.authProfileId || "";
         const identityId = button.dataset.identityId || "";
         const key = button.dataset.redisProfileKey || "";
@@ -2435,10 +2435,17 @@ async function scanRedisSessionsFromViewer() {
         applyAuthProfileSelection(profileId, { overwrite: true });
         renderAuthPanel();
         renderRedisViewer();
-        loadRedisSessionFromViewer({
+        await loadRedisSessionFromViewer({
           quiet: true,
-          note: `Zvolen ulozeny ucet pro ${key}. Pro BE scenare se prihlaste tlacitkem Prihlasit.`
+          note: `Zvolen ulozeny ucet pro ${key}.`
         });
+
+        try {
+          await executeAuthLogin();
+          showRedisResult("ok", "Ucet zvolen a prihlasen", `Profil byl zvolen podle ${key}. BE JWT je obnovene, MOS session se pouzije z Redis.`);
+        } catch (error) {
+          showRedisResult("error", "Ucet zvolen, prihlaseni selhalo", error instanceof Error ? error.message : String(error));
+        }
       });
     });
   } catch (error) {
@@ -2473,7 +2480,7 @@ function renderRedisSessionSearchItem(item) {
         <span>SessionID ${escapeHtml(sessionId || "-")}</span>
       </div>
       ${profile
-        ? `<button class="redis-profile-action" type="button" data-auth-profile-id="${escapeHtml(profile.id)}" data-identity-id="${escapeHtml(item.identityId)}" data-redis-profile-key="${escapeHtml(item.key)}">Zvolit ucet</button>`
+        ? `<button class="redis-profile-action" type="button" data-auth-profile-id="${escapeHtml(profile.id)}" data-identity-id="${escapeHtml(item.identityId)}" data-redis-profile-key="${escapeHtml(item.key)}">Zvolit a prihlasit</button>`
         : `<div class="redis-profile-missing">Neznamy ucet v Klikatku. Pouzitelne jen pro prime MOS volani.</div>`}
     </div>
   `;
@@ -4144,6 +4151,21 @@ async function runCurrentStep() {
       reason: "MissingScenarioContext"
     });
     showResult("error", message);
+    renderModeBanner();
+    return;
+  }
+
+  const mosSessionCheck = validateMosSessionContextForStep(step);
+  if (!mosSessionCheck.ok) {
+    state.lastStepResult = { level: "error", messages: [mosSessionCheck.message] };
+    addLog("error", `${step.title} blocked`, {
+      error: mosSessionCheck.message,
+      reason: "InvalidMosSessionContext",
+      contextKeys: mosSessionCheck.keys
+    });
+    showResult("error", mosSessionCheck.message);
+    elements.nextStep.disabled = true;
+    elements.nextStep.classList.remove("ready");
     renderModeBanner();
     return;
   }
@@ -6226,6 +6248,47 @@ function buildRequest(step) {
     visibleHeaders,
     visibleBody
   };
+}
+
+function validateMosSessionContextForStep(step) {
+  if (!step?.request || requiresAnonymousAuthForStep(step)) {
+    return { ok: true };
+  }
+
+  const keys = getMosSessionContextKeysForStep(step);
+  const invalidKeys = keys.filter(key => {
+    const value = String(state.context?.[key] ?? state.workflowContext?.[key] ?? "").trim();
+    return !value || isEmptyGuid(value);
+  });
+
+  if (invalidKeys.length === 0) {
+    return { ok: true, keys };
+  }
+
+  return {
+    ok: false,
+    keys: invalidKeys,
+    message: `Krok vyzaduje platne MOS SessionID, ale ${invalidKeys.join(", ")} je prazdne nebo nulove. Nactete/obnovte MOS session z Redis a krok zopakujte.`
+  };
+}
+
+function getMosSessionContextKeysForStep(step) {
+  const requestText = JSON.stringify(step?.request || {});
+  const keys = new Set();
+  const pattern = /\{\{\s*context\.([a-zA-Z0-9_]*SessionI?D[a-zA-Z0-9_]*)\s*\}\}/gi;
+  let match;
+
+  while ((match = pattern.exec(requestText)) !== null) {
+    keys.add(match[1]);
+  }
+
+  for (const key of step?.requiresContext || []) {
+    if (/sessioni?d/i.test(key)) {
+      keys.add(key);
+    }
+  }
+
+  return [...keys];
 }
 
 function buildMultipartBody(step) {
