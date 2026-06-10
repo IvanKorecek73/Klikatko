@@ -2801,6 +2801,20 @@ function renderIdentityProfileActions() {
   const canSave = Boolean(String(values.email || "").trim() && String(values.password || "").trim());
   elements.identitySaveProfileAction.disabled = !canSave;
   elements.identityRemoveProfileAction.disabled = !profile?.custom;
+
+  if (profile?.custom) {
+    elements.identitySaveProfileAction.textContent = "Aktualizovat ulozeny";
+    elements.identitySaveProfileAction.title = "Aktualizuje lokalne ulozeny ucet v Klikatku.";
+    elements.identityRemoveProfileAction.title = "Odebere jen lokalni ulozeny ucet v Klikatku. Ucet v BE/MOS nemaze.";
+  } else if (profile?.isNewProfile) {
+    elements.identitySaveProfileAction.textContent = "Ulozit ucet";
+    elements.identitySaveProfileAction.title = "Ulozi novy lokalni ucet do rychleho vyberu Klikatka.";
+    elements.identityRemoveProfileAction.title = "Novy ucet zatim neni ulozeny.";
+  } else {
+    elements.identitySaveProfileAction.textContent = "Ulozit kopii";
+    elements.identitySaveProfileAction.title = "Ulozi vlastni lokalni kopii vestaveneho uctu.";
+    elements.identityRemoveProfileAction.title = "Vestaveny ucet z konfigurace nelze odebrat. Odebrat lze jen lokalne ulozenou kopii.";
+  }
 }
 
 function renderIdentityProfileFields() {
