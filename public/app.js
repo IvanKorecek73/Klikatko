@@ -1360,6 +1360,7 @@ function resetAuthState() {
 }
 
 async function performAuthRequest(kind, config) {
+  syncAuthFormValuesFromDom();
   const request = buildAuthRequest(config);
   const startedAt = performance.now();
 
