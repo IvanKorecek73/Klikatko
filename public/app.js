@@ -2946,7 +2946,7 @@ async function scanRedisSessionsFromViewer() {
         const key = button.dataset.redisProfileKey || "";
         state.redisIdentityId = identityId;
         state.redisIdentityManual = true;
-        applyAuthProfileSelection(profileId, { overwrite: true });
+        await applyIdentityProfileSelection(profileId);
         renderAuthPanel();
         renderRedisViewer();
         await loadRedisSessionFromViewer({
@@ -2955,7 +2955,7 @@ async function scanRedisSessionsFromViewer() {
         });
 
         try {
-          await executeAuthLogin();
+          await executeIdentityAuthAction("login");
           showRedisResult("ok", "Ucet zvolen a prihlasen", `Profil byl zvolen podle ${key}. BE JWT je obnovene, MOS session se pouzije z Redis.`);
         } catch (error) {
           showRedisResult("error", "Ucet zvolen, prihlaseni selhalo", error instanceof Error ? error.message : String(error));
