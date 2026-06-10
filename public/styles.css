@@ -1909,7 +1909,7 @@ button:disabled {
 .log-head {
   flex: none;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   gap: 12px;
   margin-bottom: 16px;
@@ -1919,6 +1919,7 @@ button:disabled {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .log-actions button {
