@@ -3043,7 +3043,10 @@ function getRedisSessionProblem(session) {
 
 function getRedisBridgeBaseUrls() {
   const configured = getRedisBridgeBaseUrl();
-  return [...new Set([configured, "/__redis", "http://127.0.0.1:5097"].filter(Boolean))];
+  const localHarness = window.location?.port
+    ? `http://127.0.0.1:${window.location.port}/__redis`
+    : "";
+  return [...new Set([configured, "/__redis", localHarness, "http://127.0.0.1:5097"].filter(Boolean))];
 }
 
 async function fetchRedisBridgeJson(path) {
@@ -3082,7 +3085,12 @@ async function fetchRedisBridgeJson(path) {
     }
   }
 
-  throw new Error(errors.join("\n"));
+  const detail = errors.join("\n");
+  const hasStaticNotFound = errors.some(error => error.includes("HTTP 404") && error.includes("Not found"));
+  const hint = hasStaticNotFound
+    ? "\nPravdepodobne bezi stary/staticky server Klikatka nebo soucasne bezi dve instance na localhost/127.0.0.1. Spustte Klikatko pres Start-Klikatko.cmd a otevirejte http://127.0.0.1:5096."
+    : "";
+  throw new Error(`${detail}${hint}`);
 }
 
 function renderRedisSession(session, note = "") {

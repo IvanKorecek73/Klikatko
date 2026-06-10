@@ -42,7 +42,7 @@ echo Prostredi lze potom prepinat primo v UI.
 echo.
 
 start "Klikatko Redis Bridge" /min "%NODE_EXE%" tools\redis-bridge\src\server.js
-start "" "http://localhost:%PORT%"
+start "" "http://127.0.0.1:%PORT%"
 "%NODE_EXE%" server.js
 
 endlocal

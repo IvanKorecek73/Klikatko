@@ -5,6 +5,7 @@ const path = require("path");
 const zlib = require("zlib");
 const { handleRedisBridgeRequest } = require("./tools/redis-bridge/src/server");
 
+const host = process.env.HARNESS_HOST || "127.0.0.1";
 const port = Number(process.env.PORT || 5096);
 let targetBaseUrl = process.env.TICKET_SERVICE_BASE_URL || "http://localhost:5087";
 const proxyTimeoutMs = Number(process.env.HARNESS_PROXY_TIMEOUT_MS || 30000);
@@ -42,8 +43,8 @@ const server = http.createServer((request, response) => {
   serveStatic(request, response);
 });
 
-server.listen(port, () => {
-  console.log(`Klikátko: http://localhost:${port}`);
+server.listen(port, host, () => {
+  console.log(`Klikátko: http://${host}:${port}`);
   console.log(`Proxy target: ${targetBaseUrl}`);
 });
 
@@ -56,6 +57,7 @@ function serveMeta(response) {
     "Access-Control-Allow-Origin": "*"
   });
   response.end(JSON.stringify({
+    host,
     port,
     proxyBasePath: "/api",
     proxyTarget: targetBaseUrl

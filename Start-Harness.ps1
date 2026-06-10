@@ -682,7 +682,7 @@ try {
     Write-Host "Stop with Ctrl+C."
 
     if ($OpenBrowser) {
-        Start-Process "http://localhost:$Port"
+        Start-Process "http://127.0.0.1:$Port"
     }
 
     while ($true) {
