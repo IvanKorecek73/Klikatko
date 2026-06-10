@@ -2839,7 +2839,8 @@ function refreshRedisSessionForCurrentIdentity() {
   }
 
   const loadedIdentityId = getIdentityIdFromRedisSession(state.redisLastSession);
-  if (loadedIdentityId && loadedIdentityId.toLowerCase() === identityId.toLowerCase() && state.redisAutoSessionIdentityId === identityId) {
+  if (state.redisAutoSessionIdentityId === identityId
+    && (!state.redisLastSession || !loadedIdentityId || loadedIdentityId.toLowerCase() === identityId.toLowerCase())) {
     return;
   }
 
