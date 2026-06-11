@@ -731,6 +731,12 @@ function getAuthFormStorageKey(projectId) {
   return `demoHarness.authForm.${projectId}`;
 }
 
+function getSharedApiKeyStorageKey(authConfig) {
+  const headerName = authConfig?.apiKeyHeader || "apiKey";
+  const placement = authConfig?.apiKeyInHeader === false ? "body" : "header";
+  return `demoHarness.sharedApiKey.${placement}.${headerName}`;
+}
+
 function getAuthProfileNotesStorageKey(projectId) {
   return `demoHarness.authProfileNotes.${projectId}`;
 }
@@ -970,10 +976,63 @@ function loadSavedAuthFormValues(project) {
   }
 
   try {
-    return JSON.parse(localStorage.getItem(getAuthFormStorageKey(project.id)) || "{}");
+    const values = JSON.parse(localStorage.getItem(getAuthFormStorageKey(project.id)) || "{}");
+    const authConfig = getProjectAuthConfig(project);
+
+    if (authConfig.type === "apiKey" && !values.apiKey) {
+      const sharedApiKey = loadSharedApiKey(project, authConfig);
+
+      if (sharedApiKey) {
+        values.apiKey = sharedApiKey;
+      }
+    }
+
+    return values;
   } catch {
     return {};
   }
+}
+
+function loadSharedApiKey(project, authConfig) {
+  const sharedKey = localStorage.getItem(getSharedApiKeyStorageKey(authConfig));
+
+  if (sharedKey) {
+    return sharedKey;
+  }
+
+  for (const candidate of state.projectIndex?.projects || []) {
+    if (candidate.id === project?.id) {
+      continue;
+    }
+
+    const candidateAuth = getProjectAuthConfig(candidate);
+
+    if (!isCompatibleApiKeyAuth(authConfig, candidateAuth)) {
+      continue;
+    }
+
+    try {
+      const values = JSON.parse(localStorage.getItem(getAuthFormStorageKey(candidate.id)) || "{}");
+
+      if (values.apiKey) {
+        localStorage.setItem(getSharedApiKeyStorageKey(authConfig), values.apiKey);
+        return values.apiKey;
+      }
+    } catch {
+      // Ignore malformed legacy auth storage and keep looking.
+    }
+  }
+
+  return "";
+}
+
+function isCompatibleApiKeyAuth(left, right) {
+  if (left?.type !== "apiKey" || right?.type !== "apiKey") {
+    return false;
+  }
+
+  return (left.apiKeyHeader || "apiKey") === (right.apiKeyHeader || "apiKey")
+    && (left.apiKeyInHeader !== false) === (right.apiKeyInHeader !== false);
 }
 
 function loadSavedAuthProfileNotes(project) {
@@ -1026,6 +1085,10 @@ function saveAuthFormValues() {
   localStorage.setItem(
     getAuthFormStorageKey(state.currentProject.id),
     JSON.stringify(persistedValues));
+
+  if (authConfig.type === "apiKey" && persistedValues.apiKey) {
+    localStorage.setItem(getSharedApiKeyStorageKey(authConfig), persistedValues.apiKey);
+  }
 
   if (authConfig.type === "jwt") {
     localStorage.setItem(getAuthTokenStorageKey(state.currentProject.id), state.authFormValues.jwtToken || "");
@@ -1332,6 +1395,10 @@ function saveAuthFormValuesForProject(project, authConfig, formValues) {
   }
 
   localStorage.setItem(getAuthFormStorageKey(project.id), JSON.stringify(persistedValues));
+
+  if (authConfig.type === "apiKey" && persistedValues.apiKey) {
+    localStorage.setItem(getSharedApiKeyStorageKey(authConfig), persistedValues.apiKey);
+  }
 }
 
 function saveIdentityFormValues() {
