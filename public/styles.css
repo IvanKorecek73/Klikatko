@@ -76,10 +76,26 @@ select {
 .scenario-panel.identity-tab-active > .advanced-settings,
 .scenario-panel.workflow-tab-active > .project-control,
 .scenario-panel.workflow-tab-active > .pack-control,
-.scenario-panel.workflow-tab-active > .environment-control,
 .scenario-panel.workflow-tab-active > .target-info,
 .scenario-panel.workflow-tab-active > .advanced-settings {
   display: none;
+}
+
+.environment-control select,
+.workflow-profile-select select {
+  display: none;
+}
+
+.environment-readonly {
+  display: block;
+  width: 100%;
+  min-height: 35px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--ink);
+  white-space: normal;
 }
 
 .right-tabs {
