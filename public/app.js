@@ -162,6 +162,7 @@ const elements = {
   redisLoadSession: document.querySelector("#redisLoadSession"),
   redisUseSession: document.querySelector("#redisUseSession"),
   redisScanSessions: document.querySelector("#redisScanSessions"),
+  coreMosServiceKey: document.querySelector("#coreMosServiceKey"),
   redisResult: document.querySelector("#redisResult"),
   testerTab: document.querySelector("#testerTab"),
   logTab: document.querySelector("#logTab"),
@@ -317,6 +318,11 @@ function bindEventHandlers() {
   elements.redisIdentityId.addEventListener("input", event => {
     state.redisIdentityId = event.target.value.trim();
     state.redisIdentityManual = true;
+  });
+  elements.coreMosServiceKey?.addEventListener("input", event => {
+    saveCoreMosServiceKey(event.target.value.trim());
+    renderModeBanner();
+    updateIdentityTabStatus();
   });
   elements.redisLoadSession.addEventListener("click", loadRedisSessionFromViewer);
   elements.redisUseSession.addEventListener("click", useRedisSessionFromViewer);
@@ -976,7 +982,7 @@ function loadSavedAuthFormValues(project) {
   }
 
   try {
-    const values = JSON.parse(localStorage.getItem(getAuthFormStorageKey(project.id)) || "{}");
+    const values = loadRawAuthFormValues(project);
     const authConfig = getProjectAuthConfig(project);
 
     if (authConfig.type === "apiKey" && !values.apiKey) {
@@ -991,6 +997,14 @@ function loadSavedAuthFormValues(project) {
   } catch {
     return {};
   }
+}
+
+function loadRawAuthFormValues(project) {
+  if (!project?.id) {
+    return {};
+  }
+
+  return JSON.parse(localStorage.getItem(getAuthFormStorageKey(project.id)) || "{}");
 }
 
 function loadSharedApiKey(project, authConfig) {
@@ -1024,6 +1038,69 @@ function loadSharedApiKey(project, authConfig) {
   }
 
   return "";
+}
+
+function getCoreMosApiKeyProject() {
+  return (state.projectIndex?.projects || []).find(project => {
+    const authConfig = getProjectAuthConfig(project);
+    return authConfig.type === "apiKey"
+      && authConfig.apiKeyHeader === "X-Klikatko-ServiceKey"
+      && authConfig.apiKeyInHeader === false;
+  }) || null;
+}
+
+function getCoreMosServiceKey() {
+  const project = getCoreMosApiKeyProject();
+
+  if (!project) {
+    return "";
+  }
+
+  const authConfig = getProjectAuthConfig(project);
+  return loadSharedApiKey(project, authConfig);
+}
+
+function saveCoreMosServiceKey(value) {
+  const project = getCoreMosApiKeyProject();
+
+  if (!project) {
+    return;
+  }
+
+  const authConfig = getProjectAuthConfig(project);
+  const normalized = String(value || "").trim();
+  const sharedKey = getSharedApiKeyStorageKey(authConfig);
+
+  if (normalized) {
+    localStorage.setItem(sharedKey, normalized);
+  } else {
+    localStorage.removeItem(sharedKey);
+  }
+
+  for (const candidate of state.projectIndex?.projects || []) {
+    const candidateAuth = getProjectAuthConfig(candidate);
+
+    if (!isCompatibleApiKeyAuth(authConfig, candidateAuth)) {
+      continue;
+    }
+
+    const values = loadRawAuthFormValues(candidate);
+
+    if (normalized) {
+      values.apiKey = normalized;
+    } else {
+      delete values.apiKey;
+    }
+
+    localStorage.setItem(getAuthFormStorageKey(candidate.id), JSON.stringify(values));
+
+    if (state.currentProject?.id === candidate.id) {
+      state.authFormValues = {
+        ...(state.authFormValues || {}),
+        ...values
+      };
+    }
+  }
 }
 
 function isCompatibleApiKeyAuth(left, right) {
@@ -2381,7 +2458,19 @@ function getCurrentJwtToken() {
 }
 
 function getCurrentApiKey() {
-  return String(state.authFormValues?.apiKey || "").trim();
+  const directApiKey = String(state.authFormValues?.apiKey || "").trim();
+
+  if (directApiKey) {
+    return directApiKey;
+  }
+
+  const authConfig = getProjectAuthConfig();
+
+  if (authConfig.type !== "apiKey") {
+    return "";
+  }
+
+  return loadSharedApiKey(state.currentProject, authConfig);
 }
 
 function getAuthorizationInfo() {
@@ -2981,6 +3070,9 @@ function renderRedisViewer() {
   }
 
   elements.redisBridgeUrl.value = state.redisBridgeUrl || "/__redis";
+  if (elements.coreMosServiceKey) {
+    elements.coreMosServiceKey.value = getCoreMosServiceKey();
+  }
 
   const currentPidLitackaIdentityId = getCurrentPidLitackaIdentityId();
   if (!state.redisIdentityManual && currentPidLitackaIdentityId) {
