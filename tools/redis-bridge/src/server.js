@@ -6,7 +6,7 @@ const path = require("path");
 loadDotEnv();
 
 const port = Number(process.env.REDIS_BRIDGE_PORT || process.env.PORT || 5097);
-const redisConfig = parseRedisConfig(process.env.REDIS_URL || process.env.REDIS_CONNECTION_STRING || "localhost:6379");
+const defaultRedisConfig = parseRedisConfig(process.env.REDIS_URL || process.env.REDIS_CONNECTION_STRING || "localhost:6379");
 
 function createRedisBridgeServer(options = {}) {
   return http.createServer((request, response) => handleRedisBridgeRequest(request, response, options));
@@ -27,10 +27,11 @@ async function handleRedisBridgeRequest(request, response, options = {}) {
     }
 
     if (request.method === "GET" && url.pathname === "/health") {
-      const pong = await withRedis(client => client.command(["PING"]));
+      const redisConfig = resolveRequestRedisConfig(options, url);
+      const pong = await withRedis(redisConfig, client => client.command(["PING"]));
       sendJson(response, 200, {
         status: pong === "PONG" ? "OK" : "WARN",
-        redis: publicRedisConfig()
+        redis: publicRedisConfig(redisConfig)
       });
       return;
     }
@@ -38,7 +39,7 @@ async function handleRedisBridgeRequest(request, response, options = {}) {
     if (request.method === "GET" && url.pathname.startsWith("/session/")) {
       const identityId = decodeURIComponent(url.pathname.slice("/session/".length)).trim();
       const key = `mos:session:user:${identityId}`;
-      sendJson(response, 200, await readSessionKey(key));
+      sendJson(response, 200, await readSessionKey(key, resolveRequestRedisConfig(options, url)));
       return;
     }
 
@@ -49,14 +50,14 @@ async function handleRedisBridgeRequest(request, response, options = {}) {
         return;
       }
 
-      sendJson(response, 200, await readAnyKey(key));
+      sendJson(response, 200, await readAnyKey(key, resolveRequestRedisConfig(options, url)));
       return;
     }
 
     if (request.method === "GET" && url.pathname === "/scan") {
       const pattern = String(url.searchParams.get("pattern") || "mos:session:user:*");
       const count = Math.min(Math.max(Number(url.searchParams.get("count") || 50), 1), 200);
-      sendJson(response, 200, await scanKeys(pattern, count));
+      sendJson(response, 200, await scanKeys(pattern, count, resolveRequestRedisConfig(options, url)));
       return;
     }
 
@@ -74,12 +75,25 @@ const server = createRedisBridgeServer();
 if (require.main === module) {
   server.listen(port, "127.0.0.1", () => {
     console.log(`Klikatko Redis bridge: http://127.0.0.1:${port}`);
-    console.log(`Redis target: ${publicRedisConfig().host}:${publicRedisConfig().port}`);
+    console.log(`Redis target: ${publicRedisConfig(defaultRedisConfig).host}:${publicRedisConfig(defaultRedisConfig).port}`);
   });
 }
 
-async function readSessionKey(key) {
-  const data = await readAnyKey(key);
+function resolveRequestRedisConfig(options, url) {
+  if (typeof options.redisConfigResolver === "function") {
+    const environmentId = String(url.searchParams.get("environmentId") || "").trim();
+    const resolved = options.redisConfigResolver(environmentId);
+
+    if (resolved) {
+      return typeof resolved === "string" ? parseRedisConfig(resolved) : resolved;
+    }
+  }
+
+  return options.redisConfig || defaultRedisConfig;
+}
+
+async function readSessionKey(key, redisConfig = defaultRedisConfig) {
+  const data = await readAnyKey(key, redisConfig);
   const payload = parseJson(data.hash?.payload);
   return {
     ...data,
@@ -88,8 +102,8 @@ async function readSessionKey(key) {
   };
 }
 
-async function readAnyKey(key) {
-  return await withRedis(async client => {
+async function readAnyKey(key, redisConfig = defaultRedisConfig) {
+  return await withRedis(redisConfig, async client => {
     const type = await client.command(["TYPE", key]);
     const ttlSeconds = Number(await client.command(["TTL", key]));
     const result = { key, exists: type !== "none", type, ttlSeconds };
@@ -104,8 +118,8 @@ async function readAnyKey(key) {
   });
 }
 
-async function scanKeys(pattern, count) {
-  return await withRedis(async client => {
+async function scanKeys(pattern, count, redisConfig = defaultRedisConfig) {
+  return await withRedis(redisConfig, async client => {
     let cursor = "0";
     const keys = [];
 
@@ -119,7 +133,7 @@ async function scanKeys(pattern, count) {
   });
 }
 
-async function withRedis(action) {
+async function withRedis(redisConfig, action) {
   const client = new RedisRespClient(redisConfig);
   await client.connect();
 
@@ -337,7 +351,7 @@ function parseRedisConfig(input) {
   return config;
 }
 
-function publicRedisConfig() {
+function publicRedisConfig(redisConfig = defaultRedisConfig) {
   return {
     host: redisConfig.host,
     port: redisConfig.port,

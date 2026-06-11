@@ -10,7 +10,8 @@
       "environments": {
         "pidlitacka": "pidlitacka-local",
         "mos-coupons": "mos-pre-core",
-        "mos-diagnostics": "mos-pre-core"
+        "mos-diagnostics": "mos-pre-core",
+        "mos-identifiers": "mos-pre-core"
       }
     },
     {
@@ -20,7 +21,8 @@
       "environments": {
         "pidlitacka": "pidlitacka-integration",
         "mos-coupons": "mos-pre-core",
-        "mos-diagnostics": "mos-pre-core"
+        "mos-diagnostics": "mos-pre-core",
+        "mos-identifiers": "mos-pre-core"
       }
     }
   ],

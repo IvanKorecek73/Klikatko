@@ -151,6 +151,7 @@ const elements = {
   redisIdentityId: document.querySelector("#redisIdentityId"),
   redisStatus: document.querySelector("#redisStatus"),
   identitySummary: document.querySelector("#identitySummary"),
+  identityEnvironmentSelect: document.querySelector("#identityEnvironmentSelect"),
   identityProfileSelect: document.querySelector("#identityProfileSelect"),
   identityAccountFields: document.querySelector("#identityAccountFields"),
   identityDeviceFields: document.querySelector("#identityDeviceFields"),
@@ -310,6 +311,9 @@ function bindEventHandlers() {
   elements.identityDeviceFields.addEventListener("input", handleIdentityProfileFieldInput);
   elements.identitySaveProfileAction.addEventListener("click", saveCurrentIdentityProfile);
   elements.identityRemoveProfileAction.addEventListener("click", removeCurrentIdentityProfile);
+  elements.identityEnvironmentSelect?.addEventListener("change", event => {
+    applyPidLitackaIdentityEnvironment(event.target.value);
+  });
   elements.identityLoginAction.addEventListener("click", () => executeIdentityAuthAction("ensure"));
   elements.identityRefreshAction.addEventListener("click", () => executeIdentityAuthAction("refresh"));
   elements.identityRenewMosAction.addEventListener("click", () => executeIdentityAuthAction("mos"));
@@ -854,6 +858,47 @@ function getPidLitackaEnvironmentId(project = getPidLitackaProject()) {
   return project
     ? (getSavedEnvironmentId(project) || getDefaultEnvironmentId(project))
     : "";
+}
+
+function getPidLitackaEnvironment(project = getPidLitackaProject()) {
+  const environmentId = getPidLitackaEnvironmentId(project);
+  return project?.environments?.find(environment => environment.id === environmentId)
+    || project?.environments?.[0]
+    || null;
+}
+
+async function applyPidLitackaIdentityEnvironment(environmentId) {
+  const project = getPidLitackaProject();
+  const environment = project?.environments?.find(item => item.id === environmentId)
+    || project?.environments?.[0]
+    || null;
+
+  if (!project || !environment) {
+    return;
+  }
+
+  localStorage.setItem(getEnvironmentStorageKey(project.id), environment.id);
+  state.redisAutoSessionIdentityId = "";
+  state.redisLastSession = null;
+
+  if (state.currentProject?.id === project.id) {
+    await applyProjectEnvironment(project, environment.id);
+  } else {
+    try {
+      await updateHarnessProxyTarget(environment.targetBaseUrl);
+      await loadHarnessMeta();
+    } catch (error) {
+      addLog("warn", "Prepnutí PidLitacka prostredi v zalozce Uzivatel se nepodarilo", {
+        projectId: project.id,
+        environmentId: environment.id,
+        targetBaseUrl: environment.targetBaseUrl,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  renderRedisViewer();
+  renderModeBanner();
 }
 
 function getPidLitackaAuthProfiles() {
@@ -3276,6 +3321,7 @@ function renderRedisViewer() {
     elements.coreMosServiceKey.value = getCoreMosServiceKey();
   }
 
+  renderIdentityEnvironmentSelect();
   const currentPidLitackaIdentityId = getCurrentPidLitackaIdentityId();
   if (!state.redisIdentityManual && currentPidLitackaIdentityId) {
     state.redisIdentityId = currentPidLitackaIdentityId;
@@ -3290,6 +3336,27 @@ function renderRedisViewer() {
   renderRedisHealthStatus();
   checkRedisHealth();
   refreshRedisSessionForCurrentIdentity();
+}
+
+function renderIdentityEnvironmentSelect() {
+  if (!elements.identityEnvironmentSelect) {
+    return;
+  }
+
+  const project = getPidLitackaProject();
+  const environments = project?.environments || [];
+  const selectedEnvironmentId = getPidLitackaEnvironmentId(project);
+  elements.identityEnvironmentSelect.innerHTML = "";
+
+  for (const environment of environments) {
+    const option = document.createElement("option");
+    option.value = environment.id;
+    option.textContent = environment.name || environment.id;
+    elements.identityEnvironmentSelect.appendChild(option);
+  }
+
+  elements.identityEnvironmentSelect.value = selectedEnvironmentId;
+  elements.identityEnvironmentSelect.disabled = environments.length <= 1;
 }
 
 function renderIdentityProfileSelect() {
@@ -3473,6 +3540,10 @@ function renderIdentitySummary() {
     <div class="identity-summary-row">
       <span>Ucet</span>
       <strong>${escapeHtml(profileLabel)}</strong>
+    </div>
+    <div class="identity-summary-row">
+      <span>Prostredi BE</span>
+      <code>${escapeHtml(environment?.name || environment?.id || "-")}</code>
     </div>
     <div class="identity-summary-row">
       <span>Typ uctu</span>
@@ -3912,6 +3983,17 @@ function getRedisBridgeBaseUrl() {
   return String(state.redisBridgeUrl || elements.redisBridgeUrl?.value || "/__redis").replace(/\/$/, "");
 }
 
+function appendRedisEnvironmentQuery(path) {
+  const environmentId = getPidLitackaEnvironmentId();
+
+  if (!environmentId) {
+    return path;
+  }
+
+  const separator = String(path).includes("?") ? "&" : "?";
+  return `${path}${separator}environmentId=${encodeURIComponent(environmentId)}`;
+}
+
 function isUsableRedisSession(session) {
   const sessionId = String(session?.sessionId || session?.payload?.sessionId || session?.payload?.SessionId || "").trim();
   return Boolean(session?.exists && sessionId && !isEmptyGuid(sessionId));
@@ -3941,6 +4023,12 @@ function getRedisSessionProblem(session) {
 
 function getRedisBridgeBaseUrls() {
   const configured = getRedisBridgeBaseUrl();
+  const environmentId = getPidLitackaEnvironmentId();
+
+  if (environmentId && environmentId !== "pidlitacka-local") {
+    return [configured];
+  }
+
   const localHarness = window.location?.port
     ? `http://127.0.0.1:${window.location.port}/__redis`
     : "";
@@ -3949,9 +4037,10 @@ function getRedisBridgeBaseUrls() {
 
 async function fetchRedisBridgeJson(path) {
   const errors = [];
+  const redisPath = appendRedisEnvironmentQuery(path);
 
   for (const baseUrl of getRedisBridgeBaseUrls()) {
-    const url = `${baseUrl}${path}`;
+    const url = `${baseUrl}${redisPath}`;
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), 1500);
 

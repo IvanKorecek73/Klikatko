@@ -1,3 +1,6 @@
 {
-  "coreMosServiceKey": "c8b76d63-3c39-46f2-ac12-887776070d45"
+  "coreMosServiceKey": "c8b76d63-3c39-46f2-ac12-887776070d45",
+  "redisConnections": {
+    "pidlitacka-local": "localhost:6379,abortConnect=false"
+  }
 }

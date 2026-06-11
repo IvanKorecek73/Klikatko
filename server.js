@@ -36,7 +36,10 @@ const server = http.createServer((request, response) => {
   }
 
   if (request.url.startsWith("/__redis/")) {
-    handleRedisBridgeRequest(request, response, { pathPrefix: "/__redis" });
+    handleRedisBridgeRequest(request, response, {
+      pathPrefix: "/__redis",
+      redisConfigResolver: resolveRedisConnectionString
+    });
     return;
   }
 
@@ -105,6 +108,36 @@ function configureProxyTarget(request, response) {
       }));
     }
   });
+}
+
+function resolveRedisConnectionString(environmentId) {
+  const normalizedEnvironmentId = String(environmentId || "").trim();
+  const localConfig = loadLocalConfig();
+  const redisConnections = localConfig.redisConnections || localConfig.redisConnectionStrings || {};
+  const redisConfig = localConfig.redis || {};
+  const directValue = normalizedEnvironmentId ? redisConnections[normalizedEnvironmentId] : "";
+  const objectValue = normalizedEnvironmentId ? redisConfig[normalizedEnvironmentId]?.connectionString : "";
+  const fallbackValue = redisConnections.default || redisConfig.default?.connectionString || "";
+
+  if (directValue || objectValue) {
+    return directValue || objectValue;
+  }
+
+  if (normalizedEnvironmentId && normalizedEnvironmentId !== "pidlitacka-local" && !fallbackValue) {
+    throw new Error(`Redis connection string for environment '${normalizedEnvironmentId}' is not configured in public/local/klikatko.local.json.`);
+  }
+
+  return fallbackValue || null;
+}
+
+function loadLocalConfig() {
+  const filePath = path.join(publicDir, "local", "klikatko.local.json");
+
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch {
+    return {};
+  }
 }
 
 function serveStatic(request, response) {
