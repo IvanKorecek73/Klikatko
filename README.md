@@ -38,21 +38,11 @@ Proxy target už pak lze přepínat přímo v UI přes:
 - `Test pack`
 - `Prostředí`
 
-## Doporučené umístění
+## Umístění
 
-Klikátko je už dnes samostatný mini-projekt. Pokud ho budeme chtít úplně oddělit od Tickets repo, nejbezpečnější je:
-
-1. zkopírovat celý adresář `integration/demo-harness`
-2. ověřit spuštění v nové lokaci
-3. teprve potom případně smazat původní kopii
-
-Doporučená cílová složka:
+Klikátko je samostatný mini-projekt v:
 
 - `C:\Users\op3782\source\repos\klikatko`
-
-nebo obecnější název:
-
-- `C:\Users\op3782\source\repos\api-demo-harness`
 
 ## Připnutí do Windows lišty
 

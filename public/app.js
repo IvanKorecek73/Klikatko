@@ -791,12 +791,33 @@ function createNewAuthProfileDraftValues() {
   };
 }
 
+function applyLocalAuthProfileValues(profile, project = state.currentProject) {
+  if (!profile?.id || profile.isNewProfile || profile.authRequest === "anonymous") {
+    return profile;
+  }
+
+  const localValues = state.localConfig?.authProfiles?.[project?.id]?.[profile.id];
+
+  if (!localValues || typeof localValues !== "object") {
+    return profile;
+  }
+
+  return {
+    ...profile,
+    values: {
+      ...(profile.values || {}),
+      ...localValues
+    }
+  };
+}
+
 function getAuthProfiles(authConfig = getProjectAuthConfig()) {
   if (authConfig?.type !== "login") {
     return [];
   }
 
-  const staticProfiles = authConfig.login?.profiles || [];
+  const staticProfiles = (authConfig.login?.profiles || [])
+    .map(profile => applyLocalAuthProfileValues(profile, state.currentProject));
   const anonymousProfiles = staticProfiles.filter(profile => profile.authRequest === "anonymous");
   const regularProfiles = staticProfiles.filter(profile => profile.authRequest !== "anonymous");
   const customProfiles = (state.authCustomProfiles || []).map(profile => ({
@@ -834,7 +855,8 @@ function getPidLitackaAuthProfiles() {
     return [];
   }
 
-  const staticProfiles = authConfig.login?.profiles || [];
+  const staticProfiles = (authConfig.login?.profiles || [])
+    .map(profile => applyLocalAuthProfileValues(profile, project));
   const anonymousProfiles = staticProfiles.filter(profile => profile.authRequest === "anonymous");
   const regularProfiles = staticProfiles.filter(profile => profile.authRequest !== "anonymous");
   const customProfiles = loadSavedAuthCustomProfiles(project).map(profile => ({

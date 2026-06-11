@@ -1,8 +1,8 @@
 {
-  "name": "ticket-service-demo-harness",
+  "name": "klikatko",
   "version": "0.1.0",
   "private": true,
-  "description": "Mobile-like scenario runner for Ticket Service business flows.",
+  "description": "Mobile-like scenario runner for API business flows.",
   "scripts": {
     "start": "node server.js"
   }
