@@ -35,6 +35,7 @@ const state = {
   workflowLastReport: null,
   selectedWorkflowEnvironmentProfileId: localStorage.getItem("demoHarness.workflowEnvironmentProfile") || "",
   harnessMeta: null,
+  localConfig: null,
   authSession: null,
   authFormValues: {},
   authProfileNotes: {},
@@ -178,6 +179,7 @@ async function init() {
 
   try {
     state.projectIndex = await fetchJson("/scenarios/index.json");
+    state.localConfig = await loadLocalConfig();
     await loadWorkflowIndex();
     await loadHarnessMeta();
     populateProjectOptions();
@@ -1014,6 +1016,10 @@ function loadSharedApiKey(project, authConfig) {
     return sharedKey;
   }
 
+  if (isCoreMosApiKeyAuth(authConfig) && state.localConfig?.coreMosServiceKey) {
+    return String(state.localConfig.coreMosServiceKey || "").trim();
+  }
+
   for (const candidate of state.projectIndex?.projects || []) {
     if (candidate.id === project?.id) {
       continue;
@@ -1043,9 +1049,7 @@ function loadSharedApiKey(project, authConfig) {
 function getCoreMosApiKeyProject() {
   return (state.projectIndex?.projects || []).find(project => {
     const authConfig = getProjectAuthConfig(project);
-    return authConfig.type === "apiKey"
-      && authConfig.apiKeyHeader === "X-Klikatko-ServiceKey"
-      && authConfig.apiKeyInHeader === false;
+    return isCoreMosApiKeyAuth(authConfig);
   }) || null;
 }
 
@@ -1110,6 +1114,12 @@ function isCompatibleApiKeyAuth(left, right) {
 
   return (left.apiKeyHeader || "apiKey") === (right.apiKeyHeader || "apiKey")
     && (left.apiKeyInHeader !== false) === (right.apiKeyInHeader !== false);
+}
+
+function isCoreMosApiKeyAuth(authConfig) {
+  return authConfig?.type === "apiKey"
+    && authConfig.apiKeyHeader === "X-Klikatko-ServiceKey"
+    && authConfig.apiKeyInHeader === false;
 }
 
 function loadSavedAuthProfileNotes(project) {
@@ -2398,6 +2408,14 @@ async function loadHarnessMeta() {
     state.harnessMeta = await fetchJson("/__harness/meta");
   } catch {
     state.harnessMeta = null;
+  }
+}
+
+async function loadLocalConfig() {
+  try {
+    return await fetchJson("/local/klikatko.local.json");
+  } catch {
+    return {};
   }
 }
 
