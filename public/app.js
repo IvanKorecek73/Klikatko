@@ -160,6 +160,7 @@ const elements = {
   identityRefreshAction: document.querySelector("#identityRefreshAction"),
   identityRenewMosAction: document.querySelector("#identityRenewMosAction"),
   identityLogoutAction: document.querySelector("#identityLogoutAction"),
+  identityActionStatus: document.querySelector("#identityActionStatus"),
   redisLoadSession: document.querySelector("#redisLoadSession"),
   redisUseSession: document.querySelector("#redisUseSession"),
   redisScanSessions: document.querySelector("#redisScanSessions"),
@@ -1726,6 +1727,15 @@ function createCustomAuthProfileId(email, deviceId) {
   return `custom-${idParts.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${Date.now()}`;
 }
 
+function showIdentityActionStatus(level, message) {
+  if (!elements.identityActionStatus) {
+    return;
+  }
+
+  elements.identityActionStatus.textContent = message || "";
+  elements.identityActionStatus.className = `identity-action-status ${level || "neutral"}`;
+}
+
 async function executeIdentityAuthAction(action) {
   const project = getPidLitackaProject();
   const actionLabels = {
@@ -1736,10 +1746,12 @@ async function executeIdentityAuthAction(action) {
   };
 
   if (!project) {
+    showIdentityActionStatus("error", "PidLitacka projekt neni dostupny.");
     showRedisResult("error", "PidLitacka projekt neni dostupny.", "Nelze provest prihlaseni testovaci identity.");
     return;
   }
 
+  showIdentityActionStatus("warn", actionLabels[action] || "Provadim akci...");
   showRedisResult("warn", actionLabels[action] || "Provadim akci...", "Pracuji s aktualne vybranym uctem v zalozce Uzivatel.");
 
   try {
@@ -1784,12 +1796,15 @@ async function executeIdentityAuthAction(action) {
 
     state.redisAutoSessionIdentityId = "";
     renderRedisViewer();
+    showIdentityActionStatus("ok", actionLabels[action]?.replace("...", ".") || "Hotovo.");
     showRedisResult("ok", "Akce prihlaseni probehla.", actionLabels[action]?.replace("...", ".") || "Hotovo.");
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    showIdentityActionStatus("error", message);
     showRedisResult(
       "error",
       "Akce prihlaseni selhala.",
-      error instanceof Error ? error.message : String(error)
+      message
     );
   }
 }
