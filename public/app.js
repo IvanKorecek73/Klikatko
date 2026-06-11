@@ -191,6 +191,7 @@ async function init() {
       scenarioId: lastSelection?.scenarioId,
       suppressLog: true
     });
+    await applySelectedWorkflowEnvironmentProfile();
     renderRedisViewer();
     renderIdentityTabStatus();
   } catch (error) {
@@ -255,9 +256,10 @@ function bindEventHandlers() {
   elements.runWorkflow.addEventListener("click", startSelectedWorkflow);
   elements.continueWorkflow.addEventListener("click", continueWorkflowRun);
   elements.stopWorkflow.addEventListener("click", requestStopWorkflowRun);
-  elements.workflowEnvironmentProfileSelect.addEventListener("change", event => {
+  elements.workflowEnvironmentProfileSelect.addEventListener("change", async event => {
     state.selectedWorkflowEnvironmentProfileId = event.target.value;
     localStorage.setItem(WORKFLOW_ENVIRONMENT_PROFILE_STORAGE_KEY, state.selectedWorkflowEnvironmentProfileId);
+    await applySelectedWorkflowEnvironmentProfile();
     renderWorkflowEnvironmentProfileHint();
     renderWorkflowList();
   });
@@ -274,7 +276,11 @@ function bindEventHandlers() {
   });
   elements.environmentSelect.addEventListener("change", async event => {
     try {
-      await applyProjectEnvironment(state.currentProject, event.target.value);
+      if (state.currentProject?.id === "pidlitacka") {
+        await applyPidLitackaIdentityEnvironment(event.target.value);
+      } else {
+        await applyProjectEnvironment(state.currentProject, event.target.value);
+      }
     } catch (error) {
       showStartupError(error);
     }
@@ -450,6 +456,45 @@ function getSelectedWorkflowEnvironmentProfile() {
   return getWorkflowEnvironmentProfiles().find(profile => profile.id === selectedId) || null;
 }
 
+function selectWorkflowProfileForPidLitackaEnvironment(environmentId) {
+  const profiles = getWorkflowEnvironmentProfiles();
+  const matchingProfile = profiles.find(profile => profile.environments?.pidlitacka === environmentId);
+
+  if (!matchingProfile || matchingProfile.id === getSelectedWorkflowEnvironmentProfileId()) {
+    renderWorkflowEnvironmentProfileHint();
+    return;
+  }
+
+  state.selectedWorkflowEnvironmentProfileId = matchingProfile.id;
+  localStorage.setItem(WORKFLOW_ENVIRONMENT_PROFILE_STORAGE_KEY, matchingProfile.id);
+  if (elements.workflowEnvironmentProfileSelect) {
+    elements.workflowEnvironmentProfileSelect.value = matchingProfile.id;
+  }
+  renderWorkflowEnvironmentProfileHint();
+  renderWorkflowList();
+}
+
+async function applySelectedWorkflowEnvironmentProfile() {
+  const profile = getSelectedWorkflowEnvironmentProfile();
+  const pidLitackaEnvironmentId = profile?.environments?.pidlitacka || "";
+
+  if (!pidLitackaEnvironmentId) {
+    renderIdentityEnvironmentSelect();
+    renderIdentitySummary();
+    return;
+  }
+
+  if (getPidLitackaEnvironmentId() !== pidLitackaEnvironmentId) {
+    await applyPidLitackaIdentityEnvironment(pidLitackaEnvironmentId, {
+      syncWorkflowProfile: false
+    });
+    return;
+  }
+
+  renderIdentityEnvironmentSelect();
+  renderIdentitySummary();
+}
+
 function renderWorkflowEnvironmentProfileHint() {
   if (!elements.workflowEnvironmentProfileHint) {
     return;
@@ -478,6 +523,10 @@ function getProjectEnvironmentLabel(projectId, environmentId) {
 }
 
 function getWorkflowItemEnvironmentId(item) {
+  if (item?.projectId === "pidlitacka") {
+    return getPidLitackaEnvironmentId();
+  }
+
   if (item?.environmentId) {
     return item.environmentId;
   }
@@ -867,7 +916,7 @@ function getPidLitackaEnvironment(project = getPidLitackaProject()) {
     || null;
 }
 
-async function applyPidLitackaIdentityEnvironment(environmentId) {
+async function applyPidLitackaIdentityEnvironment(environmentId, options = {}) {
   const project = getPidLitackaProject();
   const environment = project?.environments?.find(item => item.id === environmentId)
     || project?.environments?.[0]
@@ -878,6 +927,9 @@ async function applyPidLitackaIdentityEnvironment(environmentId) {
   }
 
   localStorage.setItem(getEnvironmentStorageKey(project.id), environment.id);
+  if (options.syncWorkflowProfile !== false) {
+    selectWorkflowProfileForPidLitackaEnvironment(environment.id);
+  }
   state.redisAutoSessionIdentityId = "";
   state.redisLastSession = null;
 
@@ -3509,6 +3561,8 @@ function renderIdentitySummary() {
   const project = getPidLitackaProject();
   const profile = getSelectedPidLitackaProfile();
   const values = getPidLitackaIdentityValues();
+  const environment = getPidLitackaEnvironment(project);
+  const mosEnvironmentText = getMosEnvironmentSummaryText();
   const session = project ? loadSavedAuthSession(project, getPidLitackaEnvironmentId(project)) : null;
   const tokenInfo = session?.accessToken ? getJwtInfo(session.accessToken) : { valid: false, message: "Nejste prihlasen." };
   const identityId = String(session?.identityId || state.redisIdentityId || "").trim();
@@ -3544,6 +3598,10 @@ function renderIdentitySummary() {
     <div class="identity-summary-row">
       <span>Prostredi BE</span>
       <code>${escapeHtml(environment?.name || environment?.id || "-")}</code>
+    </div>
+    <div class="identity-summary-row">
+      <span>Prostredi MOS</span>
+      <code>${escapeHtml(mosEnvironmentText)}</code>
     </div>
     <div class="identity-summary-row">
       <span>Typ uctu</span>
@@ -3590,7 +3648,7 @@ function renderIdentityTabStatus() {
     return;
   }
 
-  const status = getIdentityTabStatus();
+  const status = withIdentityEnvironmentStatus(getIdentityTabStatus());
   elements.redisTab.classList.remove(
     "identity-tab-status-neutral",
     "identity-tab-status-ok",
@@ -3600,6 +3658,42 @@ function renderIdentityTabStatus() {
   elements.redisTab.classList.add(`identity-tab-status-${status.level}`);
   elements.redisTab.title = status.title;
   elements.redisTab.setAttribute("aria-label", `Uživatel - ${status.title}`);
+}
+
+function withIdentityEnvironmentStatus(status) {
+  const lines = getIdentityEnvironmentTooltipLines();
+
+  return {
+    ...status,
+    title: [
+      status.title,
+      ...lines
+    ].filter(Boolean).join("\n")
+  };
+}
+
+function getIdentityEnvironmentTooltipLines() {
+  const environment = getPidLitackaEnvironment();
+
+  return [
+    `BE PidLitacka: ${environment?.name || environment?.id || "-"}`,
+    `MOS: ${getMosEnvironmentSummaryText()}`
+  ];
+}
+
+function getMosEnvironmentSummaryText() {
+  const profile = getSelectedWorkflowEnvironmentProfile();
+  const entries = Object.entries(profile?.environments || {})
+    .filter(([projectId]) => String(projectId).startsWith("mos-"));
+  const labels = [...new Set(entries
+    .map(([projectId, environmentId]) => getProjectEnvironmentLabel(projectId, environmentId))
+    .filter(Boolean))];
+
+  if (labels.length > 0) {
+    return labels.join(", ");
+  }
+
+  return "podle vybraneho MOS projektu";
 }
 
 function getIdentityTabStatus() {
@@ -6293,6 +6387,7 @@ async function startSelectedWorkflow() {
     return;
   }
 
+  await applySelectedWorkflowEnvironmentProfile();
   prepareWorkflowRun(workflow, 0, {
     keepContext: false,
     keepPreviousResults: false
@@ -6313,6 +6408,7 @@ async function startWorkflowFromItem(workflowId, itemIndex) {
     return;
   }
 
+  await applySelectedWorkflowEnvironmentProfile();
   const keepContext = state.workflowRun?.workflowId === workflow.id;
   state.selectedWorkflowId = workflow.id;
   prepareWorkflowRun(workflow, itemIndex, {
