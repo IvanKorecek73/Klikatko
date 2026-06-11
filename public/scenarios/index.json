@@ -345,6 +345,29 @@
           "targetBaseUrl": "https://pre-core.mos.oict.cz"
         }
       ]
+    },
+    {
+      "id": "mos-identifiers",
+      "name": "MOS Identifikatory",
+      "description": "Prime Core MOS SOAP scenare pro prejmenovani, blokovani a odblokovani identifikatoru.",
+      "manifest": "mos-identifiers/index.json",
+      "defaultBaseUrl": "/api",
+      "auth": {
+        "type": "apiKey",
+        "panelTitle": "Pristup (Core MOS ServiceKey)",
+        "apiKeyHeader": "X-Klikatko-ServiceKey",
+        "apiKeyInHeader": false,
+        "apiKeyLabel": "ServiceKey",
+        "apiKeyPlaceholder": "Vlozte ServiceKey pro Core MOS"
+      },
+      "defaultEnvironmentId": "mos-pre-core",
+      "environments": [
+        {
+          "id": "mos-pre-core",
+          "name": "PRE-CORE",
+          "targetBaseUrl": "https://pre-core.mos.oict.cz"
+        }
+      ]
     }
   ]
 }

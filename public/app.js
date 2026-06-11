@@ -11071,6 +11071,7 @@ function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
       item.customerProfileName || null,
       item.tariffName || null,
       item.maskedPan || item.cln || null,
+      item.blockedStatus || null,
       item.isPersonalized === "true" ? "personalizovaný" : item.isPersonalized === "false" ? "nepersonalizovaný" : null,
       item.isDefault === "true" ? "výchozí profil" : null,
       item.zoneName ? `zóna ${item.zoneName}` : null,
@@ -11105,6 +11106,7 @@ function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
       { label: "Výchozí profil", value: item.isDefault === "true" ? "ano" : item.isDefault === "false" ? "ne" : null },
       { label: "Maskovaná hodnota", value: item.maskedPan },
       { label: "CLN", value: item.cln },
+      { label: "Blokace", value: item.blockedStatus },
       { label: "Personalizovaný", value: item.isPersonalized === "true" ? "ano" : item.isPersonalized === "false" ? "ne" : null }
     ]
   }), { selection });

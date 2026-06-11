@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "defaultPackId": "mos-identifiers-core-soap",
+  "packs": [
+    {
+      "id": "mos-identifiers-core-soap",
+      "name": "MOS Identifikatory - Core SOAP",
+      "description": "Prime Core MOS SOAP scenare pro prejmenovani, blokovani a odblokovani identifikatoru.",
+      "file": "core-soap-identifier-management.json"
+    }
+  ]
+}

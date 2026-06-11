@@ -1,0 +1,530 @@
+{
+  "version": 1,
+  "name": "MOS Identifikatory - Core SOAP",
+  "description": "Prime testovaci scenare nad Core MOS SOAP API pro spravu identifikatoru bez PidLitacka BE.",
+  "scenarios": [
+    {
+      "id": "mos-identifier-rename-soap",
+      "title": "MOS identifikator - prejmenovat",
+      "description": "Nacte MOS SessionID z Redis, nacte tokeny aktualniho loginu, umozni vybrat identifikator, zavola ChangeTokenName a znovu nacte tokeny pro kontrolu.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["identifiers", "soap", "core-mos", "mutation", "rename"],
+      "app": {
+        "section": "profile",
+        "title": "Identifikatory",
+        "subtitle": "Prejmenovani"
+      },
+      "instructions": [
+        "V zalozce Uzivatel nejdrive pouzijte Prihlasit / obnovit, aby byl pripraven BE JWT i MOS SessionID v Redis.",
+        "Scenar pracuje primo s Core MOS, ne s BE PidLitacka.",
+        "Vyberte existujici identifikator a zadejte novy nazev. MOS povoluje neprazdny nazev do 64 znaku.",
+        "Nepouzivejte v nazvu XML specialni znaky &, < nebo >.",
+        "Posledni krok znovu nacte tokeny, abyste mohli vizualne overit novy nazev."
+      ],
+      "steps": [
+        {
+          "id": "mos-identifiers-rename-load-session",
+          "title": "Nacist MOS SessionID z Redis",
+          "description": "Nacte MOS SessionID z Redis podle PidLitacka IdentityId a ulozi ho do kontextu jako mosIdentifierSessionId.",
+          "customAction": "loadMosSessionFromRedis",
+          "redisSession": {
+            "identityContextKey": "pidLitackaIdentityId",
+            "contextKey": "mosIdentifierSessionId"
+          },
+          "expected": {
+            "status": 200
+          },
+          "skipWhen": {
+            "contextExists": "mosIdentifierSessionId"
+          }
+        },
+        {
+          "id": "mos-identifiers-rename-select-token",
+          "title": "Vybrat identifikator",
+          "description": "Nacte tokeny/identifikatory prihlaseneho MOS uctu a ulozi vybrany TokenID do kontextu.",
+          "requiresContext": ["mosIdentifierSessionId"],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokens\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokens xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosIdentifierSessionId}}</SessionID>\n      <GetOnlyAvailableTokens>false</GetOnlyAvailableTokens>\n    </GetTokens>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "regex": "<GetTokensResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>"
+              },
+              {
+                "path": "$",
+                "regex": "<TokenEx[\\s\\S]*?>"
+              }
+            ]
+          },
+          "selection": {
+            "buttonLabel": "Pouzit identifikator",
+            "selectedButtonLabel": "Identifikator vybran",
+            "emptyTitle": "Zadne identifikatory",
+            "emptyText": "Core MOS pro aktualni login nevratil zadny token/identifikator.",
+            "sourceRegex": {
+              "itemPattern": "<TokenEx[^>]*>([\\s\\S]*?)</TokenEx>",
+              "fields": {
+                "tokenId": "<TokenID>([^<]+)</TokenID>",
+                "name": "<Name>([^<]*)</Name>",
+                "token": "<Token>([^<]*)</Token>",
+                "customerId": "<CustomerIDx>([^<]+)</CustomerIDx>",
+                "identifierType": "<IdentifierType>([^<]*)</IdentifierType>",
+                "identifierSubtype": "<IdentifierSubtype>([^<]*)</IdentifierSubtype>",
+                "maskedPan": "<MaskedPAN>([^<]*)</MaskedPAN>",
+                "cln": "<CLN>([^<]*)</CLN>",
+                "active": "<Active>([^<]+)</Active>",
+                "isPersonalized": "<IsPersonalized>([^<]*)</IsPersonalized>",
+                "blockedStatus": "<TokenBlockedStatus>([^<]*)</TokenBlockedStatus>"
+              }
+            },
+            "store": {
+              "mosIdentifierTokenId": "$.tokenId",
+              "mosIdentifierOriginalName": "$.name",
+              "mosIdentifierType": "$.identifierType",
+              "mosIdentifierMaskedValue": "$.maskedPan",
+              "mosIdentifierCln": "$.cln",
+              "mosIdentifierActive": "$.active",
+              "mosIdentifierBlockedStatus": "$.blockedStatus"
+            }
+          }
+        },
+        {
+          "id": "mos-identifiers-change-token-name",
+          "title": "Prejmenovat vybrany identifikator",
+          "description": "Zavola ChangeTokenName(TokenID, NewName).",
+          "requiresContext": ["mosIdentifierSessionId", "mosIdentifierTokenId"],
+          "fields": [
+            {
+              "name": "tokenId",
+              "label": "TokenID",
+              "type": "number",
+              "value": "{{context.mosIdentifierTokenId}}"
+            },
+            {
+              "name": "newName",
+              "label": "Novy nazev",
+              "type": "text",
+              "value": "Klikatko rename {{today}}",
+              "placeholder": "Neprazdny nazev, max. 64 znaku"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/ChangeTokenName\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <ChangeTokenName xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosIdentifierSessionId}}</SessionID>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <NewName>{{form.newName}}</NewName>\n    </ChangeTokenName>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "remember": {
+            "mosIdentifierNewName": "{{form.newName}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "regex": "<ChangeTokenNameResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "message": "MOS neprejmenoval identifikator. Zkontrolujte vlastnictvi tokenu a neprazdny nazev do 64 znaku."
+              }
+            ]
+          }
+        },
+        {
+          "id": "mos-identifiers-rename-verify",
+          "title": "Zkontrolovat identifikatory po prejmenovani",
+          "description": "Znovu nacte tokeny aktualniho MOS uctu. Vybrany token by mel mit novy nazev.",
+          "requiresContext": ["mosIdentifierSessionId"],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokens\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokens xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosIdentifierSessionId}}</SessionID>\n      <GetOnlyAvailableTokens>false</GetOnlyAvailableTokens>\n    </GetTokens>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "regex": "<GetTokensResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>"
+              },
+              {
+                "path": "$",
+                "regex": "<TokenEx[\\s\\S]*?>"
+              }
+            ]
+          },
+          "selection": {
+            "buttonLabel": "Ulozit kontrolni token",
+            "selectedButtonLabel": "Kontrola ulozena",
+            "sourceRegex": {
+              "itemPattern": "<TokenEx[^>]*>([\\s\\S]*?)</TokenEx>",
+              "fields": {
+                "tokenId": "<TokenID>([^<]+)</TokenID>",
+                "name": "<Name>([^<]*)</Name>",
+                "identifierType": "<IdentifierType>([^<]*)</IdentifierType>",
+                "maskedPan": "<MaskedPAN>([^<]*)</MaskedPAN>",
+                "cln": "<CLN>([^<]*)</CLN>",
+                "active": "<Active>([^<]+)</Active>",
+                "blockedStatus": "<TokenBlockedStatus>([^<]*)</TokenBlockedStatus>"
+              }
+            },
+            "store": {
+              "mosIdentifierVerifyTokenId": "$.tokenId",
+              "mosIdentifierVerifyName": "$.name",
+              "mosIdentifierVerifyActive": "$.active",
+              "mosIdentifierVerifyBlockedStatus": "$.blockedStatus"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "mos-identifier-block-soap",
+      "title": "MOS identifikator - zablokovat",
+      "description": "Nacte identifikatory, umozni vybrat token a zavola ChangeActiveToken(TokenID, false, 1).",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["identifiers", "soap", "core-mos", "mutation", "block"],
+      "app": {
+        "section": "profile",
+        "title": "Identifikatory",
+        "subtitle": "Blokace"
+      },
+      "instructions": [
+        "V zalozce Uzivatel nejdrive pouzijte Prihlasit / obnovit.",
+        "Scenar vola primou Core MOS operaci ChangeActiveToken.",
+        "Pro uzivatelskou blokaci posila TokenBlockedStatus = 1, aby MOS nastavil BlockedByUser.",
+        "Vyberte token, ktery ma byt aktualne aktivni a odblokovany. Pokud vyberete uz blokovany token, MOS muze vratit chybu."
+      ],
+      "steps": [
+        {
+          "id": "mos-identifiers-block-load-session",
+          "title": "Nacist MOS SessionID z Redis",
+          "customAction": "loadMosSessionFromRedis",
+          "redisSession": {
+            "identityContextKey": "pidLitackaIdentityId",
+            "contextKey": "mosIdentifierSessionId"
+          },
+          "expected": {
+            "status": 200
+          },
+          "skipWhen": {
+            "contextExists": "mosIdentifierSessionId"
+          }
+        },
+        {
+          "id": "mos-identifiers-block-select-token",
+          "title": "Vybrat identifikator k blokaci",
+          "description": "Nacte tokeny a ulozi vybrany TokenID. V kartach sledujte Active a TokenBlockedStatus.",
+          "requiresContext": ["mosIdentifierSessionId"],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokens\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokens xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosIdentifierSessionId}}</SessionID>\n      <GetOnlyAvailableTokens>false</GetOnlyAvailableTokens>\n    </GetTokens>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "regex": "<GetTokensResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>"
+              },
+              {
+                "path": "$",
+                "regex": "<TokenEx[\\s\\S]*?>"
+              }
+            ]
+          },
+          "selection": {
+            "buttonLabel": "Blokovat tento identifikator",
+            "selectedButtonLabel": "Vybrano k blokaci",
+            "sourceRegex": {
+              "itemPattern": "<TokenEx[^>]*>([\\s\\S]*?)</TokenEx>",
+              "fields": {
+                "tokenId": "<TokenID>([^<]+)</TokenID>",
+                "name": "<Name>([^<]*)</Name>",
+                "identifierType": "<IdentifierType>([^<]*)</IdentifierType>",
+                "maskedPan": "<MaskedPAN>([^<]*)</MaskedPAN>",
+                "cln": "<CLN>([^<]*)</CLN>",
+                "active": "<Active>([^<]+)</Active>",
+                "isPersonalized": "<IsPersonalized>([^<]*)</IsPersonalized>",
+                "blockedStatus": "<TokenBlockedStatus>([^<]*)</TokenBlockedStatus>"
+              }
+            },
+            "store": {
+              "mosIdentifierTokenId": "$.tokenId",
+              "mosIdentifierOriginalName": "$.name",
+              "mosIdentifierActive": "$.active",
+              "mosIdentifierBlockedStatus": "$.blockedStatus"
+            }
+          }
+        },
+        {
+          "id": "mos-identifiers-change-active-block",
+          "title": "Zablokovat vybrany identifikator",
+          "description": "Zavola ChangeActiveToken(TokenID, IsActive=false, TokenBlockedStatus=1).",
+          "requiresContext": ["mosIdentifierSessionId", "mosIdentifierTokenId"],
+          "fields": [
+            {
+              "name": "tokenId",
+              "label": "TokenID",
+              "type": "number",
+              "value": "{{context.mosIdentifierTokenId}}"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/ChangeActiveToken\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <ChangeActiveToken xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosIdentifierSessionId}}</SessionID>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <IsActive>false</IsActive>\n      <TokenBlockedStatus>1</TokenBlockedStatus>\n    </ChangeActiveToken>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "regex": "<ChangeActiveTokenResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "message": "MOS token nezablokoval. Zkontrolujte, ze token patri aktualnimu loginu a neni blokovan stavem Admin/Issuer."
+              }
+            ]
+          }
+        },
+        {
+          "id": "mos-identifiers-block-verify",
+          "title": "Zkontrolovat identifikatory po blokaci",
+          "description": "Znovu nacte tokeny, vcetne blokovanych. Vybrany token by mel mit Active=false a blokaci BlockedByUser.",
+          "requiresContext": ["mosIdentifierSessionId"],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokens\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokens xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosIdentifierSessionId}}</SessionID>\n      <GetOnlyAvailableTokens>false</GetOnlyAvailableTokens>\n    </GetTokens>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "regex": "<GetTokensResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>"
+              }
+            ]
+          },
+          "selection": {
+            "buttonLabel": "Ulozit kontrolni token",
+            "selectedButtonLabel": "Kontrola ulozena",
+            "sourceRegex": {
+              "itemPattern": "<TokenEx[^>]*>([\\s\\S]*?)</TokenEx>",
+              "fields": {
+                "tokenId": "<TokenID>([^<]+)</TokenID>",
+                "name": "<Name>([^<]*)</Name>",
+                "identifierType": "<IdentifierType>([^<]*)</IdentifierType>",
+                "maskedPan": "<MaskedPAN>([^<]*)</MaskedPAN>",
+                "cln": "<CLN>([^<]*)</CLN>",
+                "active": "<Active>([^<]+)</Active>",
+                "blockedStatus": "<TokenBlockedStatus>([^<]*)</TokenBlockedStatus>"
+              }
+            },
+            "store": {
+              "mosIdentifierVerifyTokenId": "$.tokenId",
+              "mosIdentifierVerifyActive": "$.active",
+              "mosIdentifierVerifyBlockedStatus": "$.blockedStatus"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "mos-identifier-unblock-soap",
+      "title": "MOS identifikator - odblokovat",
+      "description": "Nacte identifikatory, umozni vybrat blokovany token a zavola ChangeActiveToken(TokenID, true, TokenBlockedStatus=nil).",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["identifiers", "soap", "core-mos", "mutation", "unblock"],
+      "app": {
+        "section": "profile",
+        "title": "Identifikatory",
+        "subtitle": "Odblokace"
+      },
+      "instructions": [
+        "V zalozce Uzivatel nejdrive pouzijte Prihlasit / obnovit.",
+        "Scenar vola primou Core MOS operaci ChangeActiveToken.",
+        "Pro odblokovani posila IsActive=true a TokenBlockedStatus jako xsi:nil.",
+        "Vyberte token blokovany uzivatelem. Admin/Issuer blokaci uzivatel odblokovat nesmi."
+      ],
+      "steps": [
+        {
+          "id": "mos-identifiers-unblock-load-session",
+          "title": "Nacist MOS SessionID z Redis",
+          "customAction": "loadMosSessionFromRedis",
+          "redisSession": {
+            "identityContextKey": "pidLitackaIdentityId",
+            "contextKey": "mosIdentifierSessionId"
+          },
+          "expected": {
+            "status": 200
+          },
+          "skipWhen": {
+            "contextExists": "mosIdentifierSessionId"
+          }
+        },
+        {
+          "id": "mos-identifiers-unblock-select-token",
+          "title": "Vybrat identifikator k odblokovani",
+          "description": "Nacte tokeny vcetne blokovanych. V kartach vyberte token s odpovidajicim TokenBlockedStatus.",
+          "requiresContext": ["mosIdentifierSessionId"],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokens\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokens xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosIdentifierSessionId}}</SessionID>\n      <GetOnlyAvailableTokens>false</GetOnlyAvailableTokens>\n    </GetTokens>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "regex": "<GetTokensResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>"
+              },
+              {
+                "path": "$",
+                "regex": "<TokenEx[\\s\\S]*?>"
+              }
+            ]
+          },
+          "selection": {
+            "buttonLabel": "Odblokovat tento identifikator",
+            "selectedButtonLabel": "Vybrano k odblokaci",
+            "sourceRegex": {
+              "itemPattern": "<TokenEx[^>]*>([\\s\\S]*?)</TokenEx>",
+              "fields": {
+                "tokenId": "<TokenID>([^<]+)</TokenID>",
+                "name": "<Name>([^<]*)</Name>",
+                "identifierType": "<IdentifierType>([^<]*)</IdentifierType>",
+                "maskedPan": "<MaskedPAN>([^<]*)</MaskedPAN>",
+                "cln": "<CLN>([^<]*)</CLN>",
+                "active": "<Active>([^<]+)</Active>",
+                "isPersonalized": "<IsPersonalized>([^<]*)</IsPersonalized>",
+                "blockedStatus": "<TokenBlockedStatus>([^<]*)</TokenBlockedStatus>"
+              }
+            },
+            "store": {
+              "mosIdentifierTokenId": "$.tokenId",
+              "mosIdentifierOriginalName": "$.name",
+              "mosIdentifierActive": "$.active",
+              "mosIdentifierBlockedStatus": "$.blockedStatus"
+            }
+          }
+        },
+        {
+          "id": "mos-identifiers-change-active-unblock",
+          "title": "Odblokovat vybrany identifikator",
+          "description": "Zavola ChangeActiveToken(TokenID, IsActive=true, TokenBlockedStatus=nil).",
+          "requiresContext": ["mosIdentifierSessionId", "mosIdentifierTokenId"],
+          "fields": [
+            {
+              "name": "tokenId",
+              "label": "TokenID",
+              "type": "number",
+              "value": "{{context.mosIdentifierTokenId}}"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/ChangeActiveToken\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <ChangeActiveToken xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosIdentifierSessionId}}</SessionID>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <IsActive>true</IsActive>\n      <TokenBlockedStatus xsi:nil=\"true\" />\n    </ChangeActiveToken>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "regex": "<ChangeActiveTokenResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "message": "MOS token neodblokoval. Token muze byt uz aktivni nebo blokovany stavem Admin/Issuer."
+              }
+            ]
+          }
+        },
+        {
+          "id": "mos-identifiers-unblock-verify",
+          "title": "Zkontrolovat identifikatory po odblokovani",
+          "description": "Znovu nacte tokeny. Vybrany token by mel byt aktivni a bez uzivatelske blokace.",
+          "requiresContext": ["mosIdentifierSessionId"],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokens\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokens xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosIdentifierSessionId}}</SessionID>\n      <GetOnlyAvailableTokens>false</GetOnlyAvailableTokens>\n    </GetTokens>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "regex": "<GetTokensResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>"
+              }
+            ]
+          },
+          "selection": {
+            "buttonLabel": "Ulozit kontrolni token",
+            "selectedButtonLabel": "Kontrola ulozena",
+            "sourceRegex": {
+              "itemPattern": "<TokenEx[^>]*>([\\s\\S]*?)</TokenEx>",
+              "fields": {
+                "tokenId": "<TokenID>([^<]+)</TokenID>",
+                "name": "<Name>([^<]*)</Name>",
+                "identifierType": "<IdentifierType>([^<]*)</IdentifierType>",
+                "maskedPan": "<MaskedPAN>([^<]*)</MaskedPAN>",
+                "cln": "<CLN>([^<]*)</CLN>",
+                "active": "<Active>([^<]+)</Active>",
+                "blockedStatus": "<TokenBlockedStatus>([^<]*)</TokenBlockedStatus>"
+              }
+            },
+            "store": {
+              "mosIdentifierVerifyTokenId": "$.tokenId",
+              "mosIdentifierVerifyActive": "$.active",
+              "mosIdentifierVerifyBlockedStatus": "$.blockedStatus"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
