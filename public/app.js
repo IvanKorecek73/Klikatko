@@ -1461,9 +1461,9 @@ function renderIdentityActions(authConfig = getProjectAuthConfig()) {
   const session = project ? loadSavedAuthSession(project, getPidLitackaEnvironmentId(project)) : null;
 
   elements.identityLoginAction.disabled = !(project && pidAuthConfig.type === "login");
-  elements.identityRefreshAction.disabled = !(project && pidAuthConfig.refresh && session?.refreshToken);
-  elements.identityRenewMosAction.disabled = !(project && pidAuthConfig.sessionRenew && session?.accessToken && !session?.isAnonymous);
-  elements.identityLogoutAction.disabled = !(project && pidAuthConfig.logout && session?.accessToken);
+  elements.identityRefreshAction.disabled = !(project && pidAuthConfig.type === "login" && pidAuthConfig.refresh);
+  elements.identityRenewMosAction.disabled = !(project && pidAuthConfig.type === "login" && pidAuthConfig.sessionRenew);
+  elements.identityLogoutAction.disabled = !(project && pidAuthConfig.type === "login" && pidAuthConfig.logout);
 }
 
 async function applyIdentityProfileSelection(profileId) {
@@ -1728,30 +1728,63 @@ function createCustomAuthProfileId(email, deviceId) {
 
 async function executeIdentityAuthAction(action) {
   const project = getPidLitackaProject();
+  const actionLabels = {
+    login: "Prihlasuji do BE...",
+    refresh: "Obnovuji JWT...",
+    mos: "Obnovuji MOS session...",
+    logout: "Odhlasuji..."
+  };
 
   if (!project) {
     showRedisResult("error", "PidLitacka projekt neni dostupny.", "Nelze provest prihlaseni testovaci identity.");
     return;
   }
 
+  showRedisResult("warn", actionLabels[action] || "Provadim akci...", "Pracuji s aktualne vybranym uctem v zalozce Uzivatel.");
+
   try {
     await withPidLitackaIdentityContext(async authConfig => {
       if (action === "login") {
+        if (authConfig.type !== "login" || !authConfig.login) {
+          throw new Error("Projekt nema nakonfigurovane prihlaseni do BE.");
+        }
         await performAuthRequest("login", getActiveLoginRequestConfig(authConfig), { syncDom: false });
       } else if (action === "refresh") {
+        if (authConfig.type !== "login" || !authConfig.refresh) {
+          throw new Error("Projekt nema nakonfigurovanou obnovu JWT.");
+        }
+        if (!state.authSession?.refreshToken) {
+          throw new Error("Neni ulozeny refresh token. Pouzijte 'Prihlasit do BE'.");
+        }
         await performAuthRequest("refresh", authConfig.refresh, { syncDom: false });
       } else if (action === "mos") {
+        if (authConfig.type !== "login" || !authConfig.sessionRenew) {
+          throw new Error("Projekt nema nakonfigurovanou obnovu MOS session.");
+        }
+        if (!state.authSession?.accessToken) {
+          throw new Error("Neni ulozeny access token. Nejdrive se prihlaste do BE nebo obnovte JWT.");
+        }
+        if (state.authSession?.isAnonymous) {
+          throw new Error("MOS session nelze obnovit pro anonymniho uzivatele.");
+        }
         const result = await renewMosSessionIfPossible({ syncDom: false });
         if (!result.ok) {
           throw new Error(result.message);
         }
       } else if (action === "logout") {
+        if (authConfig.type !== "login" || !authConfig.logout) {
+          throw new Error("Projekt nema nakonfigurovane odhlaseni.");
+        }
+        if (!state.authSession?.accessToken) {
+          throw new Error("Neni ulozene aktivni prihlaseni k odhlaseni.");
+        }
         await performAuthRequest("logout", authConfig.logout, { syncDom: false });
       }
     });
 
     state.redisAutoSessionIdentityId = "";
     renderRedisViewer();
+    showRedisResult("ok", "Akce prihlaseni probehla.", actionLabels[action]?.replace("...", ".") || "Hotovo.");
   } catch (error) {
     showRedisResult(
       "error",
