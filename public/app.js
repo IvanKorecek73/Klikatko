@@ -9436,6 +9436,14 @@ function buildAppCardsHtml(body, step = currentStep()) {
     return renderPersonalizeIdentifierCardHtml(body, step);
   }
 
+  if (isRenameIdentifierResponse(body)) {
+    return renderRenameIdentifierCardHtml(body);
+  }
+
+  if (isIdentifierActiveStateResponse(body)) {
+    return renderIdentifierActiveStateCardHtml(body);
+  }
+
   if (isTokenizeMobileIdentifierResponse(body)) {
     return renderTokenizeMobileIdentifierCardHtml(body);
   }
@@ -10478,6 +10486,7 @@ function renderClientIdentifiersCardHtml(body, step = currentStep()) {
         identifier.subtype || null,
         identifier.isActive ? "aktivní" : "neaktivní",
         identifier.isPersonalized === true ? "personalizovaný" : identifier.isPersonalized === false ? "nepersonalizovaný" : null,
+        identifier.blockedStatus ? `blokace ${identifier.blockedStatus}` : null,
         identifier.isAvailableForTransportSystem ? "dostupný pro dopravu" : null,
         identifier.isActiveForTransportSystem ? "aktivní v dopravě" : null
       ],
@@ -10653,6 +10662,76 @@ function renderPersonalizeIdentifierCardHtml(body, step = currentStep()) {
           <div class="app-detail-row"><span>Výsledek</span><span>${escapeHtml(getIdentifierOperationStatusLabel(body.status))}</span></div>
           <div class="app-detail-row"><span>TokenID</span><span>${escapeHtml(body.identifierId || "-")}</span></div>
           <div class="app-detail-row"><span>Personalizovaný</span><span>${escapeHtml(formatBooleanAnswer(body.isPersonalized))}</span></div>
+          ${steps.map(step => `
+            <div class="app-detail-row">
+              <span>${escapeHtml(getIdentifierStepLabel(step.name))}</span>
+              <span>${escapeHtml(getIdentifierStepDetails(step, body))}</span>
+            </div>
+          `).join("")}
+        </div>
+      </article>
+    </div>
+  `;
+}
+
+function renderRenameIdentifierCardHtml(body) {
+  const steps = Array.isArray(body.steps) ? body.steps : [];
+  const completed = body.status === "Completed";
+
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>${escapeHtml(completed ? "Identifikátor přejmenován" : "Přejmenování identifikátoru")}</strong>
+        <p>${escapeHtml(completed
+          ? `BE PidLitacka potvrdil nový název ${body.name || ""}.`
+          : "Přejmenování se nedokončilo. Zkontrolujte kroky níže.")}</p>
+        <div class="app-card-meta">
+          ${renderAppChip(getIdentifierOperationStatusLabel(body.status))}
+          ${body.identifierId ? renderAppChip(`ID ${body.identifierId}`) : ""}
+          ${body.name ? renderAppChip(body.name) : ""}
+          ${renderAppChip(steps.length === 1 ? "1 krok" : `${steps.length} kroků`)}
+        </div>
+        <div class="app-card-details">
+          <div class="app-detail-row"><span>Výsledek</span><span>${escapeHtml(getIdentifierOperationStatusLabel(body.status))}</span></div>
+          <div class="app-detail-row"><span>Identifier ID</span><span>${escapeHtml(body.identifierId || "-")}</span></div>
+          <div class="app-detail-row"><span>Nový název</span><span>${escapeHtml(body.name || "-")}</span></div>
+          ${steps.map(step => `
+            <div class="app-detail-row">
+              <span>${escapeHtml(getIdentifierStepLabel(step.name))}</span>
+              <span>${escapeHtml(getIdentifierStepDetails(step, body))}</span>
+            </div>
+          `).join("")}
+        </div>
+      </article>
+    </div>
+  `;
+}
+
+function renderIdentifierActiveStateCardHtml(body) {
+  const steps = Array.isArray(body.steps) ? body.steps : [];
+  const completed = body.status === "Completed";
+  const activeText = body.isActive ? "aktivní" : "neaktivní";
+  const title = body.isActive ? "Identifikátor odblokován" : "Identifikátor zablokován";
+
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>${escapeHtml(completed ? title : "Změna stavu identifikátoru")}</strong>
+        <p>${escapeHtml(completed
+          ? `Identifikátor je nyní ${activeText}, stav blokace ${body.blockedStatus || "-"}.`
+          : "Změna stavu se nedokončila. Zkontrolujte kroky níže.")}</p>
+        <div class="app-card-meta">
+          ${renderAppChip(getIdentifierOperationStatusLabel(body.status))}
+          ${body.identifierId ? renderAppChip(`ID ${body.identifierId}`) : ""}
+          ${renderAppChip(activeText)}
+          ${body.blockedStatus ? renderAppChip(`blokace ${body.blockedStatus}`) : ""}
+          ${renderAppChip(steps.length === 1 ? "1 krok" : `${steps.length} kroků`)}
+        </div>
+        <div class="app-card-details">
+          <div class="app-detail-row"><span>Výsledek</span><span>${escapeHtml(getIdentifierOperationStatusLabel(body.status))}</span></div>
+          <div class="app-detail-row"><span>Identifier ID</span><span>${escapeHtml(body.identifierId || "-")}</span></div>
+          <div class="app-detail-row"><span>Aktivní</span><span>${escapeHtml(formatBooleanAnswer(body.isActive))}</span></div>
+          <div class="app-detail-row"><span>Blokace</span><span>${escapeHtml(body.blockedStatus || "-")}</span></div>
           ${steps.map(step => `
             <div class="app-detail-row">
               <span>${escapeHtml(getIdentifierStepLabel(step.name))}</span>
@@ -11829,6 +11908,27 @@ function isPersonalizeIdentifierResponse(value) {
     && typeof value.isPersonalized === "boolean"
     && !("canBePersonalized" in value)
     && !("registrationState" in value);
+}
+
+function isRenameIdentifierResponse(value) {
+  return value
+    && typeof value === "object"
+    && typeof value.status === "string"
+    && Array.isArray(value.steps)
+    && ("identifierId" in value)
+    && ("name" in value)
+    && value.steps.some(step => step?.name === "ChangeTokenName");
+}
+
+function isIdentifierActiveStateResponse(value) {
+  return value
+    && typeof value === "object"
+    && typeof value.status === "string"
+    && Array.isArray(value.steps)
+    && ("identifierId" in value)
+    && typeof value.isActive === "boolean"
+    && ("blockedStatus" in value)
+    && value.steps.some(step => step?.name === "ChangeActiveToken");
 }
 
 function isCompleteIdentifierRegistrationResponse(value) {

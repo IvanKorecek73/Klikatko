@@ -1,0 +1,444 @@
+{
+  "version": 1,
+  "name": "PidLitacka - identifikatory",
+  "description": "REST scenare nad BE PidLitacka pro spravu identifikatoru aktualniho klienta: prejmenovani, blokace a odblokace.",
+  "scenarios": [
+    {
+      "id": "pidlitacka-identifier-rename",
+      "title": "PidLitacka identifikator - prejmenovat",
+      "description": "Nacte identifikatory prihlaseneho klienta, umozni jeden vybrat, zavola prejmenovani na BE PidLitacka a znovu nacte identifikatory pro kontrolu.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "identifiers",
+        "pidlitacka",
+        "rename",
+        "mutation"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Identifikatory",
+        "subtitle": "Prejmenovani pres BE"
+      },
+      "instructions": [
+        "V zalozce Uzivatel nejdrive pouzijte Prihlasit / obnovit, aby byl pripraven JWT i MOS SessionID.",
+        "Scenar vola BE PidLitacka, nikoliv primo Core MOS.",
+        "Vyberte existujici identifikator a zadejte novy nazev.",
+        "Posledni krok znovu nacte identifikatory, abyste mohli vizualne overit novy nazev."
+      ],
+      "steps": [
+        {
+          "id": "pidlitacka-identifiers-rename-select",
+          "title": "Vybrat identifikator",
+          "description": "Nacte identifikatory aktualniho klienta a umozni vybrat jeden nosic.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 1
+              }
+            ]
+          },
+          "selection": {
+            "sourcePath": "$.identifiers",
+            "buttonLabel": "Prejmenovat tento identifikator",
+            "selectedButtonLabel": "Vybrano k prejmenovani",
+            "emptyTitle": "Zadne identifikatory",
+            "emptyText": "Aktualni klient nema zadny identifikator, ktery by bylo mozne prejmenovat.",
+            "store": {
+              "pidIdentifierId": "$.identifierId",
+              "pidIdentifierOriginalName": "$.name",
+              "pidIdentifierType": "$.type",
+              "pidIdentifierMaskedValue": "$.maskedPan",
+              "pidIdentifierBlockedStatus": "$.blockedStatus"
+            }
+          }
+        },
+        {
+          "id": "pidlitacka-identifiers-rename-update",
+          "title": "Prejmenovat vybrany identifikator",
+          "description": "Zavola PUT /v1/client/identifiers/{identifierId}/name.",
+          "requiresContext": [
+            "pidIdentifierId"
+          ],
+          "fields": [
+            {
+              "name": "identifierId",
+              "label": "Identifier ID",
+              "type": "number",
+              "value": "{{context.pidIdentifierId}}"
+            },
+            {
+              "name": "name",
+              "label": "Novy nazev",
+              "type": "text",
+              "value": "Klikatko BE rename {{today}}",
+              "placeholder": "Novy nazev identifikatoru"
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "path": "/v1/client/identifiers/{{form.identifierId}}/name",
+            "body": {
+              "name": "{{form.name}}"
+            }
+          },
+          "remember": {
+            "pidIdentifierNewName": "{{form.name}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.name",
+                "equals": "{{form.name}}"
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "IdentifierResolution"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[2].name",
+                "equals": "ChangeTokenName"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-identifiers-rename-verify",
+          "title": "Zkontrolovat identifikatory po prejmenovani",
+          "description": "Znovu nacte identifikatory aktualniho klienta. Vybrany identifikator by mel mit novy nazev.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 1
+              }
+            ]
+          },
+          "selection": {
+            "sourcePath": "$.identifiers",
+            "buttonLabel": "Ulozit kontrolu",
+            "selectedButtonLabel": "Kontrola ulozena",
+            "store": {
+              "pidIdentifierVerifyId": "$.identifierId",
+              "pidIdentifierVerifyName": "$.name",
+              "pidIdentifierVerifyBlockedStatus": "$.blockedStatus"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-identifier-block",
+      "title": "PidLitacka identifikator - zablokovat",
+      "description": "Nacte identifikatory prihlaseneho klienta, umozni vybrat nosic a zavola uzivatelskou blokaci pres BE PidLitacka.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "identifiers",
+        "pidlitacka",
+        "block",
+        "mutation"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Identifikatory",
+        "subtitle": "Blokace pres BE"
+      },
+      "instructions": [
+        "V zalozce Uzivatel nejdrive pouzijte Prihlasit / obnovit.",
+        "Scenar vola BE PidLitacka. BE si sam dohleda klienta a vola Core MOS ChangeActiveToken.",
+        "Vyberte aktivni odblokovany identifikator. Pokud je uz zablokovany uzivatelem, BE ma operaci rizene preskocit.",
+        "Posledni krok znovu nacte identifikatory pro kontrolu stavu."
+      ],
+      "steps": [
+        {
+          "id": "pidlitacka-identifiers-block-select",
+          "title": "Vybrat identifikator k blokaci",
+          "description": "Nacte identifikatory klienta. V kartach sledujte Aktivni a Blokace.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 1
+              }
+            ]
+          },
+          "selection": {
+            "sourcePath": "$.identifiers",
+            "buttonLabel": "Blokovat tento identifikator",
+            "selectedButtonLabel": "Vybrano k blokaci",
+            "emptyTitle": "Zadne identifikatory",
+            "emptyText": "Aktualni klient nema zadny identifikator, ktery by bylo mozne blokovat.",
+            "store": {
+              "pidIdentifierId": "$.identifierId",
+              "pidIdentifierName": "$.name",
+              "pidIdentifierType": "$.type",
+              "pidIdentifierMaskedValue": "$.maskedPan",
+              "pidIdentifierBlockedStatus": "$.blockedStatus"
+            }
+          }
+        },
+        {
+          "id": "pidlitacka-identifiers-block-update",
+          "title": "Zablokovat vybrany identifikator",
+          "description": "Zavola POST /v1/client/identifiers/{identifierId}/block.",
+          "requiresContext": [
+            "pidIdentifierId"
+          ],
+          "fields": [
+            {
+              "name": "identifierId",
+              "label": "Identifier ID",
+              "type": "number",
+              "value": "{{context.pidIdentifierId}}"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/identifiers/{{form.identifierId}}/block"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.isActive",
+                "equals": false
+              },
+              {
+                "path": "$.blockedStatus",
+                "equals": "BlockedByUser"
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "IdentifierResolution"
+              },
+              {
+                "path": "$.steps[2].name",
+                "equals": "ChangeActiveToken"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-identifiers-block-verify",
+          "title": "Zkontrolovat identifikatory po blokaci",
+          "description": "Znovu nacte identifikatory. Vybrany identifikator by mel byt neaktivni a blokovany uzivatelem.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 1
+              }
+            ]
+          },
+          "selection": {
+            "sourcePath": "$.identifiers",
+            "buttonLabel": "Ulozit kontrolu",
+            "selectedButtonLabel": "Kontrola ulozena",
+            "store": {
+              "pidIdentifierVerifyId": "$.identifierId",
+              "pidIdentifierVerifyActive": "$.isActive",
+              "pidIdentifierVerifyBlockedStatus": "$.blockedStatus"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-identifier-unblock",
+      "title": "PidLitacka identifikator - odblokovat",
+      "description": "Nacte identifikatory prihlaseneho klienta, umozni vybrat nosic a zavola uzivatelskou odblokaci pres BE PidLitacka.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "identifiers",
+        "pidlitacka",
+        "unblock",
+        "mutation"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Identifikatory",
+        "subtitle": "Odblokace pres BE"
+      },
+      "instructions": [
+        "V zalozce Uzivatel nejdrive pouzijte Prihlasit / obnovit.",
+        "Scenar vola BE PidLitacka. BE ma odblokovat pouze uzivatelskou blokaci, ne admin/issuer blokaci.",
+        "Vyberte identifikator blokovany uzivatelem. Pokud je uz aktivni, BE ma operaci rizene preskocit.",
+        "Posledni krok znovu nacte identifikatory pro kontrolu stavu."
+      ],
+      "steps": [
+        {
+          "id": "pidlitacka-identifiers-unblock-select",
+          "title": "Vybrat identifikator k odblokovani",
+          "description": "Nacte identifikatory klienta. V kartach vyberte identifikator s uzivatelskou blokaci.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 1
+              }
+            ]
+          },
+          "selection": {
+            "sourcePath": "$.identifiers",
+            "buttonLabel": "Odblokovat tento identifikator",
+            "selectedButtonLabel": "Vybrano k odblokaci",
+            "emptyTitle": "Zadne identifikatory",
+            "emptyText": "Aktualni klient nema zadny identifikator, ktery by bylo mozne odblokovat.",
+            "store": {
+              "pidIdentifierId": "$.identifierId",
+              "pidIdentifierName": "$.name",
+              "pidIdentifierType": "$.type",
+              "pidIdentifierMaskedValue": "$.maskedPan",
+              "pidIdentifierBlockedStatus": "$.blockedStatus"
+            }
+          }
+        },
+        {
+          "id": "pidlitacka-identifiers-unblock-update",
+          "title": "Odblokovat vybrany identifikator",
+          "description": "Zavola POST /v1/client/identifiers/{identifierId}/unblock.",
+          "requiresContext": [
+            "pidIdentifierId"
+          ],
+          "fields": [
+            {
+              "name": "identifierId",
+              "label": "Identifier ID",
+              "type": "number",
+              "value": "{{context.pidIdentifierId}}"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/identifiers/{{form.identifierId}}/unblock"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.isActive",
+                "equals": true
+              },
+              {
+                "path": "$.blockedStatus",
+                "equals": "NotBlocked"
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "IdentifierResolution"
+              },
+              {
+                "path": "$.steps[2].name",
+                "equals": "ChangeActiveToken"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-identifiers-unblock-verify",
+          "title": "Zkontrolovat identifikatory po odblokovani",
+          "description": "Znovu nacte identifikatory. Vybrany identifikator by mel byt aktivni a bez uzivatelske blokace.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 1
+              }
+            ]
+          },
+          "selection": {
+            "sourcePath": "$.identifiers",
+            "buttonLabel": "Ulozit kontrolu",
+            "selectedButtonLabel": "Kontrola ulozena",
+            "store": {
+              "pidIdentifierVerifyId": "$.identifierId",
+              "pidIdentifierVerifyActive": "$.isActive",
+              "pidIdentifierVerifyBlockedStatus": "$.blockedStatus"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
