@@ -2043,6 +2043,32 @@ button:disabled {
   gap: 8px;
 }
 
+.identity-collapsible-section > summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.identity-collapsible-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.identity-collapsible-section > summary::after {
+  content: "Rozbalit";
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.identity-collapsible-section[open] > summary::after {
+  content: "Sbalit";
+}
+
+.identity-collapsible-section > .identity-profile-fields {
+  margin-top: 10px;
+}
+
 .identity-section-head strong {
   color: var(--ink);
   font-size: 13px;

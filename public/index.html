@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Klik&aacute;tko</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=20260611-smart-identity-auth">
+  <link rel="stylesheet" href="/styles.css?v=20260611-collapsed-device">
 </head>
 <body>
   <main class="shell">
@@ -165,13 +165,13 @@
                 <button id="identityRemoveProfileAction" type="button">Odebrat &uacute;&#269;et</button>
               </div>
             </div>
-            <div class="identity-section">
-              <div class="identity-section-head">
+            <details class="identity-section identity-collapsible-section">
+              <summary class="identity-section-head">
                 <strong>Za&#345;&iacute;zen&iacute;</strong>
                 <span>device kontext</span>
-              </div>
+              </summary>
               <div id="identityDeviceFields" class="identity-profile-fields"></div>
-            </div>
+            </details>
             <div class="identity-section">
               <div class="identity-section-head">
                 <strong>BE PidLitacka</strong>
@@ -303,6 +303,6 @@
   </main>
 
   <script src="/vendor/html2canvas.min.js?v=1.4.1"></script>
-  <script src="/app.js?v=20260611-smart-identity-auth" type="module"></script>
+  <script src="/app.js?v=20260611-collapsed-device" type="module"></script>
 </body>
 </html>
