@@ -753,6 +753,10 @@ function getAuthCustomProfilesStorageKey(projectId) {
   return `demoHarness.authCustomProfiles.${projectId}`;
 }
 
+function getHiddenAuthProfilesStorageKey(projectId) {
+  return `demoHarness.hiddenAuthProfiles.${projectId}`;
+}
+
 function getSavedEnvironmentId(project) {
   if (!project?.id) {
     return "";
@@ -816,14 +820,18 @@ function getAuthProfiles(authConfig = getProjectAuthConfig()) {
     return [];
   }
 
-  const staticProfiles = (authConfig.login?.profiles || [])
-    .map(profile => applyLocalAuthProfileValues(profile, state.currentProject));
-  const anonymousProfiles = staticProfiles.filter(profile => profile.authRequest === "anonymous");
-  const regularProfiles = staticProfiles.filter(profile => profile.authRequest !== "anonymous");
   const customProfiles = (state.authCustomProfiles || []).map(profile => ({
     ...profile,
     custom: true
   }));
+  const customProfileIds = new Set(customProfiles.map(profile => profile.id));
+  const hiddenProfiles = getHiddenAuthProfileIds(state.currentProject);
+  const staticProfiles = (authConfig.login?.profiles || [])
+    .filter(profile => !hiddenProfiles.has(profile.id))
+    .filter(profile => !customProfileIds.has(profile.id))
+    .map(profile => applyLocalAuthProfileValues(profile, state.currentProject));
+  const anonymousProfiles = staticProfiles.filter(profile => profile.authRequest === "anonymous");
+  const regularProfiles = staticProfiles.filter(profile => profile.authRequest !== "anonymous");
 
   return [
     ...regularProfiles,
@@ -855,14 +863,18 @@ function getPidLitackaAuthProfiles() {
     return [];
   }
 
-  const staticProfiles = (authConfig.login?.profiles || [])
-    .map(profile => applyLocalAuthProfileValues(profile, project));
-  const anonymousProfiles = staticProfiles.filter(profile => profile.authRequest === "anonymous");
-  const regularProfiles = staticProfiles.filter(profile => profile.authRequest !== "anonymous");
   const customProfiles = loadSavedAuthCustomProfiles(project).map(profile => ({
     ...profile,
     custom: true
   }));
+  const customProfileIds = new Set(customProfiles.map(profile => profile.id));
+  const hiddenProfiles = getHiddenAuthProfileIds(project);
+  const staticProfiles = (authConfig.login?.profiles || [])
+    .filter(profile => !hiddenProfiles.has(profile.id))
+    .filter(profile => !customProfileIds.has(profile.id))
+    .map(profile => applyLocalAuthProfileValues(profile, project));
+  const anonymousProfiles = staticProfiles.filter(profile => profile.authRequest === "anonymous");
+  const regularProfiles = staticProfiles.filter(profile => profile.authRequest !== "anonymous");
 
   return [
     ...regularProfiles,
@@ -870,6 +882,27 @@ function getPidLitackaAuthProfiles() {
     ...anonymousProfiles,
     createNewAuthProfile()
   ];
+}
+
+function getHiddenAuthProfileIds(project) {
+  if (!project?.id) {
+    return new Set();
+  }
+
+  try {
+    const ids = JSON.parse(localStorage.getItem(getHiddenAuthProfilesStorageKey(project.id)) || "[]");
+    return new Set(Array.isArray(ids) ? ids : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveHiddenAuthProfileIds(project, ids) {
+  if (!project?.id) {
+    return;
+  }
+
+  localStorage.setItem(getHiddenAuthProfilesStorageKey(project.id), JSON.stringify([...ids]));
 }
 
 function getSelectedPidLitackaProfileId() {
@@ -1598,8 +1631,9 @@ function saveCurrentIdentityProfile() {
   const session = loadSavedAuthSession(project, getPidLitackaEnvironmentId(project));
   const selectedProfile = getSelectedPidLitackaProfile();
   const note = String(values.__newProfileNote || getPidLitackaIdentityProfileNote(selectedProfile) || "").trim();
+  const isExistingProfile = selectedProfile && !selectedProfile.isNewProfile;
   const profile = {
-    id: selectedProfile?.custom
+    id: isExistingProfile
       ? selectedProfile.id
       : createCustomAuthProfileId(email, values.deviceId),
     label: email,
@@ -1627,9 +1661,12 @@ function saveCurrentIdentityProfile() {
   ];
   const notes = loadSavedAuthProfileNotes(project);
   notes[profile.id] = note;
+  const hiddenProfileIds = getHiddenAuthProfileIds(project);
+  hiddenProfileIds.delete(profile.id);
 
   localStorage.setItem(getAuthCustomProfilesStorageKey(project.id), JSON.stringify(nextProfiles));
   localStorage.setItem(getAuthProfileNotesStorageKey(project.id), JSON.stringify(notes));
+  saveHiddenAuthProfileIds(project, hiddenProfileIds);
 
   const formValues = {
     ...loadSavedAuthFormValues(project),
@@ -1646,25 +1683,28 @@ function saveCurrentIdentityProfile() {
   }
 
   renderRedisViewer();
-  showRedisResult("ok", "Ucet ulozen.", `${email} je ulozeny v lokalnim seznamu Klikatka.`);
+  showRedisResult("ok", "Ucet ulozen.", `${email} je ulozeny v seznamu Klikatka.`);
 }
 
 function removeCurrentIdentityProfile() {
   const project = getPidLitackaProject();
   const profile = getSelectedPidLitackaProfile();
 
-  if (!project || !profile?.custom) {
-    showRedisResult("warn", "Ucet nelze odebrat.", "Odebrat lze jen lokalne ulozeny ucet Klikatka.");
+  if (!project || !profile || profile.isNewProfile) {
+    showRedisResult("warn", "Ucet nelze odebrat.", "Nejdrive vyberte existujici ucet.");
     return;
   }
 
   const nextProfiles = loadSavedAuthCustomProfiles(project).filter(item => item.id !== profile.id);
   const notes = loadSavedAuthProfileNotes(project);
   delete notes[profile.id];
+  const hiddenProfileIds = getHiddenAuthProfileIds(project);
+  hiddenProfileIds.add(profile.id);
   localStorage.setItem(getAuthCustomProfilesStorageKey(project.id), JSON.stringify(nextProfiles));
   localStorage.setItem(getAuthProfileNotesStorageKey(project.id), JSON.stringify(notes));
+  saveHiddenAuthProfileIds(project, hiddenProfileIds);
 
-  const nextProfile = getPidLitackaAuthProfiles().find(item => !item.custom && !item.isNewProfile)
+  const nextProfile = getPidLitackaAuthProfiles().find(item => !item.isNewProfile)
     || createNewAuthProfile();
   const formValues = loadSavedAuthFormValues(project);
   formValues.__selectedProfileId = nextProfile.id;
@@ -1678,7 +1718,7 @@ function removeCurrentIdentityProfile() {
   }
 
   renderRedisViewer();
-  showRedisResult("ok", "Ucet odebran.", `${profile.label || profile.id} byl odebran jen z lokalniho seznamu Klikatka.`);
+  showRedisResult("ok", "Ucet odebran.", `${profile.label || profile.id} byl odebran ze seznamu Klikatka. Ucet v BE/MOS nebyl smazan.`);
 }
 
 function createCustomAuthProfileId(email, deviceId) {
@@ -2028,17 +2068,20 @@ function handleAuthFormClick(event) {
 function removeSelectedAuthProfile() {
   const selectedProfile = getSelectedAuthProfile();
 
-  if (!selectedProfile?.custom) {
+  if (!selectedProfile || selectedProfile.isNewProfile) {
     return;
   }
 
   state.authCustomProfiles = (state.authCustomProfiles || [])
     .filter(profile => profile.id !== selectedProfile.id);
   delete state.authProfileNotes[selectedProfile.id];
+  const hiddenProfileIds = getHiddenAuthProfileIds(state.currentProject);
+  hiddenProfileIds.add(selectedProfile.id);
+  saveHiddenAuthProfileIds(state.currentProject, hiddenProfileIds);
   saveAuthCustomProfiles();
   saveAuthProfileNotes();
 
-  const firstProfile = getAuthProfiles().find(profile => !profile.custom && !profile.isNewProfile);
+  const firstProfile = getAuthProfiles().find(profile => !profile.isNewProfile);
   if (firstProfile) {
     applyAuthProfileSelection(firstProfile.id, { overwrite: true });
   } else {
@@ -2217,7 +2260,7 @@ function updateAuthProfileAfterSuccessfulLogin() {
     return;
   }
 
-  if (selectedProfile?.custom) {
+  if (selectedProfile) {
     updateCustomAuthProfilePasswordAfterSuccessfulLogin(selectedProfile);
   }
 }
@@ -2287,49 +2330,49 @@ function updateCustomAuthProfilePasswordAfterSuccessfulLogin(selectedProfile) {
     return;
   }
 
+  const existingProfiles = state.authCustomProfiles || [];
+  const existingProfile = existingProfiles.find(profile => profile.id === selectedProfile.id) || selectedProfile;
+  const nextValues = {
+    ...(existingProfile.values || {})
+  };
   let changed = false;
-  state.authCustomProfiles = (state.authCustomProfiles || []).map(profile => {
-    if (profile.id !== selectedProfile.id) {
-      return profile;
-    }
 
-    const nextValues = {
-      ...(profile.values || {})
-    };
-    let profileChanged = false;
-
-    if (password && nextValues.password !== password) {
-      nextValues.password = password;
-      profileChanged = true;
-    }
-
-    if (identityId && nextValues.identityId !== identityId) {
-      nextValues.identityId = identityId;
-      profileChanged = true;
-    }
-
-    for (const field of persistedFields) {
-      const value = state.authFormValues?.[field];
-      if (value !== undefined && nextValues[field] !== value) {
-        nextValues[field] = value;
-        profileChanged = true;
-      }
-    }
-
-    if (!profileChanged) {
-      return profile;
-    }
-
+  if (password && nextValues.password !== password) {
+    nextValues.password = password;
     changed = true;
-    return {
-      ...profile,
-      values: nextValues
-    };
-  });
-
-  if (changed) {
-    saveAuthCustomProfiles();
   }
+
+  if (identityId && nextValues.identityId !== identityId) {
+    nextValues.identityId = identityId;
+    changed = true;
+  }
+
+  for (const field of persistedFields) {
+    const value = state.authFormValues?.[field];
+    if (value !== undefined && nextValues[field] !== value) {
+      nextValues[field] = value;
+      changed = true;
+    }
+  }
+
+  if (!changed) {
+    return;
+  }
+
+  const updatedProfile = {
+    ...existingProfile,
+    custom: true,
+    values: nextValues
+  };
+  const hiddenProfileIds = getHiddenAuthProfileIds(state.currentProject);
+  hiddenProfileIds.delete(updatedProfile.id);
+  state.authCustomProfiles = [
+    ...existingProfiles.filter(profile => profile.id !== updatedProfile.id),
+    updatedProfile
+  ];
+  saveHiddenAuthProfileIds(state.currentProject, hiddenProfileIds);
+
+  saveAuthCustomProfiles();
 }
 
 function buildAuthRequest(config) {
@@ -3164,15 +3207,11 @@ function getIdentityProfileOptionLabel(profile, label) {
     return label;
   }
 
-  if (profile?.custom) {
-    return `${label} (ulozeny)`;
-  }
-
   if (profile?.authRequest === "anonymous" || profile?.noteDisabled) {
     return `${label} (anonymni)`;
   }
 
-  return `${label} (vestaveny)`;
+  return label;
 }
 
 function renderIdentityProfileActions() {
@@ -3184,20 +3223,16 @@ function renderIdentityProfileActions() {
   const values = getPidLitackaIdentityValues();
   const canSave = Boolean(String(values.email || "").trim() && String(values.password || "").trim());
   elements.identitySaveProfileAction.disabled = !canSave;
-  elements.identityRemoveProfileAction.disabled = !profile?.custom;
+  elements.identityRemoveProfileAction.disabled = !profile || profile.isNewProfile;
 
-  if (profile?.custom) {
-    elements.identitySaveProfileAction.textContent = "Aktualizovat ulozeny";
-    elements.identitySaveProfileAction.title = "Aktualizuje lokalne ulozeny ucet v Klikatku.";
-    elements.identityRemoveProfileAction.title = "Odebere jen lokalni ulozeny ucet v Klikatku. Ucet v BE/MOS nemaze.";
-  } else if (profile?.isNewProfile) {
+  if (profile?.isNewProfile) {
     elements.identitySaveProfileAction.textContent = "Ulozit ucet";
     elements.identitySaveProfileAction.title = "Ulozi novy lokalni ucet do rychleho vyberu Klikatka.";
     elements.identityRemoveProfileAction.title = "Novy ucet zatim neni ulozeny.";
   } else {
-    elements.identitySaveProfileAction.textContent = "Ulozit kopii";
-    elements.identitySaveProfileAction.title = "Ulozi vlastni lokalni kopii vestaveneho uctu.";
-    elements.identityRemoveProfileAction.title = "Vestaveny ucet z konfigurace nelze odebrat. Odebrat lze jen lokalne ulozenou kopii.";
+    elements.identitySaveProfileAction.textContent = "Ulozit ucet";
+    elements.identitySaveProfileAction.title = "Aktualizuje ucet v seznamu Klikatka.";
+    elements.identityRemoveProfileAction.title = "Odebere ucet ze seznamu Klikatka. Ucet v BE/MOS nemaze.";
   }
 }
 
@@ -3499,18 +3534,14 @@ function getIdentityProfileTypeLabel(profile) {
   }
 
   if (profile.isNewProfile) {
-    return "Novy lokalni ucet";
-  }
-
-  if (profile.custom) {
-    return "Lokalne ulozeny ucet";
+    return "Novy ucet";
   }
 
   if (profile.authRequest === "anonymous" || profile.noteDisabled) {
-    return "Vestaveny anonymni profil";
+    return "Anonymni profil";
   }
 
-  return "Vestaveny profil z konfigurace";
+  return "Ulozeny ucet";
 }
 
 function getIdentityMosStateText(identityId, redisSession, loadedRedisIdentityId) {

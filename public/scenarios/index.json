@@ -42,6 +42,7 @@
               "note": "Výchozí testovací účet pro ruční scénáře. Poznámku můžete v klikátku lokálně upravit podle aktuálního stavu účtu.",
               "values": {
                 "email": "adams.k@litacka.cz",
+                "password": "Test!7958c6cb13a54",
                 "deviceId": "b862b4eb-cbba-40b2-9e60-fa2b58c990dd",
                 "deviceName": "iPhone 15 Pro",
                 "platform": "iOS",
@@ -58,6 +59,7 @@
               "note": "Doplňte lokální poznámku podle toho, pro jaké scénáře je účet vhodný.",
               "values": {
                 "email": "anna.berankova@litacka.cz",
+                "password": "Test!bde2a7f60e124",
                 "deviceId": "2b2f7300-fd24-4d79-a6c7-9d6b5d6f6b57",
                 "deviceName": "iPhone 14",
                 "platform": "iOS",
@@ -74,6 +76,7 @@
               "note": "Doplňte lokální poznámku podle toho, pro jaké scénáře je účet vhodný.",
               "values": {
                 "email": "petr.burian@litacka.cz",
+                "password": "Test!bdeyyf60e124",
                 "deviceId": "6d7cf3e8-1462-4200-b302-2cfb773084f0",
                 "deviceName": "Pixel 8",
                 "platform": "Android",
@@ -90,6 +93,7 @@
               "note": "Obecný testovací účet. Doplňte lokální poznámku podle aktuálního použití.",
               "values": {
                 "email": "test@litacka.cz",
+                "password": "Test123+",
                 "deviceId": "f2e0ea0d-7c6e-4f10-bad2-e4085ea4a0a8",
                 "deviceName": "Samsung Galaxy S24",
                 "platform": "Android",
@@ -131,6 +135,7 @@
               "name": "password",
               "label": "Heslo",
               "type": "password",
+              "value": "Test!7958c6cb13a54",
               "persist": false
             },
             {
