@@ -559,11 +559,9 @@ function renderWorkflowEnvironmentProfileReadonly() {
   }
 
   const profile = getSelectedWorkflowEnvironmentProfile();
-  const pidLitackaEnvironment = getPidLitackaEnvironment();
   elements.workflowEnvironmentProfileReadonly.textContent = [
     profile?.name || "Aktualni prostredi",
-    `BE: ${pidLitackaEnvironment?.name || pidLitackaEnvironment?.id || "-"}`,
-    `MOS: ${getMosEnvironmentSummaryText()}`
+    ...getIdentityEnvironmentSummaryParts()
   ].join(" | ");
 }
 
@@ -1673,14 +1671,9 @@ function renderEnvironmentReadonly() {
     return;
   }
 
-  const environment = state.currentProject?.id === "pidlitacka"
-    ? getPidLitackaEnvironment()
-    : state.currentProject?.id?.startsWith("mos-")
-      ? getCurrentMosProjectEnvironment()
-      : (state.currentProject?.environments || []).find(item => item.id === state.currentEnvironmentId);
   elements.environmentReadonly.textContent = [
-    state.currentProject?.name || "Projekt",
-    environment?.name || environment?.id || "vychozi"
+    ...getIdentityEnvironmentSummaryParts(),
+    state.currentProject?.name ? `Projekt: ${state.currentProject.name}` : null
   ].filter(Boolean).join(" | ");
 }
 
@@ -3851,8 +3844,11 @@ function withIdentityEnvironmentStatus(status) {
 }
 
 function getIdentityEnvironmentTooltipLines() {
-  const environment = getPidLitackaEnvironment();
+  return getIdentityEnvironmentSummaryParts();
+}
 
+function getIdentityEnvironmentSummaryParts() {
+  const environment = getPidLitackaEnvironment();
   return [
     `BE PidLitacka: ${environment?.name || environment?.id || "-"}`,
     `MOS: ${getMosEnvironmentSummaryText()}`
