@@ -1734,38 +1734,31 @@ async function executeIdentityAuthAction(action) {
     return;
   }
 
-  if (state.currentProject?.id === project.id) {
-    if (action === "login") {
-      await executeAuthLogin();
-    } else if (action === "refresh") {
-      await executeAuthRefresh();
-    } else if (action === "mos") {
-      await executeAuthSessionRenew();
-    } else if (action === "logout") {
-      await executeAuthLogout();
-    }
+  try {
+    await withPidLitackaIdentityContext(async authConfig => {
+      if (action === "login") {
+        await performAuthRequest("login", getActiveLoginRequestConfig(authConfig), { syncDom: false });
+      } else if (action === "refresh") {
+        await performAuthRequest("refresh", authConfig.refresh, { syncDom: false });
+      } else if (action === "mos") {
+        const result = await renewMosSessionIfPossible({ syncDom: false });
+        if (!result.ok) {
+          throw new Error(result.message);
+        }
+      } else if (action === "logout") {
+        await performAuthRequest("logout", authConfig.logout, { syncDom: false });
+      }
+    });
+
     state.redisAutoSessionIdentityId = "";
     renderRedisViewer();
-    return;
+  } catch (error) {
+    showRedisResult(
+      "error",
+      "Akce prihlaseni selhala.",
+      error instanceof Error ? error.message : String(error)
+    );
   }
-
-  await withPidLitackaIdentityContext(async authConfig => {
-    if (action === "login") {
-      await performAuthRequest("login", getActiveLoginRequestConfig(authConfig));
-    } else if (action === "refresh") {
-      await performAuthRequest("refresh", authConfig.refresh);
-    } else if (action === "mos") {
-      const result = await renewMosSessionIfPossible();
-      if (!result.ok) {
-        throw new Error(result.message);
-      }
-    } else if (action === "logout") {
-      await executeAuthLogout();
-    }
-  });
-
-  state.redisAutoSessionIdentityId = "";
-  renderRedisViewer();
 }
 
 async function withPidLitackaIdentityContext(action) {
@@ -2199,8 +2192,10 @@ function resetAuthState() {
   renderModeBanner();
 }
 
-async function performAuthRequest(kind, config) {
-  syncAuthFormValuesFromDom();
+async function performAuthRequest(kind, config, options = {}) {
+  if (options.syncDom !== false) {
+    syncAuthFormValuesFromDom();
+  }
   const request = buildAuthRequest(config);
   const startedAt = performance.now();
 
@@ -2841,7 +2836,7 @@ function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function renewMosSessionIfPossible() {
+async function renewMosSessionIfPossible(options = {}) {
   const authConfig = getProjectAuthConfig();
   const sessionConfig = authConfig?.sessionRenew;
 
@@ -2870,13 +2865,13 @@ async function renewMosSessionIfPossible() {
   }
 
   try {
-    const body = await performAuthRequest("session", sessionConfig);
+    const body = await performAuthRequest("session", sessionConfig, options);
     const status = String(body?.status || "").toUpperCase();
 
     if (status === "LOCK_BUSY") {
       const retryAfterMs = Number(body?.retryAfterMs || 500);
       await delay(Math.max(100, retryAfterMs));
-      await performAuthRequest("session", sessionConfig);
+      await performAuthRequest("session", sessionConfig, options);
     }
 
     return { ok: true };
