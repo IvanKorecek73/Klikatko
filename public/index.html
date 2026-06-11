@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Klik&aacute;tko</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=20260611-identity-auth-feedback">
+  <link rel="stylesheet" href="/styles.css?v=20260611-smart-identity-auth">
 </head>
 <body>
   <main class="shell">
@@ -178,11 +178,16 @@
                 <span>JWT a MOS session</span>
               </div>
               <div class="identity-actions">
-                <button id="identityLoginAction" type="button">P&#345;ihl&aacute;sit do BE</button>
-                <button id="identityRefreshAction" type="button">Obnovit JWT</button>
-                <button id="identityRenewMosAction" type="button">Obnovit MOS session</button>
+                <button id="identityLoginAction" type="button">P&#345;ihl&aacute;sit / obnovit</button>
                 <button id="identityLogoutAction" type="button">Odhl&aacute;sit</button>
               </div>
+              <details class="identity-advanced-actions">
+                <summary>Pokro&#269;il&eacute; akce</summary>
+                <div class="identity-actions">
+                  <button id="identityRefreshAction" type="button">Obnovit jen JWT</button>
+                  <button id="identityRenewMosAction" type="button">Obnovit jen MOS session</button>
+                </div>
+              </details>
               <div id="identityActionStatus" class="identity-action-status neutral">P&#345;ipraveno.</div>
             </div>
             <div class="identity-section">
@@ -298,6 +303,6 @@
   </main>
 
   <script src="/vendor/html2canvas.min.js?v=1.4.1"></script>
-  <script src="/app.js?v=20260611-identity-auth-feedback" type="module"></script>
+  <script src="/app.js?v=20260611-smart-identity-auth" type="module"></script>
 </body>
 </html>

@@ -2146,6 +2146,21 @@ button:disabled {
   padding-inline: 9px;
 }
 
+.identity-advanced-actions {
+  margin-top: 8px;
+}
+
+.identity-advanced-actions summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.82rem;
+  user-select: none;
+}
+
+.identity-advanced-actions .identity-actions {
+  margin-top: 8px;
+}
+
 .identity-action-status {
   margin-top: 8px;
   border: 1px solid var(--border);

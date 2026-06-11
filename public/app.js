@@ -310,7 +310,7 @@ function bindEventHandlers() {
   elements.identityDeviceFields.addEventListener("input", handleIdentityProfileFieldInput);
   elements.identitySaveProfileAction.addEventListener("click", saveCurrentIdentityProfile);
   elements.identityRemoveProfileAction.addEventListener("click", removeCurrentIdentityProfile);
-  elements.identityLoginAction.addEventListener("click", () => executeIdentityAuthAction("login"));
+  elements.identityLoginAction.addEventListener("click", () => executeIdentityAuthAction("ensure"));
   elements.identityRefreshAction.addEventListener("click", () => executeIdentityAuthAction("refresh"));
   elements.identityRenewMosAction.addEventListener("click", () => executeIdentityAuthAction("mos"));
   elements.identityLogoutAction.addEventListener("click", () => executeIdentityAuthAction("logout"));
@@ -1739,6 +1739,7 @@ function showIdentityActionStatus(level, message) {
 async function executeIdentityAuthAction(action) {
   const project = getPidLitackaProject();
   const actionLabels = {
+    ensure: "Pripravuji prihlaseni...",
     login: "Prihlasuji do BE...",
     refresh: "Obnovuji JWT...",
     mos: "Obnovuji MOS session...",
@@ -1756,7 +1757,9 @@ async function executeIdentityAuthAction(action) {
 
   try {
     await withPidLitackaIdentityContext(async authConfig => {
-      if (action === "login") {
+      if (action === "ensure") {
+        await ensureIdentityFullyReady(authConfig);
+      } else if (action === "login") {
         if (authConfig.type !== "login" || !authConfig.login) {
           throw new Error("Projekt nema nakonfigurovane prihlaseni do BE.");
         }
@@ -1806,6 +1809,79 @@ async function executeIdentityAuthAction(action) {
       "Akce prihlaseni selhala.",
       message
     );
+  }
+}
+
+async function ensureIdentityFullyReady(authConfig) {
+  if (authConfig.type !== "login" || !authConfig.login) {
+    throw new Error("Projekt nema nakonfigurovane prihlaseni do BE.");
+  }
+
+  const selectedValues = getPidLitackaIdentityValues();
+  const selectedEmail = String(selectedValues.email || "").trim();
+  const sessionMatchesProfile = doesSessionMatchSelectedIdentity(state.authSession, selectedEmail);
+  const hasValidJwt = Boolean(state.authSession?.accessToken)
+    && !isSessionExpired(state.authSession)
+    && sessionMatchesProfile;
+
+  if (hasValidJwt) {
+    showIdentityActionStatus("warn", "BE JWT je platny. Overuji MOS session...");
+  } else if (state.authSession?.refreshToken && sessionMatchesProfile && authConfig.refresh) {
+    showIdentityActionStatus("warn", "Obnovuji JWT pres refresh token...");
+    await performAuthRequest("refresh", authConfig.refresh, { syncDom: false });
+  } else {
+    showIdentityActionStatus("warn", "Prihlasuji do BE...");
+    await performAuthRequest("login", getActiveLoginRequestConfig(authConfig), { syncDom: false });
+  }
+
+  await ensureMosSessionReady(authConfig);
+}
+
+async function ensureMosSessionReady(authConfig) {
+  if (authConfig.type !== "login" || !authConfig.sessionRenew) {
+    return;
+  }
+
+  if (!state.authSession?.accessToken || state.authSession?.isAnonymous) {
+    return;
+  }
+
+  const identityId = String(state.authSession.identityId || "").trim();
+
+  if (!identityId) {
+    throw new Error("BE prihlaseni nevratilo identityId, nelze overit MOS session.");
+  }
+
+  state.redisIdentityId = identityId;
+  state.redisIdentityManual = false;
+  if (elements.redisIdentityId) {
+    elements.redisIdentityId.value = identityId;
+  }
+
+  showIdentityActionStatus("warn", "Overuji MOS session v Redis...");
+  let session = await loadRedisSessionFromViewer({
+    quiet: true,
+    note: "MOS session automaticky overena po prihlaseni."
+  });
+
+  if (isUsableRedisSession(session)) {
+    return;
+  }
+
+  showIdentityActionStatus("warn", "MOS session chybi. Obnovuji ji pres BE...");
+  const result = await renewMosSessionIfPossible({ syncDom: false });
+
+  if (!result.ok) {
+    throw new Error(result.message);
+  }
+
+  session = await loadRedisSessionFromViewer({
+    quiet: true,
+    note: "MOS session automaticky obnovena po prihlaseni."
+  });
+
+  if (!isUsableRedisSession(session)) {
+    throw new Error(`MOS session se nepodarilo najit v Redis (${getRedisSessionProblem(session) || "neni pouzitelna"}).`);
   }
 }
 
