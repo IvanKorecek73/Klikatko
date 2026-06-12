@@ -6209,7 +6209,8 @@ async function runCustomStep(step, runningStepIndex) {
     addLog(level, `${step.title} -> přehled kupónů`, {
       request: {
         action: step.customAction,
-        previewRequests: overview.previewRequests
+        previewRequests: overview.previewRequests,
+        calls: overview.requests
       },
       response: {
         durationMs,
@@ -6389,6 +6390,11 @@ async function loadCouponMoveTargetOverview(step) {
   const couponMap = new Map();
   const previewByTarget = new Map();
   const errors = [];
+  const requests = [
+    buildPidLitackaCallLog(identifiersResponse, {
+      purpose: "Nacist identifikatory klienta"
+    })
+  ];
 
   for (const identifier of identifiers) {
     const targetIdentifierId = identifier.identifierId;
@@ -6399,6 +6405,10 @@ async function loadCouponMoveTargetOverview(step) {
 
     try {
       const previewResponse = await callPidLitackaJson(`/v1/client/coupons/move-preview?targetIdentifierId=${encodeURIComponent(targetIdentifierId)}`);
+      requests.push(buildPidLitackaCallLog(previewResponse, {
+        purpose: "Preview presunu kuponu",
+        targetIdentifierId
+      }));
       const preview = previewResponse.body || {};
       previewByTarget.set(String(targetIdentifierId), preview);
 
@@ -6424,6 +6434,15 @@ async function loadCouponMoveTargetOverview(step) {
         couponMap.set(key, existing);
       }
     } catch (error) {
+      if (error?.request) {
+        requests.push({
+          purpose: "Preview presunu kuponu",
+          targetIdentifierId,
+          request: error.request,
+          response: error.response || null,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
       errors.push(`Target ${targetIdentifierId}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -6454,7 +6473,20 @@ async function loadCouponMoveTargetOverview(step) {
     totalIdentifiers: enrichedIdentifiers.length,
     totalCoupons: enrichedIdentifiers.reduce((sum, identifier) => sum + (identifier.coupons?.length || 0), 0),
     previewRequests: previewByTarget.size,
+    requests,
     errors
+  };
+}
+
+function buildPidLitackaCallLog(call, extra = {}) {
+  return {
+    ...extra,
+    request: call.request,
+    response: {
+      status: call.status,
+      durationMs: call.durationMs,
+      contentType: call.contentType
+    }
   };
 }
 
@@ -6478,23 +6510,46 @@ async function callPidLitackaJson(path) {
   const baseUrl = elements.baseUrl.value.replace(/\/$/, "");
   const url = `${baseUrl}${path}`;
   const headers = {};
+  const visibleHeaders = {};
 
   if (state.authSession?.accessToken) {
     headers.Authorization = `Bearer ${state.authSession.accessToken}`;
+    visibleHeaders.Authorization = "Bearer ***";
   }
 
+  const request = {
+    method: "GET",
+    url,
+    resolvedUrl: resolveDisplayedRequestUrl(url),
+    headers: visibleHeaders,
+    body: null
+  };
+  const startedAt = performance.now();
   const response = await fetch(url, {
     method: "GET",
     headers
   });
+  const durationMs = Math.round(performance.now() - startedAt);
+  const contentType = response.headers.get("content-type") || "";
   const body = response.status === 204 ? null : await readResponseBody(response);
 
   if (!response.ok) {
-    throw new Error(body?.detail || body?.title || `HTTP ${response.status}`);
+    const error = new Error(body?.detail || body?.title || `HTTP ${response.status}`);
+    error.request = request;
+    error.response = {
+      status: response.status,
+      durationMs,
+      contentType,
+      body
+    };
+    throw error;
   }
 
   return {
     status: response.status,
+    durationMs,
+    contentType,
+    request,
     body
   };
 }
