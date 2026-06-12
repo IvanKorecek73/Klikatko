@@ -1145,6 +1145,12 @@ function getPidLitackaAuthProfiles() {
   ];
 }
 
+function getAssignablePidLitackaAuthProfiles() {
+  return getPidLitackaAuthProfiles()
+    .filter(profile => !profile.isNewProfile && profile.authRequest !== "anonymous")
+    .filter(profile => String(profile.values?.email || profile.label || "").trim());
+}
+
 function getHiddenAuthProfileIds(project) {
   if (!project?.id) {
     return new Set();
@@ -2014,6 +2020,41 @@ function removeCurrentIdentityProfile() {
 function createCustomAuthProfileId(email, deviceId) {
   const idParts = [email, deviceId || String(Date.now())].join("-");
   return `custom-${idParts.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${Date.now()}`;
+}
+
+async function assignRedisIdentityToAuthProfile(profileId, identityId) {
+  const project = getPidLitackaProject();
+  const profile = getPidLitackaAuthProfiles().find(item => item.id === profileId);
+  const normalizedIdentityId = String(identityId || "").trim();
+
+  if (!project || !profile || profile.isNewProfile || profile.authRequest === "anonymous" || !normalizedIdentityId) {
+    throw new Error("Nelze priradit Redis session k vybranemu uctu.");
+  }
+
+  const values = withProfileIdentityIdForEnvironment(profile.values || {}, normalizedIdentityId, getPidLitackaEnvironmentId(project));
+  const customProfile = {
+    ...profile,
+    custom: true,
+    values
+  };
+  const savedProfiles = loadSavedAuthCustomProfiles(project);
+  const nextProfileKey = getAuthProfilePersistenceKey(customProfile);
+  const nextProfiles = [
+    ...savedProfiles.filter(item => item.id !== customProfile.id && getAuthProfilePersistenceKey(item) !== nextProfileKey),
+    customProfile
+  ];
+  const hiddenProfileIds = getHiddenAuthProfileIds(project);
+  hiddenProfileIds.delete(customProfile.id);
+
+  localStorage.setItem(getAuthCustomProfilesStorageKey(project.id), JSON.stringify(nextProfiles));
+  saveHiddenAuthProfileIds(project, hiddenProfileIds);
+
+  if (state.currentProject?.id === project.id) {
+    state.authCustomProfiles = nextProfiles;
+  }
+
+  await applyIdentityProfileSelection(customProfile.id);
+  return customProfile;
 }
 
 function showIdentityActionStatus(level, message) {
@@ -4305,6 +4346,36 @@ async function scanRedisSessionsFromViewer() {
         }
       });
     });
+    elements.redisResult.querySelectorAll("[data-redis-assign-identity-id]").forEach(button => {
+      button.addEventListener("click", async () => {
+        const identityId = button.dataset.redisAssignIdentityId || "";
+        const key = button.dataset.redisProfileKey || "";
+        const select = [...elements.redisResult.querySelectorAll("[data-redis-assign-select]")]
+          .find(item => item.dataset.redisAssignSelect === identityId);
+        const profileId = select?.value || "";
+
+        if (!profileId) {
+          showRedisResult("warn", "Vyberte ulozeny ucet.", "Nejdrive vyberte profil, ke kteremu ma byt Redis session prirazena.");
+          return;
+        }
+
+        try {
+          const profile = await assignRedisIdentityToAuthProfile(profileId, identityId);
+          state.redisIdentityId = identityId;
+          state.redisIdentityManual = false;
+          renderAuthPanel();
+          renderRedisViewer();
+          await loadRedisSessionFromViewer({
+            quiet: true,
+            note: `Redis session ${key} byla prirazena k uctu ${profile.label || profile.id}.`
+          });
+          await executeIdentityAuthAction("ensure");
+          showRedisResult("ok", "Session prirazena a overena", `Redis session ${key} byla prirazena k uctu ${profile.label || profile.id}.`);
+        } catch (error) {
+          showRedisResult("error", "Prirazeni session selhalo", error instanceof Error ? error.message : String(error));
+        }
+      });
+    });
   } catch (error) {
     showRedisResult("error", "Redis scan selhal.", error instanceof Error ? error.message : String(error));
   }
@@ -4323,6 +4394,25 @@ function renderRedisSessionSearchItem(item) {
   const sessionId = String(session.sessionId || session.payload?.sessionId || session.payload?.SessionId || "");
   const mosLoginId = session.payload?.mosLoginId ?? session.payload?.MosLoginId ?? "-";
   const profile = item.profile;
+  const assignableProfiles = getAssignablePidLitackaAuthProfiles();
+  const assignOptions = assignableProfiles
+    .map(profileItem => {
+      const label = profileItem.note
+        ? `${profileItem.label || profileItem.values?.email || profileItem.id} (${profileItem.note})`
+        : profileItem.label || profileItem.values?.email || profileItem.id;
+      return `<option value="${escapeHtml(profileItem.id)}">${escapeHtml(label)}</option>`;
+    })
+    .join("");
+  const missingProfileAction = assignableProfiles.length
+    ? `<div class="redis-profile-assign">
+        <div class="redis-profile-missing">Neznamy ucet v Klikatku. Pokud vite, komu session patri, priradte ji k ulozenemu uctu. Chybne prirazeni se pri dalsim overeni projevi neshodou BE JWT.</div>
+        <select data-redis-assign-select="${escapeHtml(item.identityId)}">
+          <option value="">Vybrat ulozeny ucet...</option>
+          ${assignOptions}
+        </select>
+        <button class="redis-profile-action" type="button" data-redis-assign-identity-id="${escapeHtml(item.identityId)}" data-redis-profile-key="${escapeHtml(item.key)}">Priradit a overit</button>
+      </div>`
+    : `<div class="redis-profile-missing">Neznamy ucet v Klikatku. Neexistuje ulozeny ucet, ke kteremu by slo session priradit.</div>`;
 
   return `
     <div class="redis-session-item ${usable ? "ok" : "warn"}">
@@ -4338,7 +4428,7 @@ function renderRedisSessionSearchItem(item) {
       </div>
       ${profile
         ? `<button class="redis-profile-action" type="button" data-auth-profile-id="${escapeHtml(profile.id)}" data-identity-id="${escapeHtml(item.identityId)}" data-redis-profile-key="${escapeHtml(item.key)}">Zvolit a prihlasit</button>`
-        : `<div class="redis-profile-missing">Neznamy ucet v Klikatku. Pouzitelne jen pro prime MOS volani.</div>`}
+        : missingProfileAction}
     </div>
   `;
 }
