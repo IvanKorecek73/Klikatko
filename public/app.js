@@ -1987,6 +1987,24 @@ function showIdentityActionStatus(level, message) {
   elements.identityActionStatus.className = `identity-action-status ${level || "neutral"}`;
 }
 
+function syncRedisIdentityFromAuthSession() {
+  const identityId = String(state.authSession?.identityId || "").trim();
+
+  if (!identityId) {
+    return "";
+  }
+
+  state.redisIdentityId = identityId;
+  state.redisIdentityManual = false;
+  state.redisAutoSessionIdentityId = "";
+
+  if (elements.redisIdentityId) {
+    elements.redisIdentityId.value = identityId;
+  }
+
+  return identityId;
+}
+
 async function executeIdentityAuthAction(action) {
   const project = getPidLitackaProject();
   const actionLabels = {
@@ -2033,9 +2051,17 @@ async function executeIdentityAuthAction(action) {
         if (state.authSession?.isAnonymous) {
           throw new Error("MOS session nelze obnovit pro anonymniho uzivatele.");
         }
+        syncRedisIdentityFromAuthSession();
         const result = await renewMosSessionIfPossible({ syncDom: false });
         if (!result.ok) {
           throw new Error(result.message);
+        }
+        const session = await loadRedisSessionFromViewer({
+          quiet: true,
+          note: "MOS session automaticky nactena pro aktualni identitu."
+        });
+        if (!isUsableRedisSession(session)) {
+          throw new Error(`MOS session se nepodarilo najit v Redis (${getRedisSessionProblem(session) || "neni pouzitelna"}).`);
         }
       } else if (action === "logout") {
         if (authConfig.type !== "login" || !authConfig.logout) {
@@ -2106,16 +2132,10 @@ async function ensureMosSessionReady(authConfig) {
     return;
   }
 
-  const identityId = String(state.authSession.identityId || "").trim();
+  const identityId = syncRedisIdentityFromAuthSession();
 
   if (!identityId) {
     throw new Error("BE prihlaseni nevratilo identityId, nelze overit MOS session.");
-  }
-
-  state.redisIdentityId = identityId;
-  state.redisIdentityManual = false;
-  if (elements.redisIdentityId) {
-    elements.redisIdentityId.value = identityId;
   }
 
   showIdentityActionStatus("warn", "Overuji MOS session v Redis...");
