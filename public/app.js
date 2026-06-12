@@ -1872,7 +1872,7 @@ function saveCurrentIdentityProfile() {
   const password = String(values.password || "");
 
   if (!project || !email || !password) {
-    showRedisResult("error", "Ucet nelze ulozit.", "Vyplnte alespon e-mail a heslo.");
+    showRedisResult("error", "Účet nelze uložit.", "Vyplňte alespoň e-mail a heslo.");
     return;
   }
 
@@ -1889,7 +1889,7 @@ function saveCurrentIdentityProfile() {
     values: {
       email,
       password,
-      identityId: values.identityId || session?.identityId || "",
+      identityId: values.identityId || session?.identityId || state.redisIdentityId || getIdentityIdFromRedisSession(state.redisLastSession) || "",
       deviceId: values.deviceId || "",
       deviceName: values.deviceName || "",
       platform: values.platform || "",
@@ -1931,7 +1931,11 @@ function saveCurrentIdentityProfile() {
   }
 
   renderRedisViewer();
-  showRedisResult("ok", "Ucet ulozen.", `${email} je ulozeny v seznamu Klikatka.`);
+  if (state.redisLastSession?.key) {
+    renderRedisSession(state.redisLastSession, "Účet byl uložen a znovu spárován podle identityId.");
+  } else {
+    showRedisResult("ok", "Účet uložen.", `${email} je uložený v seznamu Klikátka.`);
+  }
 }
 
 function removeCurrentIdentityProfile() {
@@ -1939,7 +1943,7 @@ function removeCurrentIdentityProfile() {
   const profile = getSelectedPidLitackaProfile();
 
   if (!project || !profile || profile.isNewProfile) {
-    showRedisResult("warn", "Ucet nelze odebrat.", "Nejdrive vyberte existujici ucet.");
+    showRedisResult("warn", "Účet nelze odebrat.", "Nejdříve vyberte existující účet.");
     return;
   }
 
@@ -1966,7 +1970,7 @@ function removeCurrentIdentityProfile() {
   }
 
   renderRedisViewer();
-  showRedisResult("ok", "Ucet odebran.", `${profile.label || profile.id} byl odebran ze seznamu Klikatka. Ucet v BE/MOS nebyl smazan.`);
+  showRedisResult("ok", "Účet odebrán.", `${profile.label || profile.id} byl odebrán ze seznamu Klikátka. Účet v BE/MOS nebyl smazán.`);
 }
 
 function createCustomAuthProfileId(email, deviceId) {
@@ -2075,7 +2079,16 @@ async function ensureIdentityFullyReady(authConfig) {
     showIdentityActionStatus("warn", "BE JWT je platny. Overuji MOS session...");
   } else if (state.authSession?.refreshToken && sessionMatchesProfile && authConfig.refresh) {
     showIdentityActionStatus("warn", "Obnovuji JWT pres refresh token...");
-    await performAuthRequest("refresh", authConfig.refresh, { syncDom: false });
+    try {
+      await performAuthRequest("refresh", authConfig.refresh, { syncDom: false });
+    } catch (error) {
+      if (!isUnauthorizedError(error)) {
+        throw error;
+      }
+
+      showIdentityActionStatus("warn", "Refresh token uz neni platny. Prihlasuji e-mailem a heslem...");
+      await performAuthRequest("login", getActiveLoginRequestConfig(authConfig), { syncDom: false });
+    }
   } else {
     showIdentityActionStatus("warn", "Prihlasuji do BE...");
     await performAuthRequest("login", getActiveLoginRequestConfig(authConfig), { syncDom: false });
@@ -2584,7 +2597,10 @@ async function performAuthRequest(kind, config, options = {}) {
           body
         }
       });
-      throw new Error(body?.detail || body?.title || `HTTP ${response.status}`);
+      const error = new Error(body?.detail || body?.title || `HTTP ${response.status}`);
+      error.status = response.status;
+      error.body = body;
+      throw error;
     }
 
     if (kind === "login" || kind === "refresh") {
@@ -2616,6 +2632,10 @@ async function performAuthRequest(kind, config, options = {}) {
     elements.authPanel.open = true;
     throw error;
   }
+}
+
+function isUnauthorizedError(error) {
+  return Number(error?.status) === 401 || Number(error?.status) === 403;
 }
 
 function updateAuthProfileAfterSuccessfulLogin() {
@@ -3635,13 +3655,13 @@ function renderIdentityProfileActions() {
   elements.identityRemoveProfileAction.disabled = !profile || profile.isNewProfile;
 
   if (profile?.isNewProfile) {
-    elements.identitySaveProfileAction.textContent = "Ulozit ucet";
-    elements.identitySaveProfileAction.title = "Ulozi novy lokalni ucet do rychleho vyberu Klikatka.";
-    elements.identityRemoveProfileAction.title = "Novy ucet zatim neni ulozeny.";
+    elements.identitySaveProfileAction.textContent = "Uložit účet";
+    elements.identitySaveProfileAction.title = "Uloží nový lokální účet do rychlého výběru Klikátka.";
+    elements.identityRemoveProfileAction.title = "Nový účet zatím není uložený.";
   } else {
-    elements.identitySaveProfileAction.textContent = "Ulozit ucet";
-    elements.identitySaveProfileAction.title = "Aktualizuje ucet v seznamu Klikatka.";
-    elements.identityRemoveProfileAction.title = "Odebere ucet ze seznamu Klikatka. Ucet v BE/MOS nemaze.";
+    elements.identitySaveProfileAction.textContent = "Uložit účet";
+    elements.identitySaveProfileAction.title = "Aktualizuje účet v seznamu Klikátka.";
+    elements.identityRemoveProfileAction.title = "Odebere účet ze seznamu Klikátka. Účet v BE/MOS nemaže.";
   }
 }
 
@@ -4355,7 +4375,7 @@ function renderRedisSession(session, note = "") {
     ${!exists ? `<p>${escapeHtml(getRedisSessionProblem(session) || "Session nelze pouzit pro prime MOS volani.")}</p>` : ""}
     <div class="redis-detail-row"><span>Key</span><code>${escapeHtml(session.key || "")}</code></div>
     <div class="redis-detail-row"><span>TTL</span><code>${escapeHtml(ttlText)}</code></div>
-    <div class="redis-detail-row"><span>Ulozeny ucet</span><code>${escapeHtml(profile?.label || "nenalezen v Klikatku")}</code></div>
+    <div class="redis-detail-row"><span>Uložený účet</span><code>${escapeHtml(profile?.label || "nenalezen v Klikátku podle identityId")}</code></div>
     <div class="redis-detail-row"><span>SessionID</span><code>${escapeHtml(sessionId || "-")}</code></div>
     <div class="redis-detail-row"><span>MOS LoginID</span><code>${escapeHtml(payload.mosLoginId ?? payload.MosLoginId ?? "-")}</code></div>
     <pre>${escapeHtml(JSON.stringify(payload, null, 2))}</pre>
