@@ -71,6 +71,10 @@ const IDENTITY_DEVICE_FIELD_NAMES = new Set([
 ]);
 
 const elements = {
+  globalStatusBar: document.querySelector("#globalStatusBar"),
+  globalStatusTitle: document.querySelector("#globalStatusTitle"),
+  globalStatusMessage: document.querySelector("#globalStatusMessage"),
+  globalStatusChips: document.querySelector("#globalStatusChips"),
   scenarioList: document.querySelector("#scenarioList"),
   smokeList: document.querySelector("#smokeList"),
   formList: document.querySelector("#formList"),
@@ -1721,6 +1725,242 @@ function renderEnvironmentReadonly() {
     ...getIdentityEnvironmentSummaryParts(),
     state.currentProject?.name ? `Projekt: ${state.currentProject.name}` : null
   ].filter(Boolean).join(" | ");
+  renderGlobalStatusBar();
+}
+
+function renderGlobalStatusBar() {
+  if (!elements.globalStatusBar || !elements.globalStatusTitle || !elements.globalStatusMessage || !elements.globalStatusChips) {
+    return;
+  }
+
+  const status = buildGlobalStatus();
+  elements.globalStatusBar.className = `global-status-bar ${status.level}`;
+  elements.globalStatusTitle.textContent = status.title;
+  elements.globalStatusMessage.textContent = status.message;
+  elements.globalStatusChips.innerHTML = status.chips
+    .map(chip => `<span class="global-status-chip ${escapeHtml(chip.level || "neutral")}" title="${escapeHtml(chip.title || chip.text)}">${escapeHtml(chip.text)}</span>`)
+    .join("");
+}
+
+function buildGlobalStatus() {
+  const project = state.currentProject;
+  const scenario = state.scenario;
+  const step = currentStep();
+  const contextKind = getGlobalStatusContextKind(project, scenario);
+  const authStatus = getGlobalAuthStatus();
+  const mosStatus = getGlobalMosStatus(contextKind);
+  const issues = [];
+  const warnings = [];
+
+  if (scenario && requiresAuthorization(scenario) && !hasRequiredAuthorizationFor(scenario)) {
+    issues.push(getGlobalAuthRequiredMessage(project));
+  }
+
+  if (step && requiresAuthorizationForStep(step) && !hasRequiredAuthorizationFor(step)) {
+    issues.push(getGlobalAuthRequiredMessage(project));
+  }
+
+  if (contextKind === "direct-mos" && mosStatus.level !== "ok") {
+    warnings.push("Přímý MOS scénář potřebuje MOS SessionID.");
+  }
+
+  const missingContextKeys = getMissingContextKeys(step);
+  if (missingContextKeys.length > 0) {
+    warnings.push(`Krok čeká na výběr: ${missingContextKeys.join(", ")}.`);
+  }
+
+  if (state.workflowRunning) {
+    warnings.push("Workflow právě běží.");
+  } else if (state.workflowRun?.status === "paused") {
+    warnings.push("Workflow je pozastavené.");
+  }
+
+  if (state.displayedResult?.level === "error") {
+    issues.push(state.displayedResult.message || "Poslední krok skončil chybou.");
+  } else if (state.displayedResult?.level === "warn") {
+    warnings.push(state.displayedResult.message || "Poslední krok vyžaduje pozornost.");
+  }
+
+  const level = issues.length > 0
+    ? "error"
+    : warnings.length > 0
+      ? "warn"
+      : authStatus.level === "ok" || !scenario
+        ? "ok"
+        : "neutral";
+  const title = level === "error"
+    ? "Pozor"
+    : level === "warn"
+      ? "Zkontrolujte stav"
+      : "Připraveno";
+  const message = issues[0]
+    || warnings[0]
+    || getGlobalReadyMessage(contextKind, scenario);
+  const chips = [
+    { text: project?.name || "Bez projektu", level: project ? "neutral" : "warn" },
+    { text: getGlobalPackLabel(), level: "neutral" },
+    { text: getGlobalScenarioLabel(), level: scenario ? "neutral" : "warn" },
+    { text: getGlobalEnvironmentLabel(), level: "neutral" },
+    { text: authStatus.text, level: authStatus.level, title: authStatus.title },
+    { text: mosStatus.text, level: mosStatus.level, title: mosStatus.title },
+    { text: contextKind === "direct-mos" ? "Typ: MOS" : contextKind === "pidlitacka" ? "Typ: BE PidLitacka" : "Typ: obecný", level: "neutral" }
+  ];
+
+  return { level, title, message, chips };
+}
+
+function getGlobalStatusContextKind(project = state.currentProject, scenario = state.scenario) {
+  const projectId = String(project?.id || "").toLowerCase();
+  const scenarioText = [
+    scenario?.id,
+    scenario?.title,
+    scenario?.description,
+    ...(scenario?.tags || [])
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  if (projectId.startsWith("mos-") || scenarioText.includes("core soap")) {
+    return "direct-mos";
+  }
+
+  if (projectId === "pidlitacka" || scenarioText.includes("pidlitacka")) {
+    return "pidlitacka";
+  }
+
+  return "generic";
+}
+
+function getGlobalAuthStatus() {
+  const authConfig = getProjectAuthConfig();
+
+  if (authConfig.type === "login") {
+    if (state.authSession?.accessToken && !isSessionExpired(state.authSession)) {
+      const label = state.authSession.isAnonymous
+        ? "JWT: anonymní"
+        : `JWT: ${state.authSession.email || state.authSession.displayName || "aktivní"}`;
+      return {
+        level: "ok",
+        text: label,
+        title: state.authSession.expiresAt ? `Platí do ${formatDate(state.authSession.expiresAt)}` : "JWT je aktivní"
+      };
+    }
+
+    if (state.authSession?.refreshToken && authConfig.refresh) {
+      return {
+        level: "warn",
+        text: "JWT: lze obnovit",
+        title: "Access token chybí nebo expiroval, refresh token je k dispozici"
+      };
+    }
+
+    return {
+      level: "warn",
+      text: "JWT: nepřihlášen",
+      title: "Přihlaste se v sekci Uživatel"
+    };
+  }
+
+  if (authConfig.type === "apiKey") {
+    const info = getApiKeyInfo();
+    return {
+      level: info.valid ? "ok" : "warn",
+      text: info.valid ? "API klíč: připraven" : "API klíč: chybí",
+      title: info.message || ""
+    };
+  }
+
+  const info = getJwtInfo(getCurrentJwtToken());
+  return {
+    level: info.valid ? "ok" : "warn",
+    text: info.valid ? "JWT: připraven" : "JWT: chybí",
+    title: info.message || ""
+  };
+}
+
+function getGlobalMosStatus(contextKind) {
+  const session = state.redisLastSession;
+  const usable = isUsableRedisSession(session);
+  const ttl = Number(session?.ttlSeconds);
+  const ttlText = Number.isFinite(ttl) && ttl >= 0 ? `, TTL ${ttl} s` : "";
+
+  if (usable) {
+    return {
+      level: "ok",
+      text: `MOS SessionID: Redis${ttlText}`,
+      title: `SessionID ${maskSessionId(session.sessionId || session.payload?.sessionId || session.payload?.SessionId || "")}`
+    };
+  }
+
+  if (contextKind === "pidlitacka") {
+    return {
+      level: "neutral",
+      text: "MOS session: přes BE",
+      title: "Pro BE scénáře není lokální Redis povinný; session spravuje PidLitacka BE"
+    };
+  }
+
+  if (contextKind === "direct-mos") {
+    return {
+      level: "warn",
+      text: "MOS SessionID: chybí",
+      title: "Přímé MOS SOAP scénáře potřebují SessionID z Redis nebo ruční MOS login"
+    };
+  }
+
+  return {
+    level: "neutral",
+    text: "MOS SessionID: nepoužito",
+    title: "Aktuální scénář MOS SessionID nevyžaduje"
+  };
+}
+
+function getGlobalPackLabel() {
+  const pack = (state.packIndex?.packs || []).find(item => item.id === state.currentPackId);
+  return pack?.name || state.currentPackId || "Bez test packu";
+}
+
+function getGlobalScenarioLabel() {
+  if (state.workflowRun) {
+    const workflow = getSelectedWorkflow();
+    const itemIndex = Number(state.workflowRun.itemIndex ?? -1);
+    const item = workflow?.items?.[itemIndex];
+    return item ? `Workflow: ${workflow.name} / ${item.title || item.scenarioId}` : `Workflow: ${workflow?.name || "běh"}`;
+  }
+
+  return state.scenario?.title || "Bez scénáře";
+}
+
+function getGlobalEnvironmentLabel() {
+  return getIdentityEnvironmentSummaryParts().join(" | ") || state.currentEnvironmentId || "Prostředí nezvoleno";
+}
+
+function getGlobalReadyMessage(contextKind, scenario) {
+  if (!scenario) {
+    return "Vyberte scénář, smoke run, formulář nebo workflow.";
+  }
+
+  if (contextKind === "direct-mos") {
+    return "Přímé MOS volání je připravené podle aktuálního přístupu a SessionID.";
+  }
+
+  if (contextKind === "pidlitacka") {
+    return "BE scénář je připravený; Redis je pro přímou kontrolu, ne nutná podmínka.";
+  }
+
+  return "Scénář je připravený ke spuštění.";
+}
+
+function getGlobalAuthRequiredMessage(project) {
+  const authType = getProjectAuthConfig().type;
+
+  if (authType === "login") {
+    return "Scénář vyžaduje přihlášení v sekci Uživatel.";
+  }
+
+  if (authType === "apiKey") {
+    return "Scénář vyžaduje API klíč.";
+  }
+
+  return `Scénář vyžaduje platný přístup pro ${project?.name || "aktuální projekt"}.`;
 }
 
 function renderAuthPanel() {
@@ -3467,6 +3707,7 @@ function activateLeftTab(tab) {
   elements.workflowsPane.classList.toggle("active", showWorkflows);
   elements.redisPane.classList.toggle("active", showRedis);
   renderIdentityTabStatus();
+  renderGlobalStatusBar();
 }
 
 function activateRightTab(tab) {
@@ -3978,6 +4219,7 @@ function renderIdentityTabStatus() {
   elements.redisTab.classList.add(`identity-tab-status-${status.level}`);
   elements.redisTab.title = status.title;
   elements.redisTab.setAttribute("aria-label", `Uživatel - ${status.title}`);
+  renderGlobalStatusBar();
 }
 
 function withIdentityEnvironmentStatus(status) {
@@ -4981,6 +5223,7 @@ function renderStep(options = {}) {
     renderAppNav(step);
     showResult("ok", "Sc\u00e9n\u00e1\u0159 je dokon\u010den.");
     renderContext();
+    renderGlobalStatusBar();
     return;
   }
 
@@ -5032,6 +5275,7 @@ function renderStep(options = {}) {
 
   renderModeBanner();
   renderContext();
+  renderGlobalStatusBar();
 }
 
 function syncCurrentStepFormValuesFromDom() {
@@ -7910,6 +8154,7 @@ function updateWorkflowControls() {
       : hasWorkflow
         ? "Připraven"
         : "Nenakonfigurováno");
+  renderGlobalStatusBar();
 }
 
 function updateWorkflowStatus(status) {
@@ -9546,6 +9791,7 @@ function showResult(level, message, body = null, step = currentStep()) {
   elements.resultCard.className = `result-card ${level}`;
   startResultCountdownIfNeeded(message);
   bindResultCardActions();
+  renderGlobalStatusBar();
 }
 
 function buildResultHtml(level, message, body = null, step = currentStep()) {

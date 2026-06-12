@@ -37,9 +37,103 @@ select {
 .shell {
   display: grid;
   grid-template-columns: var(--left-panel-width) 8px minmax(360px, 1fr) 8px var(--right-panel-width);
+  grid-template-rows: auto minmax(0, 1fr);
   height: 100vh;
   min-height: 0;
   overflow: hidden;
+}
+
+.global-status-bar {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  min-height: 48px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  background: #f8fafc;
+  color: var(--ink);
+}
+
+.global-status-bar.ok {
+  background: #edf8f2;
+  border-bottom-color: #b9dfc9;
+}
+
+.global-status-bar.warn {
+  background: #fff8e8;
+  border-bottom-color: #f0d89b;
+}
+
+.global-status-bar.error {
+  background: #fff1f0;
+  border-bottom-color: #f0b8b4;
+}
+
+.global-status-main {
+  display: flex;
+  min-width: 0;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.global-status-main strong {
+  flex: none;
+  font-size: 14px;
+}
+
+.global-status-main span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.global-status-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+
+.global-status-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 240px;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.global-status-chip.ok {
+  border-color: rgba(21, 115, 71, 0.26);
+  color: var(--ok);
+}
+
+.global-status-chip.warn {
+  border-color: rgba(168, 92, 0, 0.28);
+  color: var(--warn);
+}
+
+.global-status-chip.error {
+  border-color: rgba(180, 35, 24, 0.3);
+  color: var(--error);
+}
+
+.global-status-chip.neutral {
+  color: var(--muted);
 }
 
 .resize-handle {
@@ -2430,7 +2524,15 @@ button:disabled {
 @media (max-width: 1160px) {
   .shell {
     grid-template-columns: var(--left-panel-width) 8px minmax(360px, 1fr);
-    grid-template-rows: minmax(0, 1fr) minmax(220px, 45vh);
+    grid-template-rows: auto minmax(0, 1fr) minmax(220px, 45vh);
+  }
+
+  .global-status-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .global-status-chips {
+    justify-content: flex-start;
   }
 
   .resize-right {
@@ -2465,9 +2567,16 @@ button:disabled {
 
   .shell {
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
     height: auto;
     min-height: 100vh;
     overflow: visible;
+  }
+
+  .global-status-bar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
   }
 
   .resize-handle {
