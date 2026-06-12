@@ -965,7 +965,32 @@ function getAuthProfiles(authConfig = getProjectAuthConfig()) {
 }
 
 function getAuthProfileIdentityId(profile) {
-  return String(profile?.values?.identityId || profile?.identityId || "").trim();
+  const environmentId = getPidLitackaEnvironmentId();
+  return getAuthProfileIdentityIdForEnvironment(profile, environmentId);
+}
+
+function getAuthProfileIdentityIdForEnvironment(profile, environmentId = getPidLitackaEnvironmentId()) {
+  const values = profile?.values || {};
+  const identityIdByEnvironment = values.identityIdByEnvironment || profile?.identityIdByEnvironment || {};
+  const scopedIdentityId = environmentId ? identityIdByEnvironment[environmentId] : "";
+  return String(scopedIdentityId || values.identityId || profile?.identityId || "").trim();
+}
+
+function withProfileIdentityIdForEnvironment(values, identityId, environmentId = getPidLitackaEnvironmentId()) {
+  const nextValues = { ...(values || {}) };
+  const normalizedIdentityId = String(identityId || "").trim();
+
+  if (!normalizedIdentityId) {
+    return nextValues;
+  }
+
+  nextValues.identityId = normalizedIdentityId;
+  nextValues.identityIdByEnvironment = {
+    ...(nextValues.identityIdByEnvironment || {}),
+    [environmentId]: normalizedIdentityId
+  };
+
+  return nextValues;
 }
 
 function getPidLitackaProject() {
@@ -1178,20 +1203,32 @@ function getPidLitackaIdentityValues() {
     return { ...state.identityFormValues };
   }
 
+  const selectedProfileValues = { ...(selectedProfile.values || {}) };
+  const selectedProfileIdentityId = getAuthProfileIdentityId(selectedProfile);
+  if (selectedProfileIdentityId) {
+    selectedProfileValues.identityId = selectedProfileIdentityId;
+  }
+
   if (state.identityFormValues.__selectedProfileId !== selectedProfile.id) {
     state.identityFormValues = {
       ...savedValues,
-      ...(selectedProfile.values || {}),
+      ...selectedProfileValues,
       __selectedProfileId: selectedProfile.id
     };
   }
 
-  return {
+  const result = {
     ...savedValues,
-    ...(selectedProfile.values || {}),
+    ...selectedProfileValues,
     ...state.identityFormValues,
     __selectedProfileId: selectedProfile.id
   };
+
+  if (selectedProfileIdentityId) {
+    result.identityId = selectedProfileIdentityId;
+  }
+
+  return result;
 }
 
 function findAuthProfileByIdentityId(identityId, authConfig = getProjectAuthConfig()) {
@@ -1880,16 +1917,17 @@ function saveCurrentIdentityProfile() {
   const selectedProfile = getSelectedPidLitackaProfile();
   const note = String(values.__newProfileNote || getPidLitackaIdentityProfileNote(selectedProfile) || "").trim();
   const isExistingProfile = selectedProfile && !selectedProfile.isNewProfile;
+  const identityId = values.identityId || session?.identityId || state.redisIdentityId || getIdentityIdFromRedisSession(state.redisLastSession) || "";
   const profile = {
     id: isExistingProfile
       ? selectedProfile.id
       : createCustomAuthProfileId(email, values.deviceId),
     label: email,
     note,
-    values: {
+    values: withProfileIdentityIdForEnvironment({
+      ...(isExistingProfile ? selectedProfile.values || {} : {}),
       email,
       password,
-      identityId: values.identityId || session?.identityId || state.redisIdentityId || getIdentityIdFromRedisSession(state.redisLastSession) || "",
       deviceId: values.deviceId || "",
       deviceName: values.deviceName || "",
       platform: values.platform || "",
@@ -1898,7 +1936,7 @@ function saveCurrentIdentityProfile() {
       model: values.model || "",
       deviceLanguage: values.deviceLanguage || "",
       deviceMessagingToken: values.deviceMessagingToken || ""
-    }
+    }, identityId)
   };
 
   const savedProfiles = loadSavedAuthCustomProfiles(project);
@@ -2222,10 +2260,20 @@ async function withPidLitackaIdentityContext(action) {
 
     state.currentProject = previous.currentProject;
     state.currentEnvironmentId = previous.currentEnvironmentId;
-    state.authSession = previous.authSession;
-    state.authFormValues = previous.authFormValues;
-    state.authProfileNotes = previous.authProfileNotes;
-    state.authCustomProfiles = previous.authCustomProfiles;
+
+    if (previous.currentProject?.id === project?.id) {
+      const previousEnvironmentId = previous.currentEnvironmentId || environmentId;
+      state.authSession = loadSavedAuthSession(project, previousEnvironmentId);
+      state.authFormValues = loadSavedAuthFormValues(project);
+      state.authProfileNotes = loadSavedAuthProfileNotes(project);
+      state.authCustomProfiles = loadSavedAuthCustomProfiles(project);
+    } else {
+      state.authSession = previous.authSession;
+      state.authFormValues = previous.authFormValues;
+      state.authProfileNotes = previous.authProfileNotes;
+      state.authCustomProfiles = previous.authCustomProfiles;
+    }
+
     elements.baseUrl.value = previous.baseUrl;
     renderAuthPanel();
     renderModeBanner();
@@ -2697,14 +2745,14 @@ function saveNewAuthProfileAfterSuccessfulLogin(options = {}) {
   const deviceId = String(state.authFormValues?.deviceId || "").trim();
   const idParts = [email, deviceId || String(Date.now())].join("-");
   const id = `custom-${idParts.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${Date.now()}`;
+  const identityId = state.authSession?.identityId || state.authFormValues?.identityId || "";
   const profile = {
     id,
     label: email,
     note,
-    values: {
+    values: withProfileIdentityIdForEnvironment({
       email,
       password,
-      identityId: state.authSession?.identityId || state.authFormValues?.identityId || "",
       deviceId: state.authFormValues?.deviceId || "",
       deviceName: state.authFormValues?.deviceName || "",
       platform: state.authFormValues?.platform || "",
@@ -2713,7 +2761,7 @@ function saveNewAuthProfileAfterSuccessfulLogin(options = {}) {
       model: state.authFormValues?.model || "",
       deviceLanguage: state.authFormValues?.deviceLanguage || "",
       deviceMessagingToken: state.authFormValues?.deviceMessagingToken || ""
-    }
+    }, identityId)
   };
 
   const nextProfileKey = getAuthProfilePersistenceKey(profile);
@@ -2762,8 +2810,8 @@ function updateCustomAuthProfilePasswordAfterSuccessfulLogin(selectedProfile) {
     changed = true;
   }
 
-  if (identityId && nextValues.identityId !== identityId) {
-    nextValues.identityId = identityId;
+  if (identityId && getAuthProfileIdentityIdForEnvironment({ values: nextValues }) !== identityId) {
+    Object.assign(nextValues, withProfileIdentityIdForEnvironment(nextValues, identityId));
     changed = true;
   }
 
@@ -4006,16 +4054,30 @@ function getIdentityTabStatus() {
   };
 }
 
-function doesSessionMatchSelectedIdentity(session, selectedEmail) {
+function doesSessionMatchSelectedIdentity(session, selectedEmail, selectedProfile = getSelectedPidLitackaProfile()) {
   if (!session?.accessToken) {
     return false;
   }
 
-  if (session.isAnonymous || !selectedEmail || !session.email) {
+  if (session.isAnonymous) {
     return true;
   }
 
-  return String(session.email).trim().toLowerCase() === String(selectedEmail).trim().toLowerCase();
+  const normalizedSelectedEmail = String(selectedEmail || "").trim().toLowerCase();
+  const normalizedSessionEmail = String(session.email || "").trim().toLowerCase();
+
+  if (normalizedSelectedEmail && normalizedSessionEmail) {
+    return normalizedSessionEmail === normalizedSelectedEmail;
+  }
+
+  const selectedIdentityId = getAuthProfileIdentityIdForEnvironment(selectedProfile).toLowerCase();
+  const sessionIdentityId = String(session.identityId || "").trim().toLowerCase();
+
+  if (selectedIdentityId && sessionIdentityId) {
+    return sessionIdentityId === selectedIdentityId;
+  }
+
+  return false;
 }
 
 function getIdentityAuthStateText(session, selectedEmail, sessionMatchesProfile) {
@@ -4236,8 +4298,8 @@ async function scanRedisSessionsFromViewer() {
         });
 
         try {
-          await executeIdentityAuthAction("login");
-          showRedisResult("ok", "Ucet zvolen a prihlasen", `Profil byl zvolen podle ${key}. BE JWT je obnovene, MOS session se pouzije z Redis.`);
+          await executeIdentityAuthAction("ensure");
+          showRedisResult("ok", "Ucet zvolen a overen", `Profil byl zvolen podle ${key}. Prihlaseni a MOS session byly overeny nebo obnoveny podle potreby.`);
         } catch (error) {
           showRedisResult("error", "Ucet zvolen, prihlaseni selhalo", error instanceof Error ? error.message : String(error));
         }
