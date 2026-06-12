@@ -4,6 +4,60 @@
   "description": "Integrační scénáře nad klientskými kupónovými endpointy PidLitacka BE. První sada pokrývá preview a provedení přesunu kupónů mezi identifikátory.",
   "scenarios": [
     {
+      "id": "client-coupons-list-all",
+      "title": "Kupóny - načíst všechny kupóny klienta",
+      "description": "Read-only kontrola nového endpointu GET /v1/client/coupons. Vrátí všechny kupóny aktuálně přihlášeného klienta včetně přiřazených identifikátorů.",
+      "requiresAuth": true,
+      "smoke": true,
+      "manualInputRequired": false,
+      "tags": ["profile", "coupons", "client-read", "all-coupons"],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Všechny kupóny"
+      },
+      "instructions": [
+        "Přihlaste se v záložce Uživatel jako klient s validní BE JWT a MOS session.",
+        "Scénář je read-only a volá pouze GET /v1/client/coupons.",
+        "Prázdný seznam kupónů je platný výsledek pro klienta bez kupónů; chyba je neplatný HTTP status nebo chybějící struktura response."
+      ],
+      "steps": [
+        {
+          "id": "client-coupons-list-all-get",
+          "title": "Načíst všechny kupóny",
+          "description": "Zavolá GET /v1/client/coupons a zobrazí kupóny aktuálního klienta spolu s identifikátory, ke kterým jsou přiřazeny.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "notEmpty": true },
+              { "path": "$.coupons", "lengthAtLeast": 0 },
+              { "path": "$.steps", "lengthAtLeast": 2 },
+              { "path": "$.steps[0].name", "equals": "CustomerResolution" },
+              { "path": "$.steps[0].status", "equals": "Completed" },
+              { "path": "$.steps[1].name", "equals": "GetCoupons" },
+              { "path": "$.steps[1].status", "equals": "Completed" }
+            ]
+          },
+          "selection": {
+            "sourcePath": "$.coupons",
+            "buttonLabel": "Označit kupón",
+            "selectedButtonLabel": "Kupón označen",
+            "emptyTitle": "Žádné kupóny",
+            "emptyText": "Aktuální klient nemá žádné kupóny. To je korektní read-only stav.",
+            "store": {
+              "pidCouponSelectedCouponId": "$.couponId",
+              "pidCouponSelectedIdentifierId": "$.identifier.identifierId",
+              "pidCouponSelectedTariffName": "$.tariffName"
+            }
+          }
+        }
+      ]
+    },
+    {
       "id": "client-coupons-move-preview-selected-target",
       "title": "Kupóny - náhled přesunu na vybraný identifikátor",
       "description": "Načte identifikátory aktuálního klienta, vybere cílový identifikátor a zavolá preview přesunu kupónů ze všech ostatních identifikátorů.",

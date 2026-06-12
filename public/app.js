@@ -9602,6 +9602,10 @@ function buildAppCardsHtml(body, step = currentStep()) {
     return renderCouponMovePreviewCardHtml(body);
   }
 
+  if (isClientCouponsResponse(body)) {
+    return renderClientCouponsCardHtml(body);
+  }
+
   if (isMoveCouponsResponse(body)) {
     return renderMoveCouponsReportCardHtml(body);
   }
@@ -10586,6 +10590,31 @@ function renderPidCouponSubformHtml(coupons, title = "Kupóny") {
         </section>
       `).join("")}
     </div>
+  `;
+}
+
+function renderClientCouponsCardHtml(body) {
+  const coupons = Array.isArray(body.coupons) ? body.coupons : [];
+  const withIdentifierCount = coupons.filter(coupon => coupon.identifier).length;
+  const steps = Array.isArray(body.steps) ? body.steps : [];
+
+  return `
+    <article class="app-card">
+      <div class="app-card-head">
+        <strong>Všechny kupóny klienta</strong>
+        <span>${escapeHtml(body.status || "-")}</span>
+      </div>
+      <p>${escapeHtml(coupons.length > 0
+        ? `Backend vrátil ${formatCount(coupons.length, "kupón", "kupóny", "kupónů")}.`
+        : "Backend nevrátil žádné kupóny pro aktuálního klienta.")}</p>
+      <div class="app-card-meta">
+        ${renderAppChip(formatCount(coupons.length, "kupón", "kupóny", "kupónů"))}
+        ${renderAppChip(`${withIdentifierCount} s identifikátorem`)}
+        ${body.registeredNumberIsic ? renderAppChip(`ISIC ${body.registeredNumberIsic}`) : ""}
+      </div>
+      ${renderPidCouponSubformHtml(coupons, "Kupóny klienta")}
+    </article>
+    ${steps.length > 0 ? renderMoveCouponsStepsCardHtml(steps) : ""}
   `;
 }
 
@@ -12359,6 +12388,15 @@ function isCouponMovePreviewResponse(value) {
     && Array.isArray(value.sources)
     && Array.isArray(value.warnings)
     && "couponCount" in value;
+}
+
+function isClientCouponsResponse(value) {
+  return value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && "status" in value
+    && Array.isArray(value.coupons)
+    && Array.isArray(value.steps);
 }
 
 function isMoveCouponsResponse(value) {
