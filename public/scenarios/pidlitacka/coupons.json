@@ -35,11 +35,13 @@
             "assertions": [
               { "path": "$.status", "notEmpty": true },
               { "path": "$.coupons", "lengthAtLeast": 0 },
-              { "path": "$.steps", "lengthAtLeast": 2 },
+              { "path": "$.steps", "lengthAtLeast": 3 },
               { "path": "$.steps[0].name", "equals": "CustomerResolution" },
               { "path": "$.steps[0].status", "equals": "Completed" },
-              { "path": "$.steps[1].name", "equals": "GetCoupons" },
-              { "path": "$.steps[1].status", "equals": "Completed" }
+              { "path": "$.steps[1].name", "equals": "IdentifierResolution" },
+              { "path": "$.steps[1].status", "equals": "Completed" },
+              { "path": "$.steps[2].name", "equals": "GetCoupons" },
+              { "path": "$.steps[2].status", "equals": "Completed" }
             ]
           },
           "selection": {

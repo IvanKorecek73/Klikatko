@@ -10578,6 +10578,7 @@ function renderPidCouponSubformHtml(coupons, title = "Kupóny") {
           <div class="app-coupon-item-meta">
             ${[
               coupon.zones ? `zóny ${coupon.zones}` : null,
+              coupon.status || coupon.customStatusName || null,
               coupon.price !== undefined ? `${coupon.price} Kč` : null,
               coupon.customerProfileName || null
             ].filter(Boolean).map(renderAppChip).join("")}
