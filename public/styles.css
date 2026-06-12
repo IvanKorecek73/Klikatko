@@ -113,7 +113,16 @@ select {
   background: rgba(255, 255, 255, 0.72);
   color: var(--muted);
   cursor: pointer;
-  line-height: 1;
+  position: relative;
+}
+
+.global-status-toggle::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
 }
 
 .global-status-toggle:hover {
@@ -122,7 +131,11 @@ select {
 }
 
 .global-status-bar.expanded .global-status-toggle {
-  transform: rotate(180deg);
+  transform: none;
+}
+
+.global-status-bar.expanded .global-status-toggle::before {
+  transform: translateY(2px) rotate(225deg);
 }
 
 .global-status-chips {
