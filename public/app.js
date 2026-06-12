@@ -74,6 +74,7 @@ const elements = {
   globalStatusBar: document.querySelector("#globalStatusBar"),
   globalStatusTitle: document.querySelector("#globalStatusTitle"),
   globalStatusMessage: document.querySelector("#globalStatusMessage"),
+  globalStatusToggle: document.querySelector("#globalStatusToggle"),
   globalStatusChips: document.querySelector("#globalStatusChips"),
   scenarioList: document.querySelector("#scenarioList"),
   smokeList: document.querySelector("#smokeList"),
@@ -253,6 +254,7 @@ function bindEventHandlers() {
   elements.clearScenarioSelection.addEventListener("click", clearScenarioSelection);
   elements.runSelectedScenarios.addEventListener("click", runSelectedScenarios);
   elements.stopBatchRun.addEventListener("click", requestStopBatchRun);
+  elements.globalStatusToggle?.addEventListener("click", toggleGlobalStatusBar);
   elements.scenariosTab.addEventListener("click", () => activateLeftTab("scenarios"));
   elements.smokeTab.addEventListener("click", () => activateLeftTab("smoke"));
   elements.formsTab.addEventListener("click", () => activateLeftTab("forms"));
@@ -1734,12 +1736,31 @@ function renderGlobalStatusBar() {
   }
 
   const status = buildGlobalStatus();
-  elements.globalStatusBar.className = `global-status-bar ${status.level}`;
+  const wasExpanded = elements.globalStatusBar.classList.contains("expanded");
+  elements.globalStatusBar.className = `global-status-bar ${status.level}${wasExpanded ? " expanded" : ""}`;
   elements.globalStatusTitle.textContent = status.title;
   elements.globalStatusMessage.textContent = status.message;
+  elements.globalStatusMessage.title = status.message;
+  if (elements.globalStatusToggle) {
+    const expanded = wasExpanded && status.message.length >= 72;
+    elements.globalStatusBar.classList.toggle("expanded", expanded);
+    elements.globalStatusToggle.hidden = status.message.length < 72;
+    elements.globalStatusToggle.setAttribute("aria-expanded", String(expanded));
+    elements.globalStatusToggle.title = expanded ? "Sbalit stav" : "Zobrazit celý stav";
+  }
   elements.globalStatusChips.innerHTML = status.chips
     .map(chip => `<span class="global-status-chip ${escapeHtml(chip.level || "neutral")}" title="${escapeHtml(chip.title || chip.text)}">${escapeHtml(chip.text)}</span>`)
     .join("");
+}
+
+function toggleGlobalStatusBar() {
+  if (!elements.globalStatusBar || !elements.globalStatusToggle) {
+    return;
+  }
+
+  const expanded = elements.globalStatusBar.classList.toggle("expanded");
+  elements.globalStatusToggle.setAttribute("aria-expanded", String(expanded));
+  elements.globalStatusToggle.title = expanded ? "Sbalit stav" : "Zobrazit celý stav";
 }
 
 function buildGlobalStatus() {

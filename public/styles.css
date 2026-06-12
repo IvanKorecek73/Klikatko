@@ -71,6 +71,10 @@ select {
   border-bottom-color: #f0b8b4;
 }
 
+.global-status-bar.expanded {
+  align-items: start;
+}
+
 .global-status-main {
   display: flex;
   min-width: 0;
@@ -90,6 +94,35 @@ select {
   font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.global-status-bar.expanded .global-status-main span {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.global-status-toggle {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.global-status-toggle:hover {
+  color: var(--ink);
+  border-color: rgba(15, 23, 42, 0.28);
+}
+
+.global-status-bar.expanded .global-status-toggle {
+  transform: rotate(180deg);
 }
 
 .global-status-chips {
