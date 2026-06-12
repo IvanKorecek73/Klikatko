@@ -10584,6 +10584,7 @@ function renderPidCouponSubformHtml(coupons, title = "Kupóny") {
             ].filter(Boolean).map(renderAppChip).join("")}
           </div>
           <div class="app-coupon-item-details">
+            ${coupon.identifier ? `<div><span>Identifikátor</span><span>${escapeHtml(getIdentifierDisplayName(coupon.identifier))}</span></div>` : ""}
             <div><span>Platnost od</span><span>${escapeHtml(formatDate(coupon.validFrom || coupon.dateTimeFrom) || "-")}</span></div>
             <div><span>Platnost do</span><span>${escapeHtml(formatDate(coupon.validTo || coupon.dateTimeTo) || "-")}</span></div>
             <div><span>Tarif</span><span>${escapeHtml(coupon.tariffName || coupon.name || "-")}</span></div>
