@@ -6584,18 +6584,43 @@ async function loadMosTokenCouponsOverview(step) {
 }
 
 async function loadCouponMoveTargetOverview(step) {
-  const identifiersResponse = await callPidLitackaJson("/v1/client/identifiers");
-  const identifiers = Array.isArray(identifiersResponse.body?.identifiers)
-    ? identifiersResponse.body.identifiers
+  const clientCouponsResponse = await callPidLitackaJson("/v1/client/coupons");
+  const identifiers = Array.isArray(clientCouponsResponse.body?.identifiers)
+    ? clientCouponsResponse.body.identifiers
+    : [];
+  const allCoupons = Array.isArray(clientCouponsResponse.body?.coupons)
+    ? clientCouponsResponse.body.coupons
     : [];
   const couponMap = new Map();
   const previewByTarget = new Map();
   const errors = [];
   const requests = [
-    buildPidLitackaCallLog(identifiersResponse, {
-      purpose: "Nacist identifikatory klienta"
+    buildPidLitackaCallLog(clientCouponsResponse, {
+      purpose: "Nacist detail kuponu a identifikatoru klienta"
     })
   ];
+
+  for (const coupon of allCoupons) {
+    const identifier = coupon.identifier || {};
+    const identifierId = identifier.identifierId;
+
+    if (isEmpty(identifierId)) {
+      continue;
+    }
+
+    const key = String(identifierId);
+    const existing = couponMap.get(key) || {
+      identifier,
+      coupons: []
+    };
+
+    existing.identifier = {
+      ...existing.identifier,
+      ...identifier
+    };
+    existing.coupons = mergeCouponsById(existing.coupons, [coupon]);
+    couponMap.set(key, existing);
+  }
 
   for (const identifier of identifiers) {
     const targetIdentifierId = identifier.identifierId;
@@ -10597,6 +10622,7 @@ function renderPidCouponSubformHtml(coupons, title = "Kupóny") {
 
 function renderClientCouponsCardHtml(body) {
   const coupons = Array.isArray(body.coupons) ? body.coupons : [];
+  const identifiers = Array.isArray(body.identifiers) ? body.identifiers : [];
   const withIdentifierCount = coupons.filter(coupon => coupon.identifier).length;
   const steps = Array.isArray(body.steps) ? body.steps : [];
 
@@ -10611,12 +10637,80 @@ function renderClientCouponsCardHtml(body) {
         : "Backend nevrátil žádné kupóny pro aktuálního klienta.")}</p>
       <div class="app-card-meta">
         ${renderAppChip(formatCount(coupons.length, "kupón", "kupóny", "kupónů"))}
+        ${renderAppChip(formatCount(identifiers.length, "identifikátor", "identifikátory", "identifikátorů"))}
         ${renderAppChip(`${withIdentifierCount} s identifikátorem`)}
         ${body.registeredNumberIsic ? renderAppChip(`ISIC ${body.registeredNumberIsic}`) : ""}
       </div>
-      ${renderPidCouponSubformHtml(coupons, "Kupóny klienta")}
+      ${renderClientCouponsByIdentifierHtml(identifiers, coupons)}
     </article>
     ${steps.length > 0 ? renderMoveCouponsStepsCardHtml(steps) : ""}
+  `;
+}
+
+function renderClientCouponsByIdentifierHtml(identifiers, coupons) {
+  const couponMap = new Map();
+  const unmatchedCoupons = [];
+
+  for (const coupon of coupons) {
+    const identifier = coupon.identifier || {};
+    const identifierId = identifier.identifierId;
+
+    if (isEmpty(identifierId)) {
+      unmatchedCoupons.push(coupon);
+      continue;
+    }
+
+    const key = String(identifierId);
+    const existing = couponMap.get(key) || [];
+    existing.push(coupon);
+    couponMap.set(key, existing);
+  }
+
+  if (identifiers.length === 0) {
+    return renderPidCouponSubformHtml(coupons, "Kupóny klienta");
+  }
+
+  return `
+    <div class="app-card-list app-card-list-nested">
+      ${identifiers.map(identifier => {
+        const key = String(identifier.identifierId);
+        const identifierCoupons = couponMap.get(key) || [];
+
+        return renderIdentifierCouponsCardHtml(identifier, identifierCoupons);
+      }).join("")}
+      ${unmatchedCoupons.length > 0 ? `
+        <article class="app-card">
+          <strong>Kupóny bez spárovaného identifikátoru</strong>
+          <p>Core MOS vrátil kupóny, ke kterým se nepodařilo dohledat identifikátor v detailu klienta.</p>
+          ${renderPidCouponSubformHtml(unmatchedCoupons)}
+        </article>
+      ` : ""}
+    </div>
+  `;
+}
+
+function renderIdentifierCouponsCardHtml(identifier, coupons) {
+  return `
+    <article class="app-card">
+      <strong>${escapeHtml(getIdentifierDisplayName(identifier))}</strong>
+      <p>${escapeHtml(coupons.length > 0
+        ? `Na identifikátoru je ${formatCount(coupons.length, "kupón", "kupóny", "kupónů")}.`
+        : "Na tomto identifikátoru nejsou žádné kupóny.")}</p>
+      <div class="app-card-meta">
+        ${renderAppChip(getIdentifierTypeLabel(identifier))}
+        ${identifier.isActive ? renderAppChip("aktivní") : renderAppChip("neaktivní")}
+        ${identifier.isPersonalized === true ? renderAppChip("personalizovaný") : identifier.isPersonalized === false ? renderAppChip("nepersonalizovaný") : ""}
+        ${identifier.blockedStatus ? renderAppChip(`blokace ${identifier.blockedStatus}`) : ""}
+        ${renderAppChip(formatCount(coupons.length, "kupón", "kupóny", "kupónů"))}
+      </div>
+      <div class="app-card-details">
+        <div class="app-detail-row"><span>ID</span><span>${escapeHtml(identifier.identifierId || "-")}</span></div>
+        ${identifier.name ? `<div class="app-detail-row"><span>Název</span><span>${escapeHtml(identifier.name)}</span></div>` : ""}
+        ${identifier.maskedPan ? `<div class="app-detail-row"><span>Maskovaná hodnota</span><span>${escapeHtml(identifier.maskedPan)}</span></div>` : ""}
+        ${identifier.created ? `<div class="app-detail-row"><span>Vytvořeno</span><span>${escapeHtml(formatDate(identifier.created))}</span></div>` : ""}
+      </div>
+      ${renderPidCouponSubformHtml(coupons)}
+    </article>
   `;
 }
 
@@ -11070,6 +11164,7 @@ function renderClientIdentifiersCardHtml(body, step = currentStep()) {
         { label: "Blokace", value: identifier.blockedStatus },
         { label: "Dostupný pro dopravu", value: formatBooleanAnswer(identifier.isAvailableForTransportSystem) },
         { label: "Aktivní v dopravě", value: formatBooleanAnswer(identifier.isActiveForTransportSystem) },
+        { label: "Vytvořeno", value: identifier.created ? formatDate(identifier.created) : null },
         { label: "Platný od", value: identifier.validFrom ? formatDate(identifier.validFrom) : null },
         { label: "Platný do", value: identifier.validTo ? formatDate(identifier.validTo) : null }
       ].filter(item => !isEmpty(item.value))

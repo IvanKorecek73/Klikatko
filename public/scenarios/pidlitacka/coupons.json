@@ -34,6 +34,7 @@
             "status": 200,
             "assertions": [
               { "path": "$.status", "notEmpty": true },
+              { "path": "$.identifiers", "lengthAtLeast": 0 },
               { "path": "$.coupons", "lengthAtLeast": 0 },
               { "path": "$.steps", "lengthAtLeast": 3 },
               { "path": "$.steps[0].name", "equals": "CustomerResolution" },
@@ -54,6 +55,66 @@
               "pidCouponSelectedCouponId": "$.couponId",
               "pidCouponSelectedIdentifierId": "$.identifier.identifierId",
               "pidCouponSelectedTariffName": "$.tariffName"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-coupons-identifiers-detail",
+      "title": "Kupóny - detail identifikátorů a kupónů klienta",
+      "description": "Read-only scénář nad GET /v1/client/coupons zaměřený na nový detail: jedním voláním ověří identifikátory klienta, jejich metadata a kupóny přiřazené k identifikátorům.",
+      "requiresAuth": true,
+      "smoke": true,
+      "manualInputRequired": true,
+      "tags": ["profile", "coupons", "client-identifiers", "client-read", "detail"],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Detail klienta"
+      },
+      "instructions": [
+        "Přihlaste se v záložce Uživatel jako klient s validním BE JWT a MOS SessionID.",
+        "Scénář je read-only a používá jediný endpoint GET /v1/client/coupons.",
+        "V mobilu se mají zobrazit identifikátory klienta, stav/personalizace/blokace, datum vytvoření identifikátoru a kupóny pod konkrétním identifikátorem.",
+        "Prázdný seznam kupónů je platný stav; pro test přesunu kupónů je ale vhodný klient alespoň s jedním kupónem a dvěma identifikátory."
+      ],
+      "steps": [
+        {
+          "id": "client-coupons-identifiers-detail-get",
+          "title": "Načíst detail kupónů a identifikátorů",
+          "description": "Zavolá GET /v1/client/coupons a zobrazí detail aktuálního klienta seskupený podle identifikátorů.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "Completed" },
+              { "path": "$.identifiers", "lengthAtLeast": 1 },
+              { "path": "$.coupons", "lengthAtLeast": 0 },
+              { "path": "$.steps", "lengthAtLeast": 3 },
+              { "path": "$.steps[0].name", "equals": "CustomerResolution" },
+              { "path": "$.steps[0].status", "equals": "Completed" },
+              { "path": "$.steps[1].name", "equals": "IdentifierResolution" },
+              { "path": "$.steps[1].status", "equals": "Completed" },
+              { "path": "$.steps[2].name", "equals": "GetCoupons" },
+              { "path": "$.steps[2].status", "equals": "Completed" }
+            ]
+          },
+          "selection": {
+            "sourcePath": "$.identifiers",
+            "buttonLabel": "Označit identifikátor",
+            "selectedButtonLabel": "Identifikátor označen",
+            "emptyTitle": "Žádné identifikátory",
+            "emptyText": "Aktuální klient nemá žádný identifikátor. Pro test kupónů a přesunu je potřeba klienta s identifikátory nejdřív připravit.",
+            "store": {
+              "pidCouponDetailIdentifierId": "$.identifierId",
+              "pidCouponDetailIdentifierName": "$.name",
+              "pidCouponDetailIdentifierType": "$.type",
+              "pidCouponDetailIdentifierMaskedValue": "$.maskedPan",
+              "pidCouponDetailIdentifierCreated": "$.created"
             }
           }
         }
