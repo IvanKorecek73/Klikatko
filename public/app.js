@@ -985,10 +985,13 @@ function withProfileIdentityIdForEnvironment(values, identityId, environmentId =
   }
 
   nextValues.identityId = normalizedIdentityId;
-  nextValues.identityIdByEnvironment = {
-    ...(nextValues.identityIdByEnvironment || {}),
-    [environmentId]: normalizedIdentityId
-  };
+
+  if (environmentId) {
+    nextValues.identityIdByEnvironment = {
+      ...(nextValues.identityIdByEnvironment || {}),
+      [environmentId]: normalizedIdentityId
+    };
+  }
 
   return nextValues;
 }
@@ -2305,9 +2308,12 @@ async function withPidLitackaIdentityContext(action) {
     if (previous.currentProject?.id === project?.id) {
       const previousEnvironmentId = previous.currentEnvironmentId || environmentId;
       state.authSession = loadSavedAuthSession(project, previousEnvironmentId);
-      state.authFormValues = loadSavedAuthFormValues(project);
       state.authProfileNotes = loadSavedAuthProfileNotes(project);
       state.authCustomProfiles = loadSavedAuthCustomProfiles(project);
+      state.authFormValues = {
+        ...loadSavedAuthFormValues(project),
+        ...getPidLitackaIdentityValues()
+      };
     } else {
       state.authSession = previous.authSession;
       state.authFormValues = previous.authFormValues;
