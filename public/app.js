@@ -2005,6 +2005,20 @@ function syncRedisIdentityFromAuthSession() {
   return identityId;
 }
 
+function clearPidLitackaIdentitySession() {
+  state.authSession = null;
+  state.redisIdentityId = "";
+  state.redisIdentityManual = false;
+  state.redisAutoSessionIdentityId = "";
+  state.redisLastSession = null;
+
+  if (elements.redisIdentityId) {
+    elements.redisIdentityId.value = "";
+  }
+
+  saveAuthSession();
+}
+
 async function executeIdentityAuthAction(action) {
   const project = getPidLitackaProject();
   const actionLabels = {
@@ -2071,6 +2085,7 @@ async function executeIdentityAuthAction(action) {
           throw new Error("Neni ulozene aktivni prihlaseni k odhlaseni.");
         }
         await performAuthRequest("logout", authConfig.logout, { syncDom: false });
+        clearPidLitackaIdentitySession();
       }
     });
 
@@ -2570,8 +2585,7 @@ async function executeAuthLogout() {
   try {
     await performAuthRequest("logout", authConfig.logout);
   } finally {
-    state.authSession = null;
-    saveAuthSession();
+    clearPidLitackaIdentitySession();
     renderAuthPanel();
     renderModeBanner();
   }
@@ -4384,6 +4398,14 @@ function renderRedisSession(session, note = "") {
   const exists = isUsableRedisSession(session);
   const identityId = getIdentityIdFromRedisKey(session.key || state.redisIdentityId || "");
   const profile = findAuthProfileByIdentityId(identityId);
+  const currentEmail = String(state.authSession?.email || "").trim();
+  const profileEmail = String(profile?.values?.email || profile?.label || "").trim();
+  const accountPairingText = profile?.label
+    ? profile.label
+    : "nenalezen v Klikatku podle identityId";
+  const accountPairingWarning = profileEmail && currentEmail && profileEmail.toLowerCase() !== currentEmail.toLowerCase()
+    ? `<p>Ulozeny profil pro toto identityId ma jiny e-mail (${escapeHtml(profileEmail)}) nez aktualne prihlaseny uzivatel (${escapeHtml(currentEmail)}).</p>`
+    : "";
   const ttl = Number(session.ttlSeconds);
   const ttlText = ttl < 0 ? "bez TTL / nenalezeno" : `${ttl} s`;
   elements.redisStatus.textContent = exists ? "Session nalezena" : "Redis připojeno, session nenalezena";
@@ -4393,9 +4415,10 @@ function renderRedisSession(session, note = "") {
   showRedisResult(exists ? "ok" : "error", exists ? "MOS session v Redis" : "MOS session nebyla nalezena", `
     ${note ? `<p>${escapeHtml(note)}</p>` : ""}
     ${!exists ? `<p>${escapeHtml(getRedisSessionProblem(session) || "Session nelze pouzit pro prime MOS volani.")}</p>` : ""}
+    ${accountPairingWarning}
     <div class="redis-detail-row"><span>Key</span><code>${escapeHtml(session.key || "")}</code></div>
     <div class="redis-detail-row"><span>TTL</span><code>${escapeHtml(ttlText)}</code></div>
-    <div class="redis-detail-row"><span>Uložený účet</span><code>${escapeHtml(profile?.label || "nenalezen v Klikátku podle identityId")}</code></div>
+    <div class="redis-detail-row"><span>Uložený profil pro identityId</span><code>${escapeHtml(accountPairingText)}</code></div>
     <div class="redis-detail-row"><span>SessionID</span><code>${escapeHtml(sessionId || "-")}</code></div>
     <div class="redis-detail-row"><span>MOS LoginID</span><code>${escapeHtml(payload.mosLoginId ?? payload.MosLoginId ?? "-")}</code></div>
     <pre>${escapeHtml(JSON.stringify(payload, null, 2))}</pre>
