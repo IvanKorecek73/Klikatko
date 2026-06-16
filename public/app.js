@@ -2420,6 +2420,9 @@ async function executeIdentityAuthAction(action) {
         if (!isUsableRedisSession(session)) {
           throw new Error(`MOS session se nepodarilo najit v Redis (${getRedisSessionProblem(session) || "neni pouzitelna"}).`);
         }
+        if (!doesRedisSessionMatchCurrentJwt(session)) {
+          throw new Error(getRedisSessionMismatchMessage(session));
+        }
       } else if (action === "logout") {
         if (authConfig.type !== "login" || !authConfig.logout) {
           throw new Error("Projekt nema nakonfigurovane odhlaseni.");
@@ -2457,14 +2460,24 @@ async function ensureIdentityFullyReady(authConfig) {
   const sessionMatchesProfile = doesSessionMatchSelectedIdentity(state.authSession, selectedEmail);
   const hasValidJwt = Boolean(state.authSession?.accessToken)
     && !isSessionExpired(state.authSession)
-    && sessionMatchesProfile;
+    && sessionMatchesProfile
+    && hasRegisteredMosLoginClaim(state.authSession);
 
   if (hasValidJwt) {
     showIdentityActionStatus("warn", "BE JWT je platny. Overuji MOS session...");
   } else if (state.authSession?.refreshToken && sessionMatchesProfile && authConfig.refresh) {
-    showIdentityActionStatus("warn", "Obnovuji JWT pres refresh token...");
+    const tokenMissingMosLogin = Boolean(state.authSession?.accessToken)
+      && !state.authSession?.isAnonymous
+      && !hasRegisteredMosLoginClaim(state.authSession);
+    showIdentityActionStatus("warn", tokenMissingMosLogin
+      ? "JWT neobsahuje MOS LoginID. Obnovuji JWT pres refresh token..."
+      : "Obnovuji JWT pres refresh token...");
     try {
       await performAuthRequest("refresh", authConfig.refresh, { syncDom: false });
+      if (!hasRegisteredMosLoginClaim(state.authSession)) {
+        showIdentityActionStatus("warn", "Obnoveny JWT stale nema MOS LoginID. Prihlasuji e-mailem a heslem...");
+        await performAuthRequest("login", getActiveLoginRequestConfig(authConfig), { syncDom: false });
+      }
     } catch (error) {
       if (!isUnauthorizedError(error)) {
         throw error;
@@ -2476,6 +2489,10 @@ async function ensureIdentityFullyReady(authConfig) {
   } else {
     showIdentityActionStatus("warn", "Prihlasuji do BE...");
     await performAuthRequest("login", getActiveLoginRequestConfig(authConfig), { syncDom: false });
+  }
+
+  if (!hasRegisteredMosLoginClaim(state.authSession)) {
+    throw new Error("BE JWT neobsahuje mos_login_id. Pro nove MOS operace je potreba znovu se prihlasit proti aktualnimu BE.");
   }
 
   await ensureMosSessionReady(authConfig);
@@ -2502,11 +2519,13 @@ async function ensureMosSessionReady(authConfig) {
     note: "MOS session automaticky overena po prihlaseni."
   });
 
-  if (isUsableRedisSession(session)) {
+  if (isUsableRedisSession(session) && doesRedisSessionMatchCurrentJwt(session)) {
     return;
   }
 
-  showIdentityActionStatus("warn", "MOS session chybi. Obnovuji ji pres BE...");
+  showIdentityActionStatus("warn", isUsableRedisSession(session)
+    ? "MOS session neodpovida aktualnimu JWT. Obnovuji ji pres BE..."
+    : "MOS session chybi. Obnovuji ji pres BE...");
   const result = await renewMosSessionIfPossible({ syncDom: false });
 
   if (!result.ok) {
@@ -2518,8 +2537,10 @@ async function ensureMosSessionReady(authConfig) {
     note: "MOS session automaticky obnovena po prihlaseni."
   });
 
-  if (!isUsableRedisSession(session)) {
-    throw new Error(`MOS session se nepodarilo najit v Redis (${getRedisSessionProblem(session) || "neni pouzitelna"}).`);
+  if (!isUsableRedisSession(session) || !doesRedisSessionMatchCurrentJwt(session)) {
+    throw new Error(isUsableRedisSession(session)
+      ? getRedisSessionMismatchMessage(session)
+      : `MOS session se nepodarilo najit v Redis (${getRedisSessionProblem(session) || "neni pouzitelna"}).`);
   }
 }
 
@@ -2927,6 +2948,15 @@ async function executeAuthSessionRenew() {
       return;
     }
 
+    if (!doesRedisSessionMatchCurrentJwt(session)) {
+      const message = getRedisSessionMismatchMessage(session);
+      elements.authJwtStatus.textContent = message;
+      elements.authJwtStatus.className = "auth-status error";
+      elements.authPanel.open = true;
+      showRedisResult("error", "MOS session neodpovida aktualnimu JWT.", message);
+      return;
+    }
+
     elements.authJwtStatus.textContent = `MOS session obnovena a nalezena v Redis pro ${state.authSession.identityId}.`;
     elements.authJwtStatus.className = "auth-status ok";
   }
@@ -3201,15 +3231,18 @@ function updateSessionFromAuthResponse(body, config, kind = "login") {
   const identityIdPath = responseConfig.identityIdPath || "$.identityId";
   const deviceIdField = responseConfig.deviceIdField || "deviceId";
   const isAnonymousSession = config.sessionKind === "anonymous" || (kind === "refresh" && Boolean(state.authSession?.isAnonymous));
+  const accessToken = getPath(body, accessTokenPath) || state.authSession?.accessToken || "";
+  const tokenClaims = parseJwtClaims(accessToken);
 
   state.authSession = {
-    accessToken: getPath(body, accessTokenPath) || state.authSession?.accessToken || "",
+    accessToken,
     refreshToken: getPath(body, refreshTokenPath) || state.authSession?.refreshToken || "",
     expiresAt: getPath(body, expiresAtPath) || state.authSession?.expiresAt || "",
     email: isAnonymousSession ? "" : (getPath(body, emailPath) || state.authSession?.email || ""),
     displayName: isAnonymousSession ? "" : (getPath(body, displayNamePath) || state.authSession?.displayName || ""),
     identityId: getPath(body, identityIdPath) || state.authSession?.identityId || "",
     deviceId: state.authFormValues?.[deviceIdField] || state.authSession?.deviceId || "",
+    mosLoginId: getMosLoginIdFromClaims(tokenClaims) || state.authSession?.mosLoginId || "",
     isAnonymous: isAnonymousSession
   };
 
@@ -3415,6 +3448,29 @@ function getJwtInfo(token) {
   };
 }
 
+function getMosLoginIdFromClaims(claims) {
+  const rawValue = claims?.mos_login_id ?? claims?.mosLoginId ?? claims?.MosLoginId ?? "";
+  const value = Number(rawValue);
+  return Number.isFinite(value) && value > 0 ? String(value) : "";
+}
+
+function getAuthSessionMosLoginId(session = state.authSession) {
+  const storedValue = Number(session?.mosLoginId);
+  if (Number.isFinite(storedValue) && storedValue > 0) {
+    return String(storedValue);
+  }
+
+  return getMosLoginIdFromClaims(parseJwtClaims(session?.accessToken || ""));
+}
+
+function hasRegisteredMosLoginClaim(session = state.authSession) {
+  if (!session?.accessToken || session?.isAnonymous) {
+    return true;
+  }
+
+  return Boolean(getAuthSessionMosLoginId(session));
+}
+
 function getLoginSessionInfo() {
   if (!state.authSession?.accessToken) {
     return {
@@ -3446,9 +3502,11 @@ function getLoginSessionInfo() {
 function describeAuthorizationInfo(info) {
   if (getProjectAuthConfig().type === "login" && info?.session) {
     const session = info.session;
+    const mosLoginId = getAuthSessionMosLoginId(session);
     const sessionLines = [
       session.email ? `e-mail: ${session.email}` : "",
       session.identityId ? `identityId: ${session.identityId}` : "",
+      mosLoginId ? `mosLoginId: ${mosLoginId}` : "",
       session.deviceId ? `deviceId: ${session.deviceId}` : ""
     ].filter(Boolean);
 
@@ -3544,6 +3602,17 @@ function requiresAnonymousAuthForStep(step) {
   return requiresAnonymousAuth(step) || requiresAnonymousAuth(state.scenario);
 }
 
+function requiresRegisteredMosSessionForStep(step = currentStep()) {
+  if (state.currentProject?.id !== "pidlitacka") {
+    return false;
+  }
+
+  const path = String(step?.request?.path || step?.request?.url || "").toLowerCase();
+  return path.includes("/v1/client/identifiers")
+    || path.includes("/v1/client/coupons")
+    || path.includes("/v1/auth/password/change");
+}
+
 function isSessionExpired(session) {
   if (!session?.expiresAt) {
     return true;
@@ -3565,6 +3634,24 @@ async function ensureAuthorizationReady() {
         };
       }
 
+      if (requiresRegisteredMosSessionForStep(currentStep())) {
+        if (state.authSession.isAnonymous) {
+          return {
+            ok: false,
+            message: "Tento krok vyzaduje registrovaneho uzivatele s MOS session, anonymni session nestaci."
+          };
+        }
+
+        if (!hasRegisteredMosLoginClaim(state.authSession)) {
+          return await ensureRegisteredMosAuthorizationReady(authConfig);
+        }
+
+        const mosReady = await ensureMosSessionForCurrentPidLitackaUser();
+        if (!mosReady.ok) {
+          return mosReady;
+        }
+      }
+
       return { ok: true };
     }
 
@@ -3576,6 +3663,17 @@ async function ensureAuthorizationReady() {
             ok: false,
             message: "Tento scénář vyžaduje anonymní přihlášení. V záložce Uživatel vyberte Anonymní uživatel."
           };
+        }
+
+        if (requiresRegisteredMosSessionForStep(currentStep())) {
+          if (!hasRegisteredMosLoginClaim(state.authSession)) {
+            return await ensureRegisteredMosAuthorizationReady(authConfig);
+          }
+
+          const mosReady = await ensureMosSessionForCurrentPidLitackaUser();
+          if (!mosReady.ok) {
+            return mosReady;
+          }
         }
 
         return { ok: true, refreshed: true };
@@ -3603,6 +3701,38 @@ async function ensureAuthorizationReady() {
     ok: info.valid,
     message: info.message
   };
+}
+
+async function ensureRegisteredMosAuthorizationReady(authConfig) {
+  try {
+    await ensureIdentityFullyReady(authConfig);
+    return { ok: true, refreshed: true };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+async function ensureMosSessionForCurrentPidLitackaUser() {
+  try {
+    await ensureMosSessionReady(getProjectAuthConfig());
+
+    if (state.redisLastSession && !doesRedisSessionMatchCurrentJwt(state.redisLastSession)) {
+      return {
+        ok: false,
+        message: getRedisSessionMismatchMessage(state.redisLastSession)
+      };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error)
+    };
+  }
 }
 
 function isMosSessionExpiredResponse(status, body) {
@@ -4152,8 +4282,11 @@ function renderIdentitySummary() {
   const redisSessionMatchesIdentity = Boolean(state.redisLastSession)
     && (!identityId || !loadedRedisIdentityId || loadedRedisIdentityId.toLowerCase() === identityId.toLowerCase());
   const redisSession = redisSessionMatchesIdentity ? state.redisLastSession : null;
-  const hasMosSession = isUsableRedisSession(redisSession);
+  const redisSessionMatchesJwt = redisSession ? doesRedisSessionMatchCurrentJwt(redisSession, session) : false;
+  const hasMosSession = isUsableRedisSession(redisSession) && redisSessionMatchesJwt;
   const mosSessionId = String(redisSession?.sessionId || redisSession?.payload?.sessionId || redisSession?.payload?.SessionId || "").trim();
+  const jwtMosLoginId = getAuthSessionMosLoginId(session);
+  const redisMosLoginId = getMosLoginIdFromRedisSession(redisSession);
   const ttl = Number(redisSession?.ttlSeconds);
   const ttlText = Number.isFinite(ttl) && ttl >= 0 ? `${ttl} s` : "-";
   const expiresAtText = session?.expiresAt ? formatDate(session.expiresAt) : "-";
@@ -4170,7 +4303,7 @@ function renderIdentitySummary() {
   const authLevel = tokenInfo.valid && sessionMatchesProfile ? "ok" : "warn";
   const mosState = hasMosSession
     ? `MOS SessionID aktivni, TTL ${ttlText}`
-    : getIdentityMosStateText(identityId, redisSession, loadedRedisIdentityId);
+    : getIdentityMosStateText(identityId, redisSession, loadedRedisIdentityId, session);
 
   elements.identitySummary.innerHTML = `
     <div class="identity-summary-row">
@@ -4206,6 +4339,10 @@ function renderIdentitySummary() {
       <code>${escapeHtml(identityId || "-")}</code>
     </div>
     <div class="identity-summary-row">
+      <span>MOS LoginID z JWT</span>
+      <code>${escapeHtml(jwtMosLoginId || "-")}</code>
+    </div>
+    <div class="identity-summary-row">
       <span>Zarizeni</span>
       <code>${escapeHtml(values.deviceName || "-")}</code>
     </div>
@@ -4220,6 +4357,10 @@ function renderIdentitySummary() {
     <div class="identity-summary-row">
       <span>SessionID</span>
       <code>${escapeHtml(mosSessionId ? maskSessionId(mosSessionId) : "-")}</code>
+    </div>
+    <div class="identity-summary-row">
+      <span>MOS LoginID z Redis</span>
+      <code>${escapeHtml(redisMosLoginId || "-")}</code>
     </div>
   `;
   renderIdentityTabStatus();
@@ -4317,6 +4458,13 @@ function getIdentityTabStatus() {
     };
   }
 
+  if (!hasRegisteredMosLoginClaim(session)) {
+    return {
+      level: "error",
+      title: "BE JWT neobsahuje mos_login_id. Pro MOS operace je potreba znovu se prihlasit."
+    };
+  }
+
   const identityId = String(session.identityId || state.redisIdentityId || "").trim();
 
   if (!identityId) {
@@ -4338,7 +4486,7 @@ function getIdentityTabStatus() {
     && (!loadedRedisIdentityId || loadedRedisIdentityId.toLowerCase() === identityId.toLowerCase());
 
   if (sessionMatchesIdentity) {
-    if (isUsableRedisSession(state.redisLastSession)) {
+    if (isUsableRedisSession(state.redisLastSession) && doesRedisSessionMatchCurrentJwt(state.redisLastSession, session)) {
       return {
         level: "ok",
         title: "Přihlášeno, BE JWT i MOS SessionID jsou použitelné."
@@ -4347,7 +4495,9 @@ function getIdentityTabStatus() {
 
     return {
       level: "error",
-      title: `Přihlášeno, ale MOS SessionID není použitelná (${getRedisSessionProblem(state.redisLastSession) || "nepoužitelné"}).`
+      title: isUsableRedisSession(state.redisLastSession)
+        ? getRedisSessionMismatchMessage(state.redisLastSession, session)
+        : `Přihlášeno, ale MOS SessionID není použitelná (${getRedisSessionProblem(state.redisLastSession) || "nepoužitelné"}).`
     };
   }
 
@@ -4418,13 +4568,17 @@ function getIdentityProfileTypeLabel(profile) {
   return "Ulozeny ucet";
 }
 
-function getIdentityMosStateText(identityId, redisSession, loadedRedisIdentityId) {
+function getIdentityMosStateText(identityId, redisSession, loadedRedisIdentityId, authSession = state.authSession) {
   if (state.redisAutoSessionLoading && identityId) {
     return "MOS SessionID overuji v Redis...";
   }
 
   if (state.redisLastSession && loadedRedisIdentityId && identityId && loadedRedisIdentityId.toLowerCase() !== identityId.toLowerCase()) {
     return `MOS SessionID neovereno pro aktualni ucet (naposledy nacteno pro ${loadedRedisIdentityId})`;
+  }
+
+  if (isUsableRedisSession(redisSession) && !doesRedisSessionMatchCurrentJwt(redisSession, authSession)) {
+    return getRedisSessionMismatchMessage(redisSession, authSession);
   }
 
   return `MOS SessionID chybi${redisSession ? ` (${getRedisSessionProblem(redisSession) || "nepouzitelne"})` : ""}`;
@@ -4730,6 +4884,59 @@ function appendRedisEnvironmentQuery(path) {
 function isUsableRedisSession(session) {
   const sessionId = String(session?.sessionId || session?.payload?.sessionId || session?.payload?.SessionId || "").trim();
   return Boolean(session?.exists && sessionId && !isEmptyGuid(sessionId));
+}
+
+function getMosLoginIdFromRedisSession(session) {
+  const rawValue = session?.payload?.mosLoginId ?? session?.payload?.MosLoginId ?? "";
+  const value = Number(rawValue);
+  return Number.isFinite(value) && value > 0 ? String(value) : "";
+}
+
+function doesRedisSessionMatchCurrentJwt(session, authSession = state.authSession) {
+  if (!isUsableRedisSession(session) || !authSession?.accessToken || authSession?.isAnonymous) {
+    return false;
+  }
+
+  const currentIdentityId = String(authSession.identityId || "").trim().toLowerCase();
+  const redisIdentityId = getIdentityIdFromRedisSession(session).toLowerCase();
+  const currentMosLoginId = getAuthSessionMosLoginId(authSession);
+  const redisMosLoginId = getMosLoginIdFromRedisSession(session);
+
+  return Boolean(currentIdentityId)
+    && Boolean(redisIdentityId)
+    && currentIdentityId === redisIdentityId
+    && Boolean(currentMosLoginId)
+    && Boolean(redisMosLoginId)
+    && currentMosLoginId === redisMosLoginId;
+}
+
+function getRedisSessionMismatchMessage(session, authSession = state.authSession) {
+  const currentIdentityId = String(authSession?.identityId || "").trim();
+  const redisIdentityId = getIdentityIdFromRedisSession(session);
+  const currentMosLoginId = getAuthSessionMosLoginId(authSession);
+  const redisMosLoginId = getMosLoginIdFromRedisSession(session);
+
+  if (!isUsableRedisSession(session)) {
+    return `MOS session neni pouzitelna (${getRedisSessionProblem(session) || "UnknownRedisSessionProblem"}).`;
+  }
+
+  if (currentIdentityId && redisIdentityId && currentIdentityId.toLowerCase() !== redisIdentityId.toLowerCase()) {
+    return `MOS session patri jine identite (${redisIdentityId}) nez aktualni JWT (${currentIdentityId}).`;
+  }
+
+  if (!currentMosLoginId) {
+    return "Aktualni JWT neobsahuje mos_login_id. Pro nove BE MOS operace je potreba znovu se prihlasit.";
+  }
+
+  if (!redisMosLoginId) {
+    return "Redis MOS session neobsahuje MosLoginId. Obnovte MOS session pres aktualni BE.";
+  }
+
+  if (currentMosLoginId !== redisMosLoginId) {
+    return `MOS session patri jinemu MOS loginu (${redisMosLoginId}) nez aktualni JWT (${currentMosLoginId}).`;
+  }
+
+  return "MOS session neodpovida aktualnimu JWT.";
 }
 
 function isEmptyGuid(value) {
@@ -6702,23 +6909,31 @@ async function loadMosSessionFromRedisStep(step) {
   const identityId = getPidLitackaIdentityIdForRedis(identityContextKey);
 
   if (!identityId) {
-    throw new Error("Chybí PidLitacka IdentityId pro načtení MOS SessionID z Redis. Nejdříve se přihlaste do projektu PidLitacka nebo spusťte workflow od kroku, který PidLitacka uživatele přihlásí.");
+    throw new Error("Chybi PidLitacka IdentityId pro nacteni MOS SessionID z Redis. Nejdive se prihlaste do projektu PidLitacka nebo spustte workflow od kroku, ktery PidLitacka uzivatele prihlasi.");
   }
 
   let session = await fetchRedisSession(identityId);
+  const pidLitackaSession = getCurrentPidLitackaAuthSession();
 
-  if (!isUsableRedisSession(session)) {
+  if (!isUsableRedisSession(session) || !doesRedisSessionMatchCurrentJwt(session, pidLitackaSession)) {
     const renewResult = await renewPidLitackaMosSessionForWorkflow();
 
     if (!renewResult.ok) {
-      throw new Error(`Redis session pro identityId ${identityId} není použitelná: ${getRedisSessionProblem(session) || "UnknownRedisSessionProblem"}. Obnova MOS session selhala: ${renewResult.message}`);
+      const problem = isUsableRedisSession(session)
+        ? getRedisSessionMismatchMessage(session, pidLitackaSession)
+        : getRedisSessionProblem(session) || "UnknownRedisSessionProblem";
+      throw new Error(`Redis session pro identityId ${identityId} neni pouzitelna: ${problem}. Obnova MOS session selhala: ${renewResult.message}`);
     }
 
     await delay(300);
     session = await fetchRedisSession(identityId);
 
-    if (!isUsableRedisSession(session)) {
-      throw new Error(`Redis session pro identityId ${identityId} není použitelná ani po obnově: ${getRedisSessionProblem(session) || "UnknownRedisSessionProblem"}.`);
+    const renewedPidLitackaSession = getCurrentPidLitackaAuthSession();
+    if (!isUsableRedisSession(session) || !doesRedisSessionMatchCurrentJwt(session, renewedPidLitackaSession)) {
+      const problem = isUsableRedisSession(session)
+        ? getRedisSessionMismatchMessage(session, renewedPidLitackaSession)
+        : getRedisSessionProblem(session) || "UnknownRedisSessionProblem";
+      throw new Error(`Redis session pro identityId ${identityId} neni pouzitelna ani po obnove: ${problem}.`);
     }
   }
 
@@ -6737,7 +6952,6 @@ async function loadMosSessionFromRedisStep(step) {
     sessionIdMasked: maskSessionId(sessionId)
   };
 }
-
 function getPidLitackaIdentityIdForRedis(identityContextKey = "pidLitackaIdentityId") {
   const currentPidLitackaIdentityId = getCurrentPidLitackaIdentityId();
 
@@ -7550,18 +7764,21 @@ async function applyWorkflowRedisSession(item) {
 
   try {
     let session = await fetchRedisSession(identityId);
+    let pidLitackaSession = getCurrentPidLitackaAuthSession();
 
-    if (!isUsableRedisSession(session)) {
+    if (!isUsableRedisSession(session) || !doesRedisSessionMatchCurrentJwt(session, pidLitackaSession)) {
       addLog("warn", "Redis MOS session not found", {
         identityId,
         key: session.key,
         exists: session.exists,
-        reason: getRedisSessionProblem(session)
+        reason: isUsableRedisSession(session) ? getRedisSessionMismatchMessage(session, pidLitackaSession) : getRedisSessionProblem(session)
       });
 
       const renewResult = await renewPidLitackaMosSessionForWorkflow();
       if (!renewResult.ok) {
-        const problem = getRedisSessionProblem(session) || "UnknownRedisSessionProblem";
+        const problem = isUsableRedisSession(session)
+          ? getRedisSessionMismatchMessage(session, pidLitackaSession)
+          : getRedisSessionProblem(session) || "UnknownRedisSessionProblem";
         const message = `Workflow potrebuje platne MOS SessionID, ale Redis session pro identityId ${identityId} neni pouzitelna (${problem}).`;
         addLog("error", "Redis MOS session renewal failed", {
           identityId,
@@ -7582,25 +7799,43 @@ async function applyWorkflowRedisSession(item) {
 
       await delay(300);
       session = await fetchRedisSession(identityId);
+      pidLitackaSession = getCurrentPidLitackaAuthSession();
 
-      if (!isUsableRedisSession(session)) {
+      if (!isUsableRedisSession(session) || !doesRedisSessionMatchCurrentJwt(session, pidLitackaSession)) {
         const problem = getRedisSessionProblem(session) || "UnknownRedisSessionProblem";
         const message = `Workflow obnovu MOS session zkusil, ale Redis stale neobsahuje platne SessionID (${problem}).`;
         addLog("error", "Redis MOS session still missing after renewal", {
           identityId,
           key: session.key,
           exists: session.exists,
-          reason: problem
+          reason: isUsableRedisSession(session) ? getRedisSessionMismatchMessage(session, pidLitackaSession) : problem
         });
         return {
           ok: false,
-          message,
+          message: isUsableRedisSession(session) ? getRedisSessionMismatchMessage(session, pidLitackaSession) : message,
           lines: [
             `Redis key: ${session.key || `mos:session:user:${identityId}`}`,
             "Scenar nebude pokracovat, aby nevznikl falesne chybny MOS vysledek."
           ]
         };
       }
+    }
+
+    if (!doesRedisSessionMatchCurrentJwt(session, pidLitackaSession)) {
+      const message = getRedisSessionMismatchMessage(session, pidLitackaSession);
+      addLog("error", "Redis MOS session login mismatch", {
+        identityId,
+        key: session.key,
+        message
+      });
+      return {
+        ok: false,
+        message,
+        lines: [
+          `Redis key: ${session.key || `mos:session:user:${identityId}`}`,
+          "SessionID nebude pouzito pro prime MOS volani, protoze neodpovida aktualnimu BE JWT."
+        ]
+      };
     }
 
     const sessionId = session.sessionId || session.payload?.sessionId || session.payload?.SessionId;
@@ -7655,7 +7890,10 @@ async function renewPidLitackaMosSessionForWorkflow() {
   try {
     state.currentProject = pidLitackaProject;
     state.currentEnvironmentId = environmentId;
-    state.authFormValues = loadSavedAuthFormValues(pidLitackaProject);
+    state.authFormValues = {
+      ...loadSavedAuthFormValues(pidLitackaProject),
+      ...getPidLitackaIdentityValues()
+    };
     state.authProfileNotes = loadSavedAuthProfileNotes(pidLitackaProject);
     state.authCustomProfiles = loadSavedAuthCustomProfiles(pidLitackaProject);
     applyAuthFieldDefaults(getProjectAuthConfig(pidLitackaProject));

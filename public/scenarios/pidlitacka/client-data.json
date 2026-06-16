@@ -23,7 +23,7 @@
       "instructions": [
         "Nejprve se přihlaste v panelu Přístup.",
         "Spusťte krok a ověřte, jaký stav klientských dat backend pro daného uživatele vrací.",
-        "Možné stavy jsou InactiveUser, Missing, PendingPersonalData a Completed."
+        "Možné stavy jsou LoginInactive, CustomerInactive, Missing, PendingPersonalData a Completed."
       ],
       "steps": [
         {
@@ -67,7 +67,7 @@
       },
       "instructions": [
         "V panelu Přístup vyberte účet, který existuje, ale není aktivní.",
-        "Očekávaný výsledek je InactiveUser: uživatel není aktivní a scénáře založení klienta nesmí pokračovat.",
+        "Očekávaný výsledek je LoginInactive: MOS login není aktivní a scénáře založení klienta nesmí pokračovat.",
         "Pokud se vrátí jiný stav, účet není vhodný pro tento konkrétní scénář."
       ],
       "steps": [
@@ -97,7 +97,15 @@
               },
               {
                 "path": "$.status",
-                "equals": "InactiveUser"
+                "equals": "LoginInactive"
+              },
+              {
+                "path": "$.clientState.kind",
+                "equals": "LoginInactive"
+              },
+              {
+                "path": "$.clientState.recommendedAction",
+                "equals": "Relogin"
               }
             ]
           }
