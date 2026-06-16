@@ -19,7 +19,7 @@
 # - Pokud AddItemToOrder vrátí Result/ID != 0 nebo OrderID = 0, nepokračujte na SetOrderPaid.
 
 @baseUrl = {{coreMosBaseUrl}}
-@serviceKey =
+@serviceKey = c8b76d63-3c39-46f2-ac12-887776070d45
 @userName =
 @password =
 @codeSms =
