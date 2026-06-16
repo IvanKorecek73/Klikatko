@@ -2166,6 +2166,7 @@ button:disabled {
 .context-view {
   flex: none;
   min-height: 76px;
+  max-height: min(22vh, 180px);
   margin-bottom: 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -2513,6 +2514,7 @@ button:disabled {
   flex: 1;
   display: grid;
   gap: 10px;
+  align-content: start;
   min-height: 0;
   overflow: auto;
 }
@@ -2619,6 +2621,10 @@ button:disabled {
 
   .log-entries {
     overflow: visible;
+  }
+
+  .context-view {
+    max-height: 180px;
   }
 }
 
