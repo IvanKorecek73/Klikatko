@@ -920,6 +920,8 @@ function createNewAuthProfileDraftValues() {
     osVersion: android ? "14" : "17.4",
     appVersion: "2.0.0",
     model: android ? "Pixel 8" : "iPhone 15 Pro",
+    deviceLanguage: "cs",
+    deviceMessagingToken: "",
     __newProfileNote: ""
   };
 }
@@ -2033,6 +2035,7 @@ async function applyIdentityProfileSelection(profileId) {
 
   if (state.currentProject?.id === project.id) {
     applyAuthProfileSelection(profile.id, { overwrite: true });
+    saveAuthFormValuesForProject(project, getProjectAuthConfig(project), state.authFormValues);
     state.identityFormValues = {
       ...state.authFormValues,
       __selectedProfileId: profile.id
@@ -2156,6 +2159,7 @@ function handleIdentityProfileFieldInput(event) {
     return;
   }
 
+  const selectedProfile = getSelectedPidLitackaProfile();
   state.identityFormValues = {
     ...getPidLitackaIdentityValues(),
     [target.name]: target.value
@@ -2167,7 +2171,9 @@ function handleIdentityProfileFieldInput(event) {
     return;
   }
 
-  saveIdentityFormValues();
+  if (!selectedProfile?.isNewProfile) {
+    saveIdentityFormValues();
+  }
   renderIdentitySummary();
   renderIdentityProfileActions();
 }
@@ -3062,7 +3068,6 @@ function updateAuthProfileAfterSuccessfulLogin() {
   const selectedProfile = getSelectedAuthProfile();
 
   if (selectedProfile?.isNewProfile) {
-    saveNewAuthProfileAfterSuccessfulLogin();
     return;
   }
 
@@ -8507,6 +8512,7 @@ function applyAuthSessionFromStep(step, body, result) {
   saveAuthFormValues();
   saveAuthSession();
   renderAuthPanel();
+  renderRedisViewer();
   renderModeBanner();
 
   return step.authSession.message || "Uživatel je přihlášený a připravený pro další scénáře.";
