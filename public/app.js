@@ -2371,11 +2371,18 @@ function clearPidLitackaIdentitySession() {
 async function executeIdentityAuthAction(action) {
   const project = getPidLitackaProject();
   const actionLabels = {
-    ensure: "Pripravuji prihlaseni...",
-    login: "Prihlasuji do BE...",
+    ensure: "Připravuji přihlášení...",
+    login: "Přihlašuji do BE...",
     refresh: "Obnovuji JWT...",
     mos: "Obnovuji MOS session...",
-    logout: "Odhlasuji..."
+    logout: "Odhlašuji..."
+  };
+  const actionDoneLabels = {
+    ensure: "Přihlášení je připravené.",
+    login: "Přihlášení do BE proběhlo.",
+    refresh: "JWT bylo obnoveno.",
+    mos: "MOS session byla obnovena.",
+    logout: "Odhlášení proběhlo."
   };
 
   if (!project) {
@@ -2384,8 +2391,8 @@ async function executeIdentityAuthAction(action) {
     return;
   }
 
-  showIdentityActionStatus("warn", actionLabels[action] || "Provadim akci...");
-  showRedisResult("warn", actionLabels[action] || "Provadim akci...", "Pracuji s aktualne vybranym uctem v zalozce Uzivatel.");
+  showIdentityActionStatus("warn", actionLabels[action] || "Provádím akci...");
+  showRedisResult("warn", actionLabels[action] || "Provádím akci...", "Pracuji s aktuálně vybraným účtem v záložce Uživatel.");
 
   try {
     await withPidLitackaIdentityContext(async authConfig => {
@@ -2443,8 +2450,8 @@ async function executeIdentityAuthAction(action) {
 
     state.redisAutoSessionIdentityId = "";
     renderRedisViewer();
-    showIdentityActionStatus("ok", actionLabels[action]?.replace("...", ".") || "Hotovo.");
-    showRedisResult("ok", "Akce prihlaseni probehla.", actionLabels[action]?.replace("...", ".") || "Hotovo.");
+    showIdentityActionStatus("ok", actionDoneLabels[action] || "Hotovo.");
+    showRedisResult("ok", "Akce přihlášení proběhla.", actionDoneLabels[action] || "Hotovo.");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     showIdentityActionStatus("error", message);
