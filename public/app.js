@@ -7681,8 +7681,41 @@ function findFirstIncompleteWorkflowStepIndex(scenario) {
 }
 
 function requestStopWorkflowRun() {
+  if (state.workflowRun?.status === "paused" && !state.workflowRunning) {
+    cancelPausedWorkflowRun();
+    return;
+  }
+
   state.workflowStopRequested = true;
   updateWorkflowStatus("Zastavuji...");
+}
+
+function cancelPausedWorkflowRun() {
+  const previousRun = state.workflowRun;
+
+  state.workflowRun = null;
+  state.workflowRunning = false;
+  state.batchRunning = false;
+  state.workflowStopRequested = false;
+  addLog("warn", "Workflow cancelled", {
+    workflow: previousRun
+      ? {
+          workflowId: previousRun.workflowId,
+          itemIndex: previousRun.itemIndex,
+          stepIndex: previousRun.stepIndex,
+          status: previousRun.status
+        }
+      : null,
+    context: state.workflowContext
+  });
+  showWorkflowSummary("warn", "Workflow bylo zastaveno.", [
+    "Běh workflow byl ukončen a výběr scénářů je znovu dostupný.",
+    "Log a aktuální kontext zůstávají zachované."
+  ]);
+  updateWorkflowStatus("Zastaveno");
+  setWorkflowControls(false);
+  renderStep({ preserveValues: true });
+  renderGlobalStatusBar();
 }
 
 async function openWorkflowItem(item) {
@@ -8412,7 +8445,7 @@ function updateWorkflowControls() {
   const hasCompletedRun = Boolean(state.workflowRun?.status === "completed");
   elements.runWorkflow.disabled = !hasWorkflow || state.workflowRunning || hasPausedRun;
   elements.continueWorkflow.disabled = !hasWorkflow || !hasPausedRun || state.workflowRunning;
-  elements.stopWorkflow.disabled = !state.workflowRunning;
+  elements.stopWorkflow.disabled = !(state.workflowRunning || hasPausedRun);
   if (elements.workflowEnvironmentProfileSelect) {
     elements.workflowEnvironmentProfileSelect.disabled = state.workflowRunning || getWorkflowEnvironmentProfiles().length <= 1;
   }
