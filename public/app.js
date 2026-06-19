@@ -7672,7 +7672,7 @@ function findFirstIncompleteWorkflowStepIndex(scenario) {
       return index;
     }
 
-    if (step?.selection && state.activeSelection?.stepId === step.id && state.activeSelection.selectedIndex === null) {
+    if (isStepWaitingForSelection(step) && selectionFeedsFutureStep(step)) {
       return index;
     }
   }
@@ -8025,7 +8025,7 @@ function getWorkflowStopAfterStep(item, step) {
 }
 
 function getWorkflowSelectionStopAfterStep(step) {
-  if (state.activeSelection?.stepId === step.id && state.activeSelection.selectedIndex === null) {
+  if (isStepWaitingForSelection(step) && selectionFeedsFutureStep(step)) {
     const buttonLabel = state.activeSelection.config?.buttonLabel || "Vybrat";
     return {
       message: `Čeká se na výběr z odpovědi kroku: ${step.title}`,
@@ -8037,7 +8037,7 @@ function getWorkflowSelectionStopAfterStep(step) {
 }
 
 function applyWorkflowAutoSelection(item, step) {
-  if (!state.activeSelection || state.activeSelection.stepId !== step.id || state.activeSelection.selectedIndex !== null) {
+  if (!isStepWaitingForSelection(step)) {
     return false;
   }
 
@@ -9577,9 +9577,7 @@ function updateNextStepControl() {
 
 function isCurrentStepWaitingForSelection() {
   const step = currentStep();
-  return Boolean(step
-    && state.activeSelection?.stepId === step.id
-    && state.activeSelection.selectedIndex === null);
+  return isStepWaitingForSelection(step);
 }
 
 function getSelectionNextButtonLabel() {
@@ -9591,6 +9589,12 @@ function getSelectionNextButtonLabel() {
   }
 
   return "Vyberte položku";
+}
+
+function isStepWaitingForSelection(step) {
+  return Boolean(step
+    && state.activeSelection?.stepId === step.id
+    && state.activeSelection.selectedIndex === null);
 }
 
 function clearStepResultsFrom(startIndex) {
@@ -11145,8 +11149,11 @@ function renderPidCouponSubformHtml(coupons, title = "Kupóny") {
   return `
     <div class="app-coupon-list">
       <strong class="app-coupon-list-title">${escapeHtml(title)}</strong>
-      ${coupons.map(coupon => `
-        <section class="app-coupon-item">
+      ${coupons.map(coupon => {
+        const selection = getCouponSelectionState(coupon);
+
+        return `
+        <section class="app-coupon-item ${selection?.isSelected ? "app-card-selected" : ""}">
           <div class="app-coupon-item-head">
             <strong>${escapeHtml(coupon.tariffName || coupon.name || (coupon.couponId ? `Kupón ${coupon.couponId}` : "Kupón"))}</strong>
             <span>${escapeHtml(coupon.couponId ? `ID ${coupon.couponId}` : "")}</span>
@@ -11164,11 +11171,39 @@ function renderPidCouponSubformHtml(coupons, title = "Kupóny") {
             <div><span>Platnost od</span><span>${escapeHtml(formatDate(coupon.validFrom || coupon.dateTimeFrom) || "-")}</span></div>
             <div><span>Platnost do</span><span>${escapeHtml(formatDate(coupon.validTo || coupon.dateTimeTo) || "-")}</span></div>
             <div><span>Tarif</span><span>${escapeHtml(coupon.tariffName || coupon.name || "-")}</span></div>
+            <div><span>Objednávka</span><span>${escapeHtml(coupon.orderId || "-")}</span></div>
           </div>
+          ${selection ? `
+            <div class="app-card-actions">
+              <button type="button" class="app-card-select" data-selection-index="${selection.index}">
+                ${escapeHtml(selection.isSelected ? selection.selectedButtonLabel : selection.buttonLabel)}
+              </button>
+            </div>` : ""}
         </section>
-      `).join("")}
+      `;}).join("")}
     </div>
   `;
+}
+
+function getCouponSelectionState(coupon) {
+  const selection = state.activeSelection;
+
+  if (!selection || !Array.isArray(selection.items)) {
+    return null;
+  }
+
+  const index = selection.items.indexOf(coupon);
+
+  if (index < 0) {
+    return null;
+  }
+
+  return {
+    index,
+    isSelected: selection.selectedIndex === index,
+    buttonLabel: selection.config?.buttonLabel || "Vybrat",
+    selectedButtonLabel: selection.config?.selectedButtonLabel || "Vybráno"
+  };
 }
 
 function renderClientCouponsCardHtml(body) {
@@ -12243,10 +12278,42 @@ function isSelectionCollectionCompatible(activeItems, renderedItems) {
   return activeItems.every((item, index) => item === renderedItems[index]);
 }
 
+function selectionFeedsFutureStep(step) {
+  const storedKeys = Object.keys(step?.selection?.store || {});
+
+  if (storedKeys.length === 0 || !state.scenario) {
+    return false;
+  }
+
+  const steps = state.scenario.steps || [];
+  const stepIndex = steps.indexOf(step);
+
+  if (stepIndex < 0) {
+    return false;
+  }
+
+  return steps
+    .slice(stepIndex + 1)
+    .some(candidate => stepConsumesAnyContextKey(candidate, storedKeys));
+}
+
+function stepConsumesAnyContextKey(step, keys) {
+  const required = Array.isArray(step?.requiresContext)
+    ? step.requiresContext
+    : [];
+
+  if (required.some(key => keys.includes(key))) {
+    return true;
+  }
+
+  const serialized = JSON.stringify(step || {});
+  return keys.some(key => serialized.includes(`{{context.${key}}`));
+}
+
 function prepareSelection(step, body, status) {
   state.activeSelection = null;
 
-  if (!step?.selection || status >= 400) {
+  if (state.freeForm || !step?.selection || status >= 400 || !selectionFeedsFutureStep(step)) {
     return;
   }
 

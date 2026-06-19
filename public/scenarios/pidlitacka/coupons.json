@@ -61,6 +61,94 @@
       ]
     },
     {
+      "id": "client-coupons-receipt-download",
+      "title": "Kupóny - stáhnout daňový doklad",
+      "description": "Read-only scénář pro nový endpoint GET /v1/client/coupons/receipt/{orderId}. Nejprve načte kupóny klienta, uloží OrderId vybraného kupónu a potom ověří, že backend vrátí PDF doklad jako application/pdf.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["profile", "coupons", "receipt", "pdf", "client-read"],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Daňový doklad"
+      },
+      "instructions": [
+        "Přihlaste se v záložce Uživatel jako klient s validním BE JWT a MOS session.",
+        "V prvním kroku vyberte kupón, který má vyplněné OrderId. Kupóny bez OrderId nelze použít pro stažení dokladu.",
+        "Druhý krok volá GET /v1/client/coupons/receipt/{orderId}. Správný pozitivní výsledek je HTTP 200, content-type application/pdf a tlačítko pro otevření PDF.",
+        "Pokud backend vrátí 404, MOS pro danou objednávku doklad nemá dostupný; pro pozitivní test vyberte jiný kupón nebo připravte testovací objednávku s dokladem."
+      ],
+      "steps": [
+        {
+          "id": "client-coupons-receipt-select-coupon",
+          "title": "Vybrat kupón s OrderId",
+          "description": "Načte GET /v1/client/coupons a umožní vybrat kupón, jehož OrderId se použije pro stažení daňového dokladu.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "Completed" },
+              { "path": "$.coupons", "lengthAtLeast": 1 },
+              { "path": "$.steps", "lengthAtLeast": 3 },
+              { "path": "$.steps[0].name", "equals": "CustomerResolution" },
+              { "path": "$.steps[0].status", "equals": "Completed" },
+              { "path": "$.steps[1].name", "equals": "IdentifierResolution" },
+              { "path": "$.steps[1].status", "equals": "Completed" },
+              { "path": "$.steps[2].name", "equals": "GetCoupons" },
+              { "path": "$.steps[2].status", "equals": "Completed" }
+            ]
+          },
+          "selection": {
+            "sourcePath": "$.coupons",
+            "buttonLabel": "Použít pro doklad",
+            "selectedButtonLabel": "Kupón vybrán",
+            "emptyTitle": "Žádné kupóny",
+            "emptyText": "Aktuální klient nemá žádný kupón. Pro test daňového dokladu je potřeba klient s kupónem a OrderId.",
+            "store": {
+              "pidCouponReceiptOrderId": "$.orderId",
+              "pidCouponReceiptCouponId": "$.couponId",
+              "pidCouponReceiptTariffName": "$.tariffName",
+              "pidCouponReceiptIdentifierId": "$.identifier.identifierId"
+            }
+          }
+        },
+        {
+          "id": "client-coupons-receipt-download-pdf",
+          "title": "Stáhnout daňový doklad",
+          "description": "Zavolá GET /v1/client/coupons/receipt/{orderId}. Klikátko umí PDF odpověď zobrazit jako odkaz pro otevření nebo stažení.",
+          "requiresContext": ["pidCouponReceiptOrderId"],
+          "fields": [
+            {
+              "name": "orderId",
+              "label": "OrderId",
+              "type": "number",
+              "value": "{{context.pidCouponReceiptOrderId}}",
+              "placeholder": "OrderId z vybraného kupónu"
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons/receipt/{{form.orderId}}"
+          },
+          "remember": {
+            "pidCouponReceiptOrderId": "{{form.orderId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.contentType", "equals": "application/pdf" },
+              { "path": "$.size", "atLeast": 1 },
+              { "path": "$.downloadUrl", "notEmpty": true }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "client-coupons-identifiers-detail",
       "title": "Kupóny - detail identifikátorů a kupónů klienta",
       "description": "Read-only scénář nad GET /v1/client/coupons zaměřený na nový detail: jedním voláním ověří identifikátory klienta, jejich metadata a kupóny přiřazené k identifikátorům.",
