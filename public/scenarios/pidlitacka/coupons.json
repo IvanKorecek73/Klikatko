@@ -63,7 +63,7 @@
     {
       "id": "client-coupons-receipt-download",
       "title": "Kupóny - stáhnout daňový doklad",
-      "description": "Read-only scénář pro nový endpoint GET /v1/client/coupons/receipt/{orderId}. Nejprve načte kupóny klienta, uloží OrderId vybraného kupónu a potom ověří, že backend vrátí PDF doklad jako application/pdf.",
+      "description": "Read-only scénář pro endpoint GET /v1/client/coupons/receipt/{mosOrderId}. Nejprve načte kupóny klienta, uloží MOS OrderId vybraného kupónu a potom ověří, že backend vrátí PDF doklad jako application/pdf.",
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
@@ -75,15 +75,16 @@
       },
       "instructions": [
         "Přihlaste se v záložce Uživatel jako klient s validním BE JWT a MOS session.",
-        "V prvním kroku vyberte kupón, který má vyplněné OrderId. Kupóny bez OrderId nelze použít pro stažení dokladu.",
-        "Druhý krok volá GET /v1/client/coupons/receipt/{orderId}. Správný pozitivní výsledek je HTTP 200, content-type application/pdf a tlačítko pro otevření PDF.",
+        "V prvním kroku vyberte kupón, který má vyplněné MOS OrderId. Kupóny bez OrderId nelze použít pro stažení dokladu.",
+        "Druhý krok volá GET /v1/client/coupons/receipt/{mosOrderId}. Správný pozitivní výsledek je HTTP 200, content-type application/pdf a tlačítko pro otevření PDF.",
+        "Po nákupním workflow lze druhý krok spustit i přímo s hodnotou mosCouponOrderId z kontextu.",
         "Pokud backend vrátí 404, MOS pro danou objednávku doklad nemá dostupný; pro pozitivní test vyberte jiný kupón nebo připravte testovací objednávku s dokladem."
       ],
       "steps": [
         {
           "id": "client-coupons-receipt-select-coupon",
-          "title": "Vybrat kupón s OrderId",
-          "description": "Načte GET /v1/client/coupons a umožní vybrat kupón, jehož OrderId se použije pro stažení daňového dokladu.",
+          "title": "Vybrat kupón s MOS OrderId",
+          "description": "Načte GET /v1/client/coupons a umožní vybrat kupón, jehož MOS OrderId se použije pro stažení daňového dokladu.",
           "request": {
             "method": "GET",
             "path": "/v1/client/coupons"
@@ -109,6 +110,8 @@
             "emptyTitle": "Žádné kupóny",
             "emptyText": "Aktuální klient nemá žádný kupón. Pro test daňového dokladu je potřeba klient s kupónem a OrderId.",
             "store": {
+              "mosCouponOrderId": "$.orderId",
+              "pidCouponReceiptMosOrderId": "$.orderId",
               "pidCouponReceiptOrderId": "$.orderId",
               "pidCouponReceiptCouponId": "$.couponId",
               "pidCouponReceiptTariffName": "$.tariffName",
@@ -119,23 +122,24 @@
         {
           "id": "client-coupons-receipt-download-pdf",
           "title": "Stáhnout daňový doklad",
-          "description": "Zavolá GET /v1/client/coupons/receipt/{orderId}. Klikátko umí PDF odpověď zobrazit jako odkaz pro otevření nebo stažení.",
-          "requiresContext": ["pidCouponReceiptOrderId"],
+          "description": "Zavolá GET /v1/client/coupons/receipt/{mosOrderId}. Klikátko umí PDF odpověď zobrazit jako odkaz pro otevření nebo stažení.",
           "fields": [
             {
-              "name": "orderId",
-              "label": "OrderId",
+              "name": "mosOrderId",
+              "label": "MOS OrderId",
               "type": "number",
-              "value": "{{context.pidCouponReceiptOrderId}}",
-              "placeholder": "OrderId z vybraného kupónu"
+              "value": "{{context.mosCouponOrderId}}",
+              "placeholder": "MOS OrderId z vybraného kupónu nebo nákupního workflow"
             }
           ],
           "request": {
             "method": "GET",
-            "path": "/v1/client/coupons/receipt/{{form.orderId}}"
+            "path": "/v1/client/coupons/receipt/{{form.mosOrderId}}"
           },
           "remember": {
-            "pidCouponReceiptOrderId": "{{form.orderId}}"
+            "mosCouponOrderId": "{{form.mosOrderId}}",
+            "pidCouponReceiptMosOrderId": "{{form.mosOrderId}}",
+            "pidCouponReceiptOrderId": "{{form.mosOrderId}}"
           },
           "expected": {
             "status": 200,
