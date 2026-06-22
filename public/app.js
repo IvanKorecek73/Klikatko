@@ -67,7 +67,8 @@ const IDENTITY_DEVICE_FIELD_NAMES = new Set([
   "appVersion",
   "model",
   "deviceLanguage",
-  "deviceMessagingToken"
+  "deviceMessagingToken",
+  "regId"
 ]);
 
 const elements = {
@@ -922,6 +923,7 @@ function createNewAuthProfileDraftValues() {
     model: android ? "Pixel 8" : "iPhone 15 Pro",
     deviceLanguage: "cs",
     deviceMessagingToken: "",
+    regId: "",
     __newProfileNote: ""
   };
 }
@@ -2211,7 +2213,8 @@ function saveCurrentIdentityProfile() {
       appVersion: values.appVersion || "",
       model: values.model || "",
       deviceLanguage: values.deviceLanguage || "",
-      deviceMessagingToken: values.deviceMessagingToken || ""
+      deviceMessagingToken: values.deviceMessagingToken || "",
+      regId: values.regId || ""
     }, identityId)
   };
 
@@ -3110,7 +3113,8 @@ function saveNewAuthProfileAfterSuccessfulLogin(options = {}) {
       appVersion: state.authFormValues?.appVersion || "",
       model: state.authFormValues?.model || "",
       deviceLanguage: state.authFormValues?.deviceLanguage || "",
-      deviceMessagingToken: state.authFormValues?.deviceMessagingToken || ""
+      deviceMessagingToken: state.authFormValues?.deviceMessagingToken || "",
+      regId: state.authFormValues?.regId || ""
     }, identityId)
   };
 
@@ -3139,7 +3143,8 @@ function updateCustomAuthProfilePasswordAfterSuccessfulLogin(selectedProfile) {
     "appVersion",
     "model",
     "deviceLanguage",
-    "deviceMessagingToken"
+    "deviceMessagingToken",
+    "regId"
   ];
 
   const hasPersistedFieldValue = persistedFields.some(field => state.authFormValues?.[field] !== undefined);
@@ -6553,6 +6558,8 @@ function formatExpected(step) {
       parts.push(`${assertion.path} po\u010det >= ${assertion.lengthAtLeast}`);
     } else if (assertion.atLeast !== undefined) {
       parts.push(`${assertion.path} >= ${assertion.atLeast}`);
+    } else if (assertion.containsItem !== undefined) {
+      parts.push(`${assertion.path} obsahuje polo\u017eku ${JSON.stringify(resolveExpectedValue(assertion.containsItem, step))}`);
     }
   }
 
@@ -9160,6 +9167,16 @@ function evaluateStep(step, status, body) {
 
     if (assertion.atLeast !== undefined && (typeof actual !== "number" || actual < assertion.atLeast)) {
       failures.push(`Očekáváno ${assertion.path} >= ${assertion.atLeast}, vráceno ${JSON.stringify(actual)}.`);
+    }
+  }
+
+  for (const assertion of expected.assertions || []) {
+    const actual = assertion.regex !== undefined
+      ? getRegexAssertionSource(body, assertion)
+      : getPath(body, assertion.path);
+
+    if (assertion.containsItem !== undefined && !containsMatchingItem(actual, assertion.containsItem, step)) {
+      failures.push(assertion.message || `Expected ${assertion.path} to contain item ${JSON.stringify(resolveExpectedValue(assertion.containsItem, step))}.`);
     }
   }
 
@@ -13583,6 +13600,26 @@ function getPath(value, selector) {
     .filter(Boolean);
 
   return tokens.reduce((current, token) => current?.[token], value);
+}
+
+function containsMatchingItem(value, expectedShape, step) {
+  if (!Array.isArray(value)) {
+    return false;
+  }
+
+  return value.some(item => itemMatchesExpectedShape(item, expectedShape, step));
+}
+
+function itemMatchesExpectedShape(item, expectedShape, step) {
+  if (!expectedShape || typeof expectedShape !== "object" || Array.isArray(expectedShape)) {
+    return deepEqual(item, resolveExpectedValue(expectedShape, step));
+  }
+
+  return Object.entries(expectedShape).every(([selector, expected]) => {
+    const normalizedSelector = selector.startsWith("$") ? selector : `$.${selector}`;
+    const actual = getPath(item, normalizedSelector);
+    return deepEqual(actual, resolveExpectedValue(expected, step));
+  });
 }
 
 function isEmpty(value) {

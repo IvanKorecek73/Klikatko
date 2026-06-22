@@ -178,6 +178,12 @@
               "label": "Push token",
               "value": "",
               "placeholder": "Volitelné, např. FCM/APNs token"
+            },
+            {
+              "name": "regId",
+              "label": "RegId zarizeni",
+              "value": "",
+              "placeholder": "Volitelne, napr. 1805-..."
             }
           ],
           "body": {

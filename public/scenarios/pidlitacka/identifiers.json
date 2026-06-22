@@ -439,6 +439,83 @@
           }
         }
       ]
+    },
+    {
+      "id": "pidlitacka-identifiers-current-device",
+      "title": "PidLitacka identifikator - aktualni zarizeni",
+      "description": "Overi, ze prihlaseny klient ma tokenizovane MobApp zarizeni a ze pri odeslani X-Device-RegId backend oznaci aktualni zarizeni priznakem isCurrentDevice.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": false,
+      "tags": [
+        "identifiers",
+        "pidlitacka",
+        "mobapp",
+        "current-device",
+        "client-read"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Identifikatory",
+        "subtitle": "Aktualni zarizeni"
+      },
+      "instructions": [
+        "V zalozce Uzivatel nejdrive vyberte nebo ulozte profil, ktery ma vyplneny RegId zarizeni.",
+        "Ucet musi mit v MOS/BE tokenizovany alespon jeden MobApp identifikator.",
+        "Prvni krok overi existenci MobApp identifikatoru, druhy posle X-Device-RegId a ceka alespon jeden MobApp s isCurrentDevice = true."
+      ],
+      "steps": [
+        {
+          "id": "pidlitacka-identifiers-current-device-tokenized",
+          "title": "Overit tokenizovane MobApp zarizeni",
+          "description": "Nacte identifikatory aktualniho klienta a overi, ze mezi nimi existuje alespon jeden MobApp token.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 1
+              },
+              {
+                "path": "$.identifiers",
+                "containsItem": {
+                  "type": "MobApp"
+                },
+                "message": "Aktualni klient nema zadny MobApp identifikator. Nejdrive zarizeni tokenizujte."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-identifiers-current-device-flag",
+          "title": "Overit isCurrentDevice pro aktualni zarizeni",
+          "description": "Zavola stejny endpoint s hlavickou X-Device-RegId podle ulozeneho profilu a overi, ze alespon jeden MobApp identifikator patri aktualnimu zarizeni.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers",
+            "headers": {
+              "X-Device-RegId": "{{auth.regId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.identifiers",
+                "containsItem": {
+                  "type": "MobApp",
+                  "isCurrentDevice": true
+                },
+                "message": "Zadny MobApp identifikator nebyl oznacen jako aktualni zarizeni. Zkontrolujte RegId v profilu uzivatele."
+              }
+            ]
+          }
+        }
+      ]
     }
   ]
 }
