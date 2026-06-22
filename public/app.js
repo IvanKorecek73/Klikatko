@@ -6803,6 +6803,39 @@ async function runCurrentStep() {
 }
 
 async function runCustomStep(step, runningStepIndex) {
+  if (step.customAction === "requireTemplateValue") {
+    const value = resolveTemplate(step.requireValue?.template || "", { fieldValues: state.values }).trim();
+    const label = step.requireValue?.label || "Hodnota";
+    const result = value
+      ? {
+          level: "ok",
+          appMessage: `${label} je vyplnene.`,
+          messages: [step.requireValue?.okMessage || `${label} je pripraveno pro dalsi kroky scenare.`]
+        }
+      : {
+          level: "error",
+          appMessage: step.requireValue?.missingMessage || `${label} chybi.`,
+          messages: [step.requireValue?.missingDetail || `${label} doplnte v profilu uzivatele a krok zopakujte.`]
+        };
+
+    state.lastStepResult = result;
+    state.stepResults[runningStepIndex] = result;
+    addLog(result.level, `${step.title} -> kontrola hodnoty`, {
+      request: {
+        action: step.customAction,
+        label,
+        present: Boolean(value)
+      },
+      expected: step.expected || null,
+      mode: state.dirty ? "exploratory" : "scenario",
+      notes: result.messages
+    });
+    showResult(result.level, result.appMessage, { label, present: Boolean(value) }, step);
+    renderContext();
+    updateNextStepControl();
+    return;
+  }
+
   if (step.customAction === "loadMosSessionFromRedis") {
     const startedAt = performance.now();
     const loaded = await loadMosSessionFromRedisStep(step);

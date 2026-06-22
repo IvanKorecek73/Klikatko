@@ -462,9 +462,22 @@
       "instructions": [
         "V zalozce Uzivatel nejdrive vyberte nebo ulozte profil, ktery ma vyplneny RegId zarizeni.",
         "Ucet musi mit v MOS/BE tokenizovany alespon jeden MobApp identifikator.",
-        "Prvni krok overi existenci MobApp identifikatoru, druhy posle X-Device-RegId a ceka alespon jeden MobApp s isCurrentDevice = true."
+        "Prvni krok overi, ze profil ma RegId. Druhy krok overi existenci MobApp identifikatoru, treti posle X-Device-RegId a ceka alespon jeden MobApp s isCurrentDevice = true."
       ],
       "steps": [
+        {
+          "id": "pidlitacka-identifiers-current-device-regid-present",
+          "title": "Overit RegId aktualniho zarizeni",
+          "description": "Zkontroluje, ze vybrany uzivatelsky profil ma vyplneny RegId zarizeni. Bez nej nema overeni isCurrentDevice smysl.",
+          "customAction": "requireTemplateValue",
+          "requireValue": {
+            "template": "{{auth.regId}}",
+            "label": "RegId zarizeni",
+            "okMessage": "RegId je vyplneny v profilu uzivatele a muze byt poslan v hlavicce X-Device-RegId.",
+            "missingMessage": "RegId zarizeni neni vyplneny.",
+            "missingDetail": "Doplnte RegId do vybraneho profilu v zalozce Uzivatel. Bez nej by backend spravne vracel isCurrentDevice = null a dalsi kroky scenare by netestovaly aktualni zarizeni."
+          }
+        },
         {
           "id": "pidlitacka-identifiers-current-device-tokenized",
           "title": "Overit tokenizovane MobApp zarizeni",
