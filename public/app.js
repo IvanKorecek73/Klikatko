@@ -6804,8 +6804,17 @@ async function runCurrentStep() {
 
 async function runCustomStep(step, runningStepIndex) {
   if (step.customAction === "requireTemplateValue") {
-    const value = resolveTemplate(step.requireValue?.template || "", { fieldValues: state.values }).trim();
+    const templates = step.requireValue?.templates || [step.requireValue?.template || ""];
+    const value = templates
+      .map(template => resolveTemplate(template, { fieldValues: state.values }).trim())
+      .find(candidate => candidate) || "";
     const label = step.requireValue?.label || "Hodnota";
+    const contextKey = step.requireValue?.contextKey || "";
+
+    if (value && contextKey) {
+      state.context[contextKey] = value;
+    }
+
     const result = value
       ? {
           level: "ok",

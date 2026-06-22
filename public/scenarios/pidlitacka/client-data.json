@@ -758,6 +758,9 @@
           },
           "extract": {
             "mobileIdentifierId": "$.identifierId"
+          },
+          "remember": {
+            "pidCurrentDeviceRegId": "{{form.regId}}"
           }
         },
         {

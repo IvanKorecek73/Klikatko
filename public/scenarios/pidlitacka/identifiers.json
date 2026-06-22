@@ -471,11 +471,15 @@
           "description": "Zkontroluje, ze vybrany uzivatelsky profil ma vyplneny RegId zarizeni. Bez nej nema overeni isCurrentDevice smysl.",
           "customAction": "requireTemplateValue",
           "requireValue": {
-            "template": "{{auth.regId}}",
+            "templates": [
+              "{{context.pidCurrentDeviceRegId}}",
+              "{{auth.regId}}"
+            ],
+            "contextKey": "pidCurrentDeviceRegId",
             "label": "RegId zarizeni",
             "okMessage": "RegId je vyplneny v profilu uzivatele a muze byt poslan v hlavicce X-Device-RegId.",
             "missingMessage": "RegId zarizeni neni vyplneny.",
-            "missingDetail": "Doplnte RegId do vybraneho profilu v zalozce Uzivatel. Bez nej by backend spravne vracel isCurrentDevice = null a dalsi kroky scenare by netestovaly aktualni zarizeni."
+            "missingDetail": "Doplnte RegId do vybraneho profilu v zalozce Uzivatel, nebo nejdrive ve workflow projdete tokenizaci telefonu. Bez nej by backend spravne vracel isCurrentDevice = null a dalsi kroky scenare by netestovaly aktualni zarizeni."
           }
         },
         {
@@ -511,7 +515,7 @@
             "method": "GET",
             "path": "/v1/client/identifiers",
             "headers": {
-              "X-Device-RegId": "{{auth.regId}}"
+              "X-Device-RegId": "{{context.pidCurrentDeviceRegId}}"
             }
           },
           "expected": {
