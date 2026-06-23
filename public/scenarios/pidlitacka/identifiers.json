@@ -441,6 +441,51 @@
       ]
     },
     {
+      "id": "pidlitacka-identifiers-without-device-header",
+      "title": "PidLitacka identifikatory - bez hlavicky zarizeni",
+      "description": "Overi domnenku, zda GET /v1/client/identifiers spadne, kdyz klient neposle X-Device-RegId.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": false,
+      "tags": [
+        "identifiers",
+        "pidlitacka",
+        "current-device",
+        "client-read",
+        "regression"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Identifikatory",
+        "subtitle": "Bez hlavicky zarizeni"
+      },
+      "instructions": [
+        "V zalozce Uzivatel nejdrive pouzijte Prihlasit / obnovit, aby byl pripraven JWT i MOS SessionID.",
+        "Scenar zamerne neposila X-Device-RegId.",
+        "Pokud backend vrati HTTP 200 a pole identifiers, domnenka o padu bez hlavicky je vyvracena. Pokud krok spadne, response a log ukazou realny status a detail chyby."
+      ],
+      "steps": [
+        {
+          "id": "pidlitacka-identifiers-without-device-header-get",
+          "title": "Nacist identifikatory bez X-Device-RegId",
+          "description": "Zavola GET /v1/client/identifiers bez hlavicky aktualniho zarizeni a overi, ze endpoint zustane funkcni.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "pidlitacka-identifiers-current-device",
       "title": "PidLitacka identifikator - aktualni zarizeni",
       "description": "Overi, ze prihlaseny klient ma tokenizovane MobApp zarizeni a ze pri odeslani X-Device-RegId backend oznaci aktualni zarizeni priznakem isCurrentDevice.",
