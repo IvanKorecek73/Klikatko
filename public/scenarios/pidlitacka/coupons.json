@@ -1006,20 +1006,27 @@
           },
           "extract": {
             "pidCouponPurchaseCouponCreated": "$.couponSuccessfullyCreated",
-            "pidCouponPurchaseOrderStatus": "$.order.status"
+            "pidCouponPurchaseOrderStatus": "$.order.status",
+            "pidCouponPurchaseOrderTariffProfileName": "$.order.tariffProfileName",
+            "pidCouponPurchaseOrderValidFrom": "$.order.validFrom",
+            "pidCouponPurchaseOrderValidTill": "$.order.validTill"
           },
           "expected": {
             "status": 200,
             "assertions": [
+              { "path": "$.couponSuccessfullyCreated", "equals": true },
               { "path": "$.order.orderId", "equals": "{{form.orderId}}" },
-              { "path": "$.order.status", "notEmpty": true }
+              { "path": "$.order.status", "equals": "CouponReady" },
+              { "path": "$.order.tariffProfileName", "notEmpty": true },
+              { "path": "$.order.zoneNames", "lengthAtLeast": 1 }
             ]
           }
         },
         {
           "id": "client-coupons-purchase-card-verify-coupons",
           "title": "Zkontrolovat kupony po platbe",
-          "description": "Znovu nacte GET /v1/client/coupons, aby bylo videt, zda se po uspesne platbe objevil novy kupon.",
+          "description": "Znovu nacte GET /v1/client/coupons a overi, ze po uspesne platbe existuje kupon pro vybrany identifikator a tarif.",
+          "requiresContext": ["pidCouponPurchaseIdentifierId", "pidCouponPurchaseOrderTariffProfileName"],
           "request": {
             "method": "GET",
             "path": "/v1/client/coupons"
@@ -1029,8 +1036,30 @@
             "assertions": [
               { "path": "$.status", "equals": "Completed" },
               { "path": "$.identifiers", "lengthAtLeast": 1 },
-              { "path": "$.coupons", "lengthAtLeast": 0 }
+              { "path": "$.coupons", "lengthAtLeast": 1 },
+              {
+                "path": "$.coupons",
+                "containsItem": {
+                  "$.identifier.identifierId": "{{context.pidCouponPurchaseIdentifierId}}",
+                  "$.tariffName": "{{context.pidCouponPurchaseOrderTariffProfileName}}"
+                },
+                "message": "Po uspesne platbe nebyl v klientskych kuponech nalezen kupon pro vybrany identifikator a tarif."
+              }
             ]
+          },
+          "selection": {
+            "sourcePath": "$.coupons",
+            "buttonLabel": "Oznacit kupon",
+            "selectedButtonLabel": "Kupon oznacen",
+            "emptyTitle": "Zadne kupony",
+            "emptyText": "Backend po uspesne platbe nevratil zadny kupon. Nakup tedy ve skutecnosti nedobehl.",
+            "store": {
+              "pidCouponPurchaseDisplayedCouponId": "$.couponId",
+              "pidCouponPurchaseDisplayedCouponOrderId": "$.orderId",
+              "pidCouponPurchaseDisplayedCouponIdentifierId": "$.identifier.identifierId",
+              "pidCouponPurchaseDisplayedCouponTariffName": "$.tariffName",
+              "pidCouponPurchaseDisplayedCouponZones": "$.zones"
+            }
           }
         },
         {
