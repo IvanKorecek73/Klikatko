@@ -698,7 +698,7 @@
         "Pouzijte jen testovaciho klienta. Scenar vytvari realnou objednavku v MOS a inicializuje platbu kartou.",
         "V zalozce Uzivatel musi byt pripraven BE JWT a platna MOS session.",
         "Prvni krok vola GET /v1/client/coupons/purchase/options a overi, ze klient je eligible, ma alespon jeden purchasable identifikator a muze pokracovat do nakupu.",
-        "Po vyberu identifikatoru lze upravit datum zacatku a zonu. Vychozi zona je P, podle testovaciho uctu ji pripadne zmente.",
+        "Po vyberu identifikatoru lze upravit datum zacatku a zonu. Pokud ma identifikator aktivni kupon, scenar predvyplni prvni jeho zonu; jinak zonu doplnte rucne podle mapy pasem a testovaciho uctu.",
         "Krok s nabidkou pracuje s prvnim tarifnim blokem v odpovedi. Vybrany tarif lze v dalsim kroku rucne prepsat.",
         "Po inicializaci kartove platby otevrite paymentGatewayRedirectUrl mimo Klikatko, dokoncete nebo zruste platbu a raw navratova data vlozte do posledniho kroku.",
         "Pokud nechcete platbu dokoncovat, pouzijte krok Zrusit objednavku, aby v BE nezustala otevrena testovaci objednavka."
@@ -747,7 +747,8 @@
               "pidCouponPurchaseIdentifierMaskedValue": "$.maskedPan",
               "pidCouponPurchaseDefaultStartDate": "$.defaultStartDate",
               "pidCouponPurchaseMaxStartDate": "$.maxStartDate",
-              "pidCouponPurchaseActiveCouponZones": "$.activeCouponZoneLabels"
+              "pidCouponPurchaseActiveCouponZones": "$.activeCouponZoneLabels",
+              "pidCouponPurchaseDefaultZoneName": "$.activeCouponZoneLabels[0]"
             }
           }
         },
@@ -773,7 +774,7 @@
             {
               "name": "zoneName",
               "label": "Zona",
-              "value": "P",
+              "value": "{{context.pidCouponPurchaseDefaultZoneName}}",
               "placeholder": "Napriklad P, 0 nebo B"
             }
           ],
