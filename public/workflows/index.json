@@ -136,6 +136,111 @@
           "mosCouponDisplayedCouponId"
         ]
       }
+    },
+    {
+      "id": "pidlitacka-client-with-card-coupon",
+      "name": "PidLitacka - klient s kupónem placeným kartou v mobilu",
+      "description": "Jako pidlitacka-client-with-phone-and-card, ale kupón se platí kartou v mobilu přes BE PidLitacka (ne přes pobočku). Od založení a aktivace uživatele, přes klientská data, tokenizaci telefonu a karty, kontrolu identifikátorů a zjištění placené zóny (GetTokenTariffs) až po kartovou platbu s ručním průchodem branou. Čistá data každý běh = scénáře nejsou falešně negativní.",
+      "tags": ["pidlitacka", "client", "coupons", "card-payment", "setup"],
+      "items": [
+        {
+          "projectId": "pidlitacka",
+          "packId": "pidlitacka-feature-729",
+          "scenarioId": "account-creation-new-user",
+          "title": "Založit a aktivovat uživatele",
+          "description": "Workflow se zastaví na e-mailu, heslu a aktivačním tokenu podle polí scénáře."
+        },
+        {
+          "projectId": "pidlitacka",
+          "packId": "pidlitacka-client-data",
+          "scenarioId": "client-data-create-and-save",
+          "title": "Založit klienta a osobní údaje",
+          "description": "Vytvoří nebo doplní klientská data a fotografii pro aktuálně přihlášeného uživatele."
+        },
+        {
+          "projectId": "pidlitacka",
+          "packId": "pidlitacka-client-data",
+          "scenarioId": "client-identifiers-tokenize-phone",
+          "title": "Tokenizovat a personalizovat telefon",
+          "description": "Přidá MobApp identifikátor a nastaví ho jako personalizovaný."
+        },
+        {
+          "projectId": "pidlitacka",
+          "packId": "pidlitacka-client-data",
+          "scenarioId": "client-identifiers-tokenize-bank-card",
+          "title": "Tokenizovat a personalizovat platební kartu",
+          "description": "Zahájí registraci karty, zastaví se po vrácení gateway URL a po ruční tokenizaci pokračuje kontrolou stavu, kompletací a personalizací.",
+          "stopAfter": [
+            {
+              "stepId": "client-identifiers-bank-card-start",
+              "message": "Otevřete tokenizační bránu a dokončete registraci platební karty.",
+              "preserveResult": true,
+              "instructions": [
+                "V odpovědi kroku je gatewayRedirectUrl.",
+                "Otevřete URL v prohlížeči a dokončete testovací tokenizaci karty.",
+                "Po návratu z brány pokračujte ve workflow; další krok ověří stav registrace.",
+                "Pokud je potřeba URL zkopírovat, najdete ji také v logu a workflow kontextu."
+              ],
+              "contextKeys": ["bankCardGatewayRedirectUrl", "bankCardRegistrationId"]
+            }
+          ]
+        },
+        {
+          "projectId": "pidlitacka",
+          "packId": "pidlitacka-client-data",
+          "scenarioId": "client-identifiers-current-user",
+          "title": "Ověřit identifikátory klienta",
+          "description": "Závěrečné načtení identifikátorů aktuálního klienta."
+        },
+        {
+          "projectId": "mos-coupons",
+          "packId": "mos-coupons-core-soap",
+          "scenarioId": "mos-coupon-token-tariffs-lookup",
+          "title": "Zjistit placenou zónu (GetTokenTariffs)",
+          "description": "Read-only přes Core MOS: vypíše tarify a ceny tokenu, aby bylo jasné, která zóna je placená (cena > 0). Zóna P je zdarma; pro kartovou platbu je potřeba placená kombinace (typicky P + 0). Vybraná zóna se předvyplní do dalšího kroku jako P + vybraná zóna.",
+          "redisSession": {
+            "identityContextKey": "pidLitackaIdentityId",
+            "contextKey": "mosCouponSessionId"
+          }
+        },
+        {
+          "projectId": "pidlitacka",
+          "packId": "pidlitacka-coupons",
+          "scenarioId": "client-coupons-purchase-card-full-flow",
+          "title": "Koupit kupón kartou v mobilu",
+          "description": "BE PidLitacka kartová platba. Krok Nabídka použije zóny vybrané v předchozím MOS lookupu (např. P + 0), protože samotné P je zdarma → 0 Kč → kartovou platbu nelze zahájit. Workflow se zastaví po inicializaci platby kvůli ručnímu průchodu branou; úklidové zrušení objednávky se po úspěšné platbě automaticky přeskočí.",
+          "stopAfter": [
+            {
+              "stepId": "client-coupons-purchase-card-initiate-payment",
+              "message": "Otevřete platební bránu a zaplaťte kartou.",
+              "preserveResult": true,
+              "instructions": [
+                "V odpovědi kroku je paymentGatewayRedirectUrl.",
+                "Otevřete URL v prohlížeči a dokončete testovací platbu kartou.",
+                "Po návratu z brány zkopírujte raw payment data z GwResponsePage.html.",
+                "Vložte je v dalším kroku do pole Payment gateway data a pokračujte — gateway-result dokončí nákup a ověří kupón."
+              ],
+              "contextKeys": ["pidCouponPurchaseOrderId", "pidCouponPurchasePaymentGatewayReference", "pidCouponPurchasePaymentGatewayRedirectUrl"]
+            }
+          ]
+        }
+      ],
+      "report": {
+        "title": "Příprava klienta s kupónem placeným kartou",
+        "contextKeys": [
+          "userName",
+          "mobileIdentifierId",
+          "bankCardRegistrationId",
+          "bankCardIdentifierId",
+          "mosLookupSelectedZoneName",
+          "mosLookupSelectedZoneNames",
+          "mosLookupSelectedPrice",
+          "pidCouponPurchaseOrderId",
+          "pidCouponPurchasePaymentGatewayReference",
+          "pidCouponPurchaseCouponCreated",
+          "pidCouponPurchaseOrderStatus"
+        ]
+      }
     }
   ]
 }

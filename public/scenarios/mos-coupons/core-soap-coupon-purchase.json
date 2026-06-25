@@ -2216,6 +2216,146 @@
           }
         }
       ]
+    },
+    {
+      "id": "mos-coupon-token-tariffs-lookup",
+      "title": "MOS - vypsat tarify a ceny tokenu",
+      "description": "Read-only diagnostika: pro vybraný token přes Core MOS GetTokenTariffs vypíše kombinace tarif + zóna + cena, aby šlo poznat, která zóna je placená (cena > 0) a která zdarma.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["coupons", "soap", "core-mos", "tariffs", "lookup"],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Tarify a ceny tokenu"
+      },
+      "instructions": [
+        "V panelu Přístup vložte Core MOS ServiceKey.",
+        "Scénář načte MOS SessionID z Redis podle PidLitacka IdentityId.",
+        "Vyberte token (identifikátor) a uvidíte seznam kombinací tarif + zóna + cena.",
+        "Zóna P bývá 0 Kč (pražský základ). Placená je typicky zóna 0 nebo regionální pásma — pro kartovou platbu pak vyberte placenou kombinaci (např. P + 0)."
+      ],
+      "steps": [
+        {
+          "id": "mos-coupon-lookup-load-session",
+          "title": "Nacist MOS SessionID z Redis",
+          "description": "Nacte MOS SessionID z Redis podle PidLitacka IdentityId a ulozi ho do kontextu jako mosCouponSessionId.",
+          "customAction": "loadMosSessionFromRedis",
+          "redisSession": {
+            "identityContextKey": "pidLitackaIdentityId",
+            "contextKey": "mosCouponSessionId"
+          },
+          "expected": {
+            "status": 200
+          },
+          "skipWhen": {
+            "contextExists": "mosCouponSessionId"
+          }
+        },
+        {
+          "id": "mos-coupon-lookup-get-tokens",
+          "title": "Načíst identifikátory",
+          "description": "Načte dostupné tokeny/identifikátory přihlášeného MOS účtu. Vybraný token se použije pro zjištění tarifů a cen.",
+          "requiresContext": [
+            "mosCouponSessionId"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokens\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokens xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <GetOnlyAvailableTokens>true</GetOnlyAvailableTokens>\n    </GetTokens>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "expected": {
+            "status": 200
+          },
+          "selection": {
+            "buttonLabel": "Použít identifikátor",
+            "selectedButtonLabel": "Vybráno",
+            "sourceRegex": {
+              "itemPattern": "<TokenEx[^>]*>([\\s\\S]*?)</TokenEx>",
+              "fields": {
+                "tokenId": "<TokenID>([^<]+)</TokenID>",
+                "name": "<Name>([^<]*)</Name>",
+                "token": "<Token>([^<]*)</Token>",
+                "customerId": "<CustomerIDx>([^<]+)</CustomerIDx>",
+                "identifierType": "<IdentifierType>([^<]*)</IdentifierType>",
+                "maskedPan": "<MaskedPAN>([^<]*)</MaskedPAN>",
+                "cln": "<CLN>([^<]*)</CLN>",
+                "active": "<Active>([^<]+)</Active>"
+              }
+            },
+            "store": {
+              "mosLookupTokenId": "$.tokenId",
+              "mosLookupCustomerId": "$.customerId"
+            }
+          }
+        },
+        {
+          "id": "mos-coupon-lookup-get-token-tariffs",
+          "title": "Vypsat tarify a ceny",
+          "description": "Načte tarify a zóny pro vybraný token a vypíše ke každé kombinaci cenu. Krok je read-only — slouží jen ke zjištění, která zóna je placená.",
+          "requiresContext": [
+            "mosCouponSessionId",
+            "mosLookupTokenId"
+          ],
+          "fields": [
+            {
+              "name": "tokenId",
+              "label": "TokenID",
+              "type": "number",
+              "value": "{{context.mosLookupTokenId}}",
+              "placeholder": "ID tokenu / identifikátoru"
+            },
+            {
+              "name": "startDate",
+              "label": "StartDate",
+              "type": "date",
+              "value": "{{today}}"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/services/MOSservice.asmx",
+            "contentType": "text/xml; charset=utf-8",
+            "headers": {
+              "SOAPAction": "\"globdata/GetTokenTariffs\""
+            },
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokenTariffs xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <TokenID>{{form.tokenId}}</TokenID>\n      <StartDate>{{form.startDate}}</StartDate>\n    </GetTokenTariffs>\n  </soap:Body>\n</soap:Envelope>"
+          },
+          "remember": {
+            "mosLookupTokenId": "{{form.tokenId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "<GetTokenTariffsResult>[\\s\\S]*?<Result>[\\s\\S]*?<ID>0</ID>",
+                "label": "MOS Result.ID = 0",
+                "message": "GetTokenTariffs neproběhlo úspěšně."
+              }
+            ]
+          },
+          "selection": {
+            "buttonLabel": "Označit kombinaci",
+            "selectedButtonLabel": "Kombinace označena",
+            "emptyTitle": "Žádné tarifní pásmo",
+            "emptyText": "MOS pro tento token nevrátil žádnou kombinaci tarifu a zóny.",
+            "sourceRegex": {
+              "parser": "mosTariffZones"
+            },
+            "store": {
+              "mosLookupSelectedTariffId": "$.tariffId",
+              "mosLookupSelectedZoneName": "$.zoneName",
+              "mosLookupSelectedZoneNames": { "arrayUnique": [{ "literal": "P" }, "$.zoneName"] },
+              "mosLookupSelectedPrice": "$.price"
+            }
+          }
+        }
+      ]
     }
   ]
 }

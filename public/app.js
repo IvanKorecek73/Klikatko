@@ -5966,11 +5966,11 @@ function renderField(field, value) {
   }
 
   if (field.min !== undefined) {
-    input.min = String(field.min);
+    input.min = resolveTemplate(String(field.min), { fieldValues: state.values });
   }
 
   if (field.max !== undefined) {
-    input.max = String(field.max);
+    input.max = resolveTemplate(String(field.max), { fieldValues: state.values });
   }
 
   if (field.step !== undefined) {
@@ -12737,6 +12737,17 @@ function resolveSelectionStoreValue(item, selector) {
       return selector.literal;
     }
 
+    if (Object.hasOwn(selector, "arrayUnique")) {
+      const values = Array.isArray(selector.arrayUnique)
+        ? selector.arrayUnique
+            .map(entry => resolveSelectionStoreValue(item, entry))
+            .filter(value => !isEmpty(value))
+            .map(value => String(value))
+        : [];
+
+      return [...new Set(values)];
+    }
+
     if (Object.hasOwn(selector, "path")) {
       return getPath(item, selector.path);
     }
@@ -13623,7 +13634,7 @@ function resolveFieldDefaultValue(field) {
 
   if (field.type === "tag-list" && contextArrayMatch) {
     const value = state.context[contextArrayMatch[1]] ?? state.workflowContext?.[contextArrayMatch[1]];
-    return Array.isArray(value) ? value.map(item => String(item)) : [];
+    return Array.isArray(value) ? value.map(item => String(item)) : resolveFieldFallbackValue(field);
   }
 
   if (Array.isArray(field.value)) {
@@ -13639,6 +13650,20 @@ function resolveFieldDefaultValue(field) {
   }
 
   return resolveTemplate(field.value ?? "", { fieldValues: {} });
+}
+
+function resolveFieldFallbackValue(field) {
+  if (Array.isArray(field.fallbackValue)) {
+    return field.fallbackValue.map(item => resolveTemplate(String(item), { fieldValues: {} }));
+  }
+
+  if (field.fallbackValue && typeof field.fallbackValue === "object") {
+    return resolveObject(field.fallbackValue, {}, { fields: [] });
+  }
+
+  return isEmpty(field.fallbackValue)
+    ? []
+    : resolveTemplate(field.fallbackValue, { fieldValues: {} });
 }
 
 function resolveTemplate(template, { fieldValues }) {

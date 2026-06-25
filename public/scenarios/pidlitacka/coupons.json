@@ -768,13 +768,16 @@
               "label": "Zacatek platnosti",
               "type": "date",
               "value": "{{context.pidCouponPurchaseDefaultStartDate}}",
+              "min": "{{today}}",
+              "max": "{{context.pidCouponPurchaseMaxStartDate}}",
               "placeholder": "YYYY-MM-DD"
             },
             {
               "name": "zoneNames",
               "label": "Zony",
               "type": "tag-list",
-              "value": ["P"],
+              "value": "{{context.mosLookupSelectedZoneNames}}",
+              "fallbackValue": ["P"],
               "options": [
                 { "value": "P", "text": "P" },
                 { "value": "0", "text": "0" },
@@ -848,7 +851,9 @@
               "name": "startDate",
               "label": "Zacatek platnosti",
               "type": "date",
-              "value": "{{context.pidCouponPurchaseStartDate}}"
+              "value": "{{context.pidCouponPurchaseStartDate}}",
+              "min": "{{today}}",
+              "max": "{{context.pidCouponPurchaseMaxStartDate}}"
             },
             {
               "name": "zoneNames",
@@ -1067,8 +1072,11 @@
         {
           "id": "client-coupons-purchase-card-cancel-order",
           "title": "Zrusit objednavku",
-          "description": "Volitelny uklidovy krok pro pripad, kdy platbu nechcete dokoncit.",
+          "description": "Volitelny uklidovy krok pro pripad, kdy platbu nechcete dokoncit. Automaticky se preskoci, kdyz uz je objednavka ve stavu CouponReady (kupon byl uspesne zaplacen).",
           "requiresContext": ["pidCouponPurchaseOrderId"],
+          "skipWhen": {
+            "contextEquals": { "key": "pidCouponPurchaseOrderStatus", "value": "CouponReady" }
+          },
           "fields": [
             {
               "name": "orderId",
