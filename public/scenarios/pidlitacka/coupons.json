@@ -700,7 +700,7 @@
         "Prvni krok vola GET /v1/client/coupons/purchase/options a overi, ze klient je eligible, ma alespon jeden purchasable identifikator a muze pokracovat do nakupu.",
         "Po vyberu identifikatoru lze upravit datum zacatku a zony. Pokud ma identifikator aktivni kupon, scenar predvyplni jeho zony; jinak zony doplnte rucne podle mapy pasem a testovaciho uctu.",
         "Krok s nabidkou pracuje s prvnim tarifnim blokem v odpovedi. Vybrany tarif lze v dalsim kroku rucne prepsat.",
-        "Po inicializaci kartove platby otevrite paymentGatewayRedirectUrl mimo Klikatko, dokoncete nebo zruste platbu a raw navratova data vlozte do posledniho kroku.",
+        "Po inicializaci kartove platby otevrite paymentGatewayRedirectUrl mimo Klikatko. Vychozi navratova URL miri na lokalni GwResponsePage.html, kde lze zkopirovat raw navratova data pro posledni krok.",
         "Pokud nechcete platbu dokoncovat, pouzijte krok Zrusit objednavku, aby v BE nezustala otevrena testovaci objednavka."
       ],
       "steps": [
@@ -932,9 +932,10 @@
               "value": "{{context.pidCouponPurchaseOrderId}}"
             },
             {
-              "name": "returnUrl",
-              "label": "Return URL z platebni brany",
-              "value": "https://localhost/klikatko/coupon-card-gateway-result",
+              "name": "returnUrlFromPaymentGateway",
+              "label": "Navratova URL",
+              "type": "url",
+              "value": "http://localhost:5096/analysis/html/GwResponsePage.html",
               "placeholder": "URL, kam brana vrati payment data"
             },
             {
@@ -951,14 +952,15 @@
               "orderId": "{{form.orderId}}",
               "paymentDetails": {
                 "paymentMethod": "Card",
-                "returnUrlFromPaymentGateway": "{{form.returnUrl}}",
+                "returnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}",
                 "automaticPaymentResultProcessing": false,
                 "isSdkUsed": "{{form.isSdkUsed}}"
               }
             }
           },
           "remember": {
-            "pidCouponPurchaseOrderId": "{{form.orderId}}"
+            "pidCouponPurchaseOrderId": "{{form.orderId}}",
+            "pidCouponPurchaseReturnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}"
           },
           "extract": {
             "pidCouponPurchasePaymentGatewayReference": "$.paymentGatewayReference",
@@ -1132,7 +1134,7 @@
               "orderId": "00000000-0000-0000-0000-000000000000",
               "paymentDetails": {
                 "paymentMethod": "Card",
-                "returnUrlFromPaymentGateway": "https://localhost/klikatko/coupon-card-gateway-result",
+                "returnUrlFromPaymentGateway": "http://localhost:5096/analysis/html/GwResponsePage.html",
                 "automaticPaymentResultProcessing": false,
                 "isSdkUsed": false
               }
@@ -1154,7 +1156,7 @@
               "orderId": "11111111-1111-1111-1111-111111111111",
               "paymentDetails": {
                 "paymentMethod": "Card",
-                "returnUrlFromPaymentGateway": "https://localhost/klikatko/coupon-card-gateway-result",
+                "returnUrlFromPaymentGateway": "http://localhost:5096/analysis/html/GwResponsePage.html",
                 "automaticPaymentResultProcessing": true,
                 "isSdkUsed": false
               }
