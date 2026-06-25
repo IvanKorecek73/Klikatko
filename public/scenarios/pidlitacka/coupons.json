@@ -733,10 +733,13 @@
           },
           "selection": {
             "sourcePath": "$.identifiers",
+            "filter": {
+              "purchasable": true
+            },
             "buttonLabel": "Koupit na tento identifikator",
             "selectedButtonLabel": "Identifikator vybran",
             "emptyTitle": "Zadne identifikatory",
-            "emptyText": "Aktualni klient nema zadny identifikator pro nakup kuponu.",
+            "emptyText": "Aktualni klient nema zadny identifikator, na ktery lze podle BE pravidel koupit kupon. Zkontrolujte pole blockers a purchasableReason v odpovedi options.",
             "store": {
               "pidCouponPurchaseIdentifierId": "$.identifierId",
               "pidCouponPurchaseIdentifierName": "$.name",

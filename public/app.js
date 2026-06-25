@@ -12391,12 +12391,34 @@ function prepareSelection(step, body, status) {
 }
 
 function getSelectionItems(step, body) {
+  let items;
+
   if (step.selection.sourceRegex) {
-    return parseRegexSelectionItems(body, step.selection.sourceRegex);
+    items = parseRegexSelectionItems(body, step.selection.sourceRegex);
+  } else {
+    const sourcePath = step.selection.sourcePath || "$";
+    items = getPath(body, sourcePath);
   }
 
-  const sourcePath = step.selection.sourcePath || "$";
-  return getPath(body, sourcePath);
+  if (!Array.isArray(items) || !step.selection.filter) {
+    return items;
+  }
+
+  return items.filter(item => selectionItemMatchesFilter(item, step.selection.filter));
+}
+
+function selectionItemMatchesFilter(item, filter) {
+  const conditions = Array.isArray(filter) ? filter : [filter];
+  return conditions.every(condition => {
+    if (!condition || typeof condition !== "object") {
+      return true;
+    }
+
+    return Object.entries(condition).every(([selector, expected]) => {
+      const path = selector.startsWith("$") ? selector : `$.${selector}`;
+      return deepEqual(getPath(item, path), expected);
+    });
+  });
 }
 
 function parseRegexSelectionItems(body, sourceRegex) {
