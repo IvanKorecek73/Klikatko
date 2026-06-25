@@ -698,7 +698,7 @@
         "Pouzijte jen testovaciho klienta. Scenar vytvari realnou objednavku v MOS a inicializuje platbu kartou.",
         "V zalozce Uzivatel musi byt pripraven BE JWT a platna MOS session.",
         "Prvni krok vola GET /v1/client/coupons/purchase/options a overi, ze klient je eligible, ma alespon jeden purchasable identifikator a muze pokracovat do nakupu.",
-        "Po vyberu identifikatoru lze upravit datum zacatku a zonu. Pokud ma identifikator aktivni kupon, scenar predvyplni prvni jeho zonu; jinak zonu doplnte rucne podle mapy pasem a testovaciho uctu.",
+        "Po vyberu identifikatoru lze upravit datum zacatku a zony. Pokud ma identifikator aktivni kupon, scenar predvyplni jeho zony; jinak zony doplnte rucne podle mapy pasem a testovaciho uctu.",
         "Krok s nabidkou pracuje s prvnim tarifnim blokem v odpovedi. Vybrany tarif lze v dalsim kroku rucne prepsat.",
         "Po inicializaci kartove platby otevrite paymentGatewayRedirectUrl mimo Klikatko, dokoncete nebo zruste platbu a raw navratova data vlozte do posledniho kroku.",
         "Pokud nechcete platbu dokoncovat, pouzijte krok Zrusit objednavku, aby v BE nezustala otevrena testovaci objednavka."
@@ -747,8 +747,7 @@
               "pidCouponPurchaseIdentifierMaskedValue": "$.maskedPan",
               "pidCouponPurchaseDefaultStartDate": "$.defaultStartDate",
               "pidCouponPurchaseMaxStartDate": "$.maxStartDate",
-              "pidCouponPurchaseActiveCouponZones": "$.activeCouponZoneLabels",
-              "pidCouponPurchaseDefaultZoneName": "$.activeCouponZoneLabels[0]"
+              "pidCouponPurchaseActiveCouponZones": "$.activeCouponZoneLabels"
             }
           }
         },
@@ -772,20 +771,35 @@
               "placeholder": "YYYY-MM-DD"
             },
             {
-              "name": "zoneName",
-              "label": "Zona",
-              "value": "{{context.pidCouponPurchaseDefaultZoneName}}",
-              "placeholder": "Napriklad P, 0 nebo B"
+              "name": "zoneNames",
+              "label": "Zony",
+              "type": "tag-list",
+              "value": "{{context.pidCouponPurchaseActiveCouponZones}}",
+              "options": [
+                { "value": "P", "text": "P" },
+                { "value": "0", "text": "0" },
+                { "value": "B", "text": "B" },
+                { "value": "1", "text": "1" },
+                { "value": "2", "text": "2" },
+                { "value": "3", "text": "3" },
+                { "value": "4", "text": "4" },
+                { "value": "5", "text": "5" },
+                { "value": "6", "text": "6" },
+                { "value": "7", "text": "7" },
+                { "value": "8", "text": "8" },
+                { "value": "9", "text": "9" }
+              ],
+              "emptyText": "Doplnte alespon jednu zonu, napriklad P a 0 pro prazsky kupon."
             }
           ],
           "request": {
             "method": "GET",
-            "path": "/v1/client/coupons/purchase/offer?identifierId={{form.identifierId}}&startDate={{form.startDate}}&zones={{form.zoneName}}"
+            "path": "/v1/client/coupons/purchase/offer?identifierId={{form.identifierId}}&startDate={{form.startDate}}&{{query.form.zoneNames:zones}}"
           },
           "remember": {
             "pidCouponPurchaseIdentifierId": "{{form.identifierId}}",
             "pidCouponPurchaseStartDate": "{{form.startDate}}",
-            "pidCouponPurchaseZoneNames": ["{{form.zoneName}}"]
+            "pidCouponPurchaseZoneNames": "{{form.zoneNames}}"
           },
           "expected": {
             "status": 200,

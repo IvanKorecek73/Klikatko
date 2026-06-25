@@ -13617,6 +13617,15 @@ function resolveExpectedValue(value, step) {
 }
 
 function resolveFieldDefaultValue(field) {
+  const contextArrayMatch = typeof field.value === "string"
+    ? field.value.match(/^\{\{context\.([a-zA-Z0-9_]+)\}\}$/)
+    : null;
+
+  if (field.type === "tag-list" && contextArrayMatch) {
+    const value = state.context[contextArrayMatch[1]] ?? state.workflowContext?.[contextArrayMatch[1]];
+    return Array.isArray(value) ? value.map(item => String(item)) : [];
+  }
+
   if (Array.isArray(field.value)) {
     return field.value.map(item => resolveTemplate(String(item), { fieldValues: {} }));
   }
@@ -13639,6 +13648,13 @@ function resolveTemplate(template, { fieldValues }) {
     .replaceAll("{{now}}", new Date().toISOString())
     .replaceAll("{{today}}", new Date().toISOString().slice(0, 10))
     .replaceAll("{{todayPlus365}}", new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
+    .replace(/\{\{query\.form\.([a-zA-Z0-9_]+):([a-zA-Z0-9_]+)\}\}/g, (_, name, queryName) => {
+      const values = Array.isArray(fieldValues[name]) ? fieldValues[name] : [fieldValues[name]];
+      return values
+        .filter(value => !isEmpty(value))
+        .map(value => `${encodeURIComponent(queryName)}=${encodeURIComponent(String(value))}`)
+        .join("&");
+    })
     .replace(/\{\{form\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => fieldValues[name] ?? "")
     .replace(/\{\{context\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => state.context[name] ?? state.workflowContext?.[name] ?? "")
     .replace(/\{\{secret\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => state.secrets[name] ?? "")
