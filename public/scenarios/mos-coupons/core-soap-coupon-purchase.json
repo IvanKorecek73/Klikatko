@@ -2254,61 +2254,19 @@
           }
         },
         {
-          "id": "mos-coupon-lookup-get-tokens",
-          "title": "Načíst identifikátory",
-          "description": "Načte dostupné tokeny/identifikátory přihlášeného MOS účtu. Vybraný token se použije pro zjištění tarifů a cen.",
-          "requiresContext": [
-            "mosCouponSessionId"
-          ],
-          "request": {
-            "method": "POST",
-            "path": "/services/MOSservice.asmx",
-            "contentType": "text/xml; charset=utf-8",
-            "headers": {
-              "SOAPAction": "\"globdata/GetTokens\""
-            },
-            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <GetTokens xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <GetOnlyAvailableTokens>true</GetOnlyAvailableTokens>\n    </GetTokens>\n  </soap:Body>\n</soap:Envelope>"
-          },
-          "expected": {
-            "status": 200
-          },
-          "selection": {
-            "buttonLabel": "Použít identifikátor",
-            "selectedButtonLabel": "Vybráno",
-            "sourceRegex": {
-              "itemPattern": "<TokenEx[^>]*>([\\s\\S]*?)</TokenEx>",
-              "fields": {
-                "tokenId": "<TokenID>([^<]+)</TokenID>",
-                "name": "<Name>([^<]*)</Name>",
-                "token": "<Token>([^<]*)</Token>",
-                "customerId": "<CustomerIDx>([^<]+)</CustomerIDx>",
-                "identifierType": "<IdentifierType>([^<]*)</IdentifierType>",
-                "maskedPan": "<MaskedPAN>([^<]*)</MaskedPAN>",
-                "cln": "<CLN>([^<]*)</CLN>",
-                "active": "<Active>([^<]+)</Active>"
-              }
-            },
-            "store": {
-              "mosLookupTokenId": "$.tokenId",
-              "mosLookupCustomerId": "$.customerId"
-            }
-          }
-        },
-        {
           "id": "mos-coupon-lookup-get-token-tariffs",
           "title": "Vypsat tarify a ceny",
-          "description": "Načte tarify a zóny pro vybraný token a vypíše ke každé kombinaci cenu. Krok je read-only — slouží jen ke zjištění, která zóna je placená.",
+          "description": "Načte tarify a zóny pro token a vypíše ke každé kombinaci cenu. Krok je read-only — slouží jen ke zjištění, která zóna je placená. Ve workflow se TokenID předvyplní z právě tokenizované platební karty, takže není potřeba znovu vybírat identifikátor.",
           "requiresContext": [
-            "mosCouponSessionId",
-            "mosLookupTokenId"
+            "mosCouponSessionId"
           ],
           "fields": [
             {
               "name": "tokenId",
               "label": "TokenID",
               "type": "number",
-              "value": "{{context.mosLookupTokenId}}",
-              "placeholder": "ID tokenu / identifikátoru"
+              "value": "{{context.bankCardIdentifierId}}",
+              "placeholder": "ID tokenu / identifikátoru (ve workflow předvyplněno z tokenizované karty)"
             },
             {
               "name": "startDate",

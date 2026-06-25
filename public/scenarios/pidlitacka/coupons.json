@@ -777,7 +777,7 @@
               "label": "Zony",
               "type": "tag-list",
               "value": "{{context.mosLookupSelectedZoneNames}}",
-              "fallbackValue": ["P"],
+              "fallbackValue": ["P", "0"],
               "options": [
                 { "value": "P", "text": "P" },
                 { "value": "0", "text": "0" },
@@ -923,6 +923,89 @@
               { "path": "$.totalPrice", "atLeast": 0 },
               { "path": "$.priceCurrency", "equals": "CZK" }
             ]
+          }
+        },
+        {
+          "id": "client-coupons-purchase-card-receipt-details",
+          "title": "Doplnit fakturacni udaje",
+          "description": "Zavola PUT /v1/client/coupons/purchase/orders/{orderId}/receipt-details. Core MOS vyzaduje fakturacni adresu na objednavce pred zaplacenim drazsiho kuponu. Jmeno/firma a adresa se posilaji v requestu; IČO/DIČ jen pro firemni doklad.",
+          "requiresContext": ["pidCouponPurchaseOrderId"],
+          "workflowStop": {
+            "message": "Zkontrolujte fakturacni udaje pred platbou.",
+            "instructions": [
+              "Zadejte jmeno/firmu na dokladu (povinne) — adresa je predvyplnena testovacimi hodnotami, upravte podle potreby.",
+              "ICO a DIC jsou volitelne (jen pro firemni doklad), klidne nechte prazdne.",
+              "Po vyplneni pokracujte tlacitkem Pokracovat ve workflow; udaje se ulozi na objednavku v MOS."
+            ]
+          },
+          "fields": [
+            {
+              "name": "orderId",
+              "label": "Order ID",
+              "value": "{{context.pidCouponPurchaseOrderId}}"
+            },
+            {
+              "name": "name",
+              "label": "Jmeno / firma (na dokladu)",
+              "value": ""
+            },
+            {
+              "name": "street",
+              "label": "Ulice",
+              "value": "Testovaci"
+            },
+            {
+              "name": "number",
+              "label": "Cislo popisne",
+              "value": "123"
+            },
+            {
+              "name": "city",
+              "label": "Mesto",
+              "value": "Praha"
+            },
+            {
+              "name": "zip",
+              "label": "PSC",
+              "value": "11000"
+            },
+            {
+              "name": "country",
+              "label": "Zeme",
+              "value": "CZ"
+            },
+            {
+              "name": "registrationNumber",
+              "label": "ICO (volitelne)",
+              "value": "",
+              "workflowAutoStop": false
+            },
+            {
+              "name": "taxNumber",
+              "label": "DIC (volitelne)",
+              "value": "",
+              "workflowAutoStop": false
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "path": "/v1/client/coupons/purchase/orders/{{form.orderId}}/receipt-details",
+            "body": {
+              "name": "{{form.name}}",
+              "street": "{{form.street}}",
+              "number": "{{form.number}}",
+              "city": "{{form.city}}",
+              "zip": "{{form.zip}}",
+              "country": "{{form.country}}",
+              "registrationNumber": "{{form.registrationNumber}}",
+              "taxNumber": "{{form.taxNumber}}"
+            }
+          },
+          "remember": {
+            "pidCouponPurchaseOrderId": "{{form.orderId}}"
+          },
+          "expected": {
+            "status": 204
           }
         },
         {

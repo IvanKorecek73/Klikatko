@@ -223,6 +223,13 @@
               "contextKeys": ["pidCouponPurchaseOrderId", "pidCouponPurchasePaymentGatewayReference", "pidCouponPurchasePaymentGatewayRedirectUrl"]
             }
           ]
+        },
+        {
+          "projectId": "pidlitacka",
+          "packId": "pidlitacka-coupons",
+          "scenarioId": "client-coupons-receipt-download",
+          "title": "Stáhnout daňový doklad",
+          "description": "Po zaplacení stáhne daňový doklad kupónu (GET /v1/client/coupons/receipt/{mosOrderId}). Vyberte zakoupený kupón; pokud MOS doklad pro objednávku ještě nemá, vrátí 404 (doklad nemusí být hned k dispozici)."
         }
       ],
       "report": {
@@ -238,7 +245,9 @@
           "pidCouponPurchaseOrderId",
           "pidCouponPurchasePaymentGatewayReference",
           "pidCouponPurchaseCouponCreated",
-          "pidCouponPurchaseOrderStatus"
+          "pidCouponPurchaseOrderStatus",
+          "mosCouponOrderId",
+          "pidCouponReceiptMosOrderId"
         ]
       }
     }
