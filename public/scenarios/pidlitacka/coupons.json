@@ -698,7 +698,7 @@
         "Pouzijte jen testovaciho klienta. Scenar vytvari realnou objednavku v MOS a inicializuje platbu kartou.",
         "V zalozce Uzivatel musi byt pripraven BE JWT a platna MOS session.",
         "Prvni krok vola GET /v1/client/coupons/purchase/options a overi, ze klient je eligible, ma alespon jeden purchasable identifikator a muze pokracovat do nakupu.",
-        "Po vyberu identifikatoru lze upravit datum zacatku a zony. Pokud ma identifikator aktivni kupon, scenar predvyplni jeho zony; jinak zony doplnte rucne podle mapy pasem a testovaciho uctu.",
+        "Po vyberu identifikatoru lze upravit datum zacatku a zony. Vychozi pozitivni cesta pouziva zonu P stejne jako pripravny MOS pobočkovy workflow; jine zony volte jen pokud vite, ze jsou pro dany ucet, datum a tarif cenitelne.",
         "Krok s nabidkou pracuje s prvnim tarifnim blokem v odpovedi. Vybrany tarif lze v dalsim kroku rucne prepsat.",
         "Po inicializaci kartove platby otevrite paymentGatewayRedirectUrl mimo Klikatko. Vychozi navratova URL miri na lokalni GwResponsePage.html, kde lze zkopirovat raw navratova data pro posledni krok.",
         "Pokud nechcete platbu dokoncovat, pouzijte krok Zrusit objednavku, aby v BE nezustala otevrena testovaci objednavka."
@@ -774,7 +774,7 @@
               "name": "zoneNames",
               "label": "Zony",
               "type": "tag-list",
-              "value": "{{context.pidCouponPurchaseActiveCouponZones}}",
+              "value": ["P"],
               "options": [
                 { "value": "P", "text": "P" },
                 { "value": "0", "text": "0" },
