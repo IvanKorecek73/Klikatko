@@ -684,7 +684,7 @@
     {
       "id": "client-coupons-purchase-card-full-flow",
       "title": "Kupony - nakup kartou",
-      "description": "Plny rucni scenar pro novou BE funkcnost nakupu kuponu kartou: overi vstupni podminky klienta, vybere identifikator, nacte nabidku, vytvori objednavku, inicializuje kartovou platbu a zpracuje navratova data z platebni brany.",
+      "description": "Plny rucni scenar pro nakup kuponu kartou pres BE a MOS V19/GDPay: overi vstupni podminky klienta, vybere identifikator, nacte nabidku, vytvori objednavku, inicializuje kartovou platbu a zpracuje navratova data z platebni brany.",
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
@@ -695,12 +695,13 @@
         "subtitle": "Nakup kartou"
       },
       "instructions": [
-        "Pouzijte jen testovaciho klienta. Scenar vytvari realnou objednavku v MOS a inicializuje platbu kartou.",
+        "Pouzijte jen testovaciho klienta. Scenar vytvari realnou objednavku v MOS a inicializuje platbu kartou pres MOS V19/GDPay.",
         "V zalozce Uzivatel musi byt pripraven BE JWT a platna MOS session.",
         "Prvni krok vola GET /v1/client/coupons/purchase/options a overi, ze klient je eligible, ma alespon jeden purchasable identifikator a muze pokracovat do nakupu.",
         "Po vyberu identifikatoru lze upravit datum zacatku a zony. Vychozi pozitivni cesta pouziva zonu P stejne jako pripravny MOS pobočkovy workflow; jine zony volte jen pokud vite, ze jsou pro dany ucet, datum a tarif cenitelne.",
         "Krok s nabidkou pracuje s prvnim tarifnim blokem v odpovedi. Vybrany tarif lze v dalsim kroku rucne prepsat.",
         "Po inicializaci kartove platby otevrite paymentGatewayRedirectUrl mimo Klikatko. Vychozi navratova URL miri na lokalni GwResponsePage.html, kde lze zkopirovat raw navratova data pro posledni krok.",
+        "Kartovy redirect pro kupony nepouziva SDK ani browser payload v requestu; 3DS probiha na hostovane strance platebni brany.",
         "Pokud nechcete platbu dokoncovat, pouzijte krok Zrusit objednavku, aby v BE nezustala otevrena testovaci objednavka."
       ],
       "steps": [
@@ -1011,7 +1012,7 @@
         {
           "id": "client-coupons-purchase-card-initiate-payment",
           "title": "Inicializovat kartovou platbu",
-          "description": "Zavola POST /v1/client/coupons/purchase/payment/card/initiate a vrati redirect URL platebni brany.",
+          "description": "Zavola POST /v1/client/coupons/purchase/payment/card/initiate a vrati V19/GDPay redirect URL platebni brany.",
           "requiresContext": ["pidCouponPurchaseOrderId"],
           "fields": [
             {
@@ -1025,12 +1026,6 @@
               "type": "url",
               "value": "http://localhost:5096/analysis/html/GwResponsePage.html",
               "placeholder": "URL, kam brana vrati payment data"
-            },
-            {
-              "name": "isSdkUsed",
-              "label": "3DS SDK flow",
-              "type": "checkbox",
-              "value": "false"
             }
           ],
           "request": {
@@ -1041,8 +1036,7 @@
               "paymentDetails": {
                 "paymentMethod": "Card",
                 "returnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}",
-                "automaticPaymentResultProcessing": false,
-                "isSdkUsed": "{{form.isSdkUsed}}"
+                "automaticPaymentResultProcessing": false
               }
             }
           },
@@ -1226,8 +1220,7 @@
               "paymentDetails": {
                 "paymentMethod": "Card",
                 "returnUrlFromPaymentGateway": "http://localhost:5096/analysis/html/GwResponsePage.html",
-                "automaticPaymentResultProcessing": false,
-                "isSdkUsed": false
+                "automaticPaymentResultProcessing": false
               }
             }
           },
@@ -1248,8 +1241,7 @@
               "paymentDetails": {
                 "paymentMethod": "Card",
                 "returnUrlFromPaymentGateway": "http://localhost:5096/analysis/html/GwResponsePage.html",
-                "automaticPaymentResultProcessing": true,
-                "isSdkUsed": false
+                "automaticPaymentResultProcessing": true
               }
             }
           },
