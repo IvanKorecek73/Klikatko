@@ -2664,3 +2664,52 @@ button:disabled {
     overflow: visible;
   }
 }
+
+.workflow-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.workflow-inputs > strong {
+  font-size: 16px;
+}
+
+.workflow-inputs > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.workflow-inputs .field input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.workflow-inputs .field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.workflow-inputs .toolbar {
+  margin-top: 4px;
+}
+
+.workflow-inputs #workflowInputsSubmit {
+  padding: 9px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.workflow-inputs #workflowInputsSubmit:hover {
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
+}

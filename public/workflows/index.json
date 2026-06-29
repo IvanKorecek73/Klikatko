@@ -142,6 +142,12 @@
       "name": "PidLitacka - klient s kupónem placeným kartou v mobilu",
       "description": "Jako pidlitacka-client-with-phone-and-card, ale kupón se platí kartou v mobilu přes BE PidLitacka (ne přes pobočku). Od založení a aktivace uživatele, přes klientská data, tokenizaci telefonu a karty, kontrolu identifikátorů a zjištění placené zóny (GetTokenTariffs) až po kartovou platbu s ručním průchodem branou. Čistá data každý běh = scénáře nejsou falešně negativní.",
       "tags": ["pidlitacka", "client", "coupons", "card-payment", "setup"],
+      "inputs": [
+        { "name": "userName", "label": "E-mail nového uživatele", "placeholder": "nech prázdné = výchozí ze scénáře" },
+        { "name": "password", "label": "Heslo", "secret": true, "placeholder": "nech prázdné = výchozí ze scénáře" },
+        { "name": "name", "label": "Jméno / firma na dokladu (fakturace)", "value": "Jan Testovaci" },
+        { "name": "returnUrlFromPaymentGateway", "label": "Návratová URL z platební brány", "value": "http://localhost:5096/analysis/html/GwResponsePage.html" }
+      ],
       "items": [
         {
           "projectId": "pidlitacka",
@@ -229,7 +235,19 @@
           "packId": "pidlitacka-coupons",
           "scenarioId": "client-coupons-receipt-download",
           "title": "Stáhnout daňový doklad",
-          "description": "Po zaplacení stáhne daňový doklad kupónu (GET /v1/client/coupons/receipt/{mosOrderId}). Vyberte zakoupený kupón; pokud MOS doklad pro objednávku ještě nemá, vrátí 404 (doklad nemusí být hned k dispozici)."
+          "description": "Po zaplacení stáhne daňový doklad kupónu (GET /v1/client/coupons/receipt/{mosOrderId}). Vyberte zakoupený kupón; pokud MOS doklad pro objednávku ještě nemá, vrátí 404 (doklad nemusí být hned k dispozici).",
+          "stopAfter": [
+            {
+              "stepId": "client-coupons-receipt-download-pdf",
+              "message": "Daňový doklad je připravený — stáhněte ho tlačítkem Stáhnout PDF.",
+              "preserveResult": true,
+              "instructions": [
+                "Ve výsledku kroku je PDF doklad: tlačítko Stáhnout PDF uloží soubor, Otevřít PDF ho zobrazí v prohlížeči.",
+                "Pokud MOS doklad pro objednávku ještě nemá, vrátí 404 — doklad nemusí být hned k dispozici.",
+                "Po stažení dokončete workflow tlačítkem Pokračovat ve workflow."
+              ]
+            }
+          ]
         }
       ],
       "report": {

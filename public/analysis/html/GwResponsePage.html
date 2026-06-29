@@ -213,11 +213,15 @@
   <header>
     <h1>Gateway / MOS návratová URL</h1>
     <p>
-      Tato stránka zobrazí celou návratovou URL, query string, hash fragment a jednotlivé položky
+      Tato stránka zobrazí celou návratovou URL, query string, hash fragment, POST tělo a jednotlivé položky
       v tabulce. Hodí se pro návraty z platební brány, aktivační odkazy z MOS e-mailů a obnovu nebo změnu hesla.
     </p>
     <p class="hint">
       Použití jako redirect URL: <code id="recommended-url"></code>
+    </p>
+    <p class="hint">
+      POST tělo (např. data z platební brány) se zachytí přes service worker — nech stránku nejdřív jednou
+      načíst (GET), aby se worker zaregistroval; teprve potom se POST návrat zobrazí.
     </p>
   </header>
 
@@ -242,6 +246,22 @@
     <pre id="raw-fragment"></pre>
   </section>
 
+  <section class="card" id="post-section" hidden>
+    <h2>POST tělo</h2>
+    <pre id="post-body"></pre>
+    <div class="toolbar">
+      <button type="button" data-copy-target="post-body">Kopírovat POST tělo</button>
+    </div>
+    <p class="hint">
+      Pro krok „Zpracovat návrat z platební brány" (MOS <code>PaymentGWData</code>) použij hodnotu níže —
+      MOS dělá jeden <code>UrlDecode</code>, takže data musí být <strong>dvakrát zakódovaná</strong>.
+    </p>
+    <pre id="post-body-mos"></pre>
+    <div class="toolbar">
+      <button type="button" data-copy-target="post-body-mos">Kopírovat pro MOS (2× zakódováno)</button>
+    </div>
+  </section>
+
   <section class="card">
     <h2>Položky</h2>
     <div id="params"></div>
@@ -256,6 +276,10 @@
   const copyStatusElement = document.getElementById("copy-status");
   const recommendedUrlElement = document.getElementById("recommended-url");
 
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("gw-post-capture-sw.js").catch(() => {});
+  }
+
   const url = new URL(window.location.href);
   const rawQuery = url.search.startsWith("?") ? url.search.slice(1) : url.search;
   const rawFragment = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
@@ -268,7 +292,8 @@
 
   const rows = [
     ...readParams(rawQuery, "query"),
-    ...readParams(rawFragment, "hash")
+    ...readParams(rawFragment, "hash"),
+    ...readPostBody(window.__GW_POST_BODY__)
   ];
 
   renderParams(rows);
@@ -297,6 +322,42 @@
     }
 
     return result;
+  }
+
+  function readPostBody(postData) {
+    if (!postData || !postData.body) {
+      return [];
+    }
+
+    const postSection = document.getElementById("post-section");
+    const postBodyElement = document.getElementById("post-body");
+    postBodyElement.textContent = postData.body;
+    // MOS ProcessPaymentGatewayResultV19 does one UrlDecode (SOAP workaround), so PaymentGWData
+    // must be double-encoded: encode the gateway POST body once more.
+    document.getElementById("post-body-mos").textContent = encodeURIComponent(postData.body);
+    postSection.hidden = false;
+
+    const contentType = (postData.contentType || "").toLowerCase();
+
+    if (contentType.includes("application/json")) {
+      try {
+        const parsed = JSON.parse(postData.body);
+        postBodyElement.textContent = JSON.stringify(parsed, null, 2);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          return Object.entries(parsed).map(([key, value]) => ({
+            source: "post",
+            key,
+            value: typeof value === "object" ? JSON.stringify(value) : String(value)
+          }));
+        }
+      } catch (error) {
+        // not valid JSON — fall through to raw body only
+      }
+      return [];
+    }
+
+    // default: treat as application/x-www-form-urlencoded
+    return readParams(postData.body, "post");
   }
 
   function renderParams(rows) {

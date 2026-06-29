@@ -30,6 +30,9 @@ const state = {
   workflowRun: null,
   workflowContext: {},
   workflowSecrets: {},
+  workflowInputs: {},
+  workflowInputsReady: false,
+  gatewayReturnSwRegistered: false,
   workflowRunning: false,
   workflowStopRequested: false,
   workflowLastReport: null,
@@ -5364,9 +5367,30 @@ function selectScenario(scenarioId, options = {}) {
   if (options.persistSelection !== false) {
     saveLastSelection({ scenarioId: state.scenario.id });
   }
+  prewarmGatewayReturnIfNeeded(state.scenario);
   renderAutoRunOptions();
   clearAutoRunSummary();
   renderStep();
+}
+
+// Registers the gateway-return capture service worker ahead of time for scenarios that
+// receive a POST return from the payment gateway, so the worker is active before the
+// gateway redirects back to GwResponsePage. Runs for both standalone and workflow runs.
+function prewarmGatewayReturnIfNeeded(scenario) {
+  if (!scenario?.prewarmReturnUrl || state.gatewayReturnSwRegistered) {
+    return;
+  }
+
+  if (!("serviceWorker" in navigator)) {
+    return;
+  }
+
+  state.gatewayReturnSwRegistered = true;
+  navigator.serviceWorker
+    .register("/analysis/html/gw-post-capture-sw.js", { scope: "/analysis/html/" })
+    .catch(() => {
+      state.gatewayReturnSwRegistered = false;
+    });
 }
 
 function selectFreeForm(formId, options = {}) {
@@ -5499,14 +5523,19 @@ function renderStep(options = {}) {
     }
 
     const hasCurrentValue = Object.prototype.hasOwnProperty.call(state.values, field.name);
-    const resolvedDefaultValue = resolveFieldDefaultValue(field);
+    // A value collected up front in the workflow inputs form (matched by field name)
+    // overrides the scenario default, so the step does not stop to ask for it.
+    const workflowInputValue = getWorkflowInputValue(field.name);
+    const baseDefaultValue = workflowInputValue !== undefined
+      ? workflowInputValue
+      : resolveFieldDefaultValue(field);
     const shouldRefillEmptyValue = preserveValues
       && hasCurrentValue
       && isEmpty(state.values[field.name])
-      && !isEmpty(resolvedDefaultValue);
+      && !isEmpty(baseDefaultValue);
     const defaultValue = preserveValues && hasCurrentValue && !shouldRefillEmptyValue
       ? state.values[field.name]
-      : resolvedDefaultValue;
+      : baseDefaultValue;
     state.values[field.name] = defaultValue;
 
     if (!field.hidden) {
@@ -7385,12 +7414,73 @@ async function runScenarioToSelectedStep() {
   setAutoRunControls(false);
 }
 
+// Returns a value pre-collected in the workflow inputs form for a field of this name,
+// or undefined when nothing was collected (so the field falls back to its scenario default).
+// Only applies during an active workflow run.
+function getWorkflowInputValue(name) {
+  const run = state.workflowRun;
+  if (!run || run.status === "completed" || !state.workflowInputs) {
+    return undefined;
+  }
+
+  const value = state.workflowInputs[name];
+  return isEmpty(value) ? undefined : value;
+}
+
+// Renders the up-front workflow inputs form. Values entered here are used automatically
+// during the run (matched by field name); fields left blank fall back to scenario defaults
+// or stop the workflow for manual entry at their step.
+function renderWorkflowInputsForm(workflow) {
+  const inputs = workflow.inputs || [];
+  const fieldsHtml = inputs.map(input => `
+    <div class="field">
+      <label for="wfinput-${escapeHtml(input.name)}">${escapeHtml(input.label || input.name)}</label>
+      <input id="wfinput-${escapeHtml(input.name)}" data-wfinput="${escapeHtml(input.name)}"
+        type="${input.secret ? "password" : "text"}"
+        value="${escapeHtml(state.workflowInputs?.[input.name] ?? input.value ?? "")}"
+        placeholder="${escapeHtml(input.placeholder || "")}" spellcheck="false">
+    </div>`).join("");
+
+  elements.resultCard.className = "result-card warn";
+  elements.resultCard.innerHTML = `
+    <div class="workflow-inputs">
+      <strong>Vstupní údaje workflow</strong>
+      <p>Vyplň, co znáš dopředu — předvyplní se automaticky a workflow se na nich nezastaví.
+      Co necháš prázdné (např. kód z e-mailu), na to workflow počká a vyžádá si to ručně na příslušném kroku.</p>
+      ${fieldsHtml}
+      <div class="toolbar">
+        <button type="button" id="workflowInputsSubmit">Spustit workflow</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("workflowInputsSubmit").addEventListener("click", () => {
+    const collected = {};
+    elements.resultCard.querySelectorAll("[data-wfinput]").forEach(input => {
+      if (!isEmpty(input.value)) {
+        collected[input.dataset.wfinput] = input.value;
+      }
+    });
+
+    state.workflowInputs = collected;
+    state.workflowInputsReady = true;
+    startSelectedWorkflow();
+  });
+}
+
 async function startSelectedWorkflow() {
   const workflow = getSelectedWorkflow();
 
   if (!workflow) {
     return;
   }
+
+  // Collect up-front inputs first (once) when the workflow declares them.
+  if (Array.isArray(workflow.inputs) && workflow.inputs.length > 0 && !state.workflowInputsReady) {
+    renderWorkflowInputsForm(workflow);
+    return;
+  }
+  state.workflowInputsReady = false;
 
   selectWorkflowProfileForIdentityEnvironments();
   prepareWorkflowRun(workflow, 0, {
@@ -10583,6 +10673,36 @@ function buildAppCardsHtml(body, step = currentStep()) {
     `;
   }
 
+  if (typeof body.couponSuccessfullyCreated === "boolean") {
+    const order = body.order || {};
+    const title = body.couponSuccessfullyCreated
+      ? "Kupón připraven"
+      : body.paymentGatewayRedirectUrl
+        ? "Platba kupónu připravena"
+        : "Stav platby kupónu";
+    return `
+      <div class="app-card-list">
+        <article class="app-card">
+          <strong>${escapeHtml(title)}</strong>
+          ${body.errorMessage ? `<p>${escapeHtml(body.errorMessage)}</p>` : ""}
+          <div class="app-card-meta">
+            ${renderAppChip(order.status || "")}
+            ${renderAppChip(order.totalPrice !== undefined ? `${order.totalPrice} ${order.priceCurrency || "CZK"}` : "")}
+            ${renderAppChip(body.couponSuccessfullyCreated ? "kupón vytvořen" : "")}
+          </div>
+          <div class="app-card-details">
+            <div class="app-detail-row"><span>Objednávka</span><span>${escapeHtml(order.orderId || "-")}</span></div>
+            <div class="app-detail-row"><span>Reference</span><span>${escapeHtml(body.paymentGatewayReference || "-")}</span></div>
+          </div>
+          ${body.paymentGatewayRedirectUrl ? `
+            <div class="app-card-actions">
+              <a class="app-card-link" href="${escapeHtml(body.paymentGatewayRedirectUrl)}" target="_blank" rel="noopener">Otevřít platební bránu</a>
+            </div>` : ""}
+        </article>
+      </div>
+    `;
+  }
+
   if (isMosParkingOrderResponse(body)) {
     return renderMosParkingOrderCardHtml(body);
   }
@@ -10780,6 +10900,7 @@ function buildAppCardsHtml(body, step = currentStep()) {
           <p>Soubor byl vracen backendem jako application/pdf.</p>
           <div class="app-card-meta">
             <span class="app-chip">${escapeHtml(`${body.size} B`)}</span>
+            <a class="app-chip app-link-chip" href="${escapeHtml(body.downloadUrl)}" download="doklad.pdf">St\u00e1hnout PDF</a>
             <a class="app-chip app-link-chip" href="${escapeHtml(body.downloadUrl)}" target="_blank" rel="noopener">Otev\u0159\u00edt PDF</a>
           </div>
         </article>
@@ -12896,6 +13017,10 @@ function summarizeBody(body) {
     return [];
   }
 
+  if (typeof body.couponSuccessfullyCreated === "boolean") {
+    return [];
+  }
+
   if (isSavedCardPaymentResponse(body)) {
     return [];
   }
@@ -13723,8 +13848,26 @@ function itemMatchesExpectedShape(item, expectedShape, step) {
   return Object.entries(expectedShape).every(([selector, expected]) => {
     const normalizedSelector = selector.startsWith("$") ? selector : `$.${selector}`;
     const actual = getPath(item, normalizedSelector);
-    return deepEqual(actual, resolveExpectedValue(expected, step));
+    return looseScalarEqual(actual, resolveExpectedValue(expected, step));
   });
+}
+
+// Equality used for containsItem leaf comparisons. Context-resolved expected values are always
+// strings (template substitution), so a number/boolean in the response is compared by its string
+// form; objects/arrays/null still go through strict deepEqual.
+function looseScalarEqual(actual, expected) {
+  if (deepEqual(actual, expected)) {
+    return true;
+  }
+
+  const isComparablePrimitive = value =>
+    typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+
+  if (isComparablePrimitive(actual) && isComparablePrimitive(expected)) {
+    return String(actual) === String(expected);
+  }
+
+  return false;
 }
 
 function isEmpty(value) {
