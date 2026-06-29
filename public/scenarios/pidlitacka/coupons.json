@@ -1383,7 +1383,7 @@
         {
           "id": "client-coupons-purchase-card-incomplete-order-detail-before-payment",
           "title": "Overit objednavku pred platbou",
-          "description": "Zavola GET /v1/client/coupons/purchase/orders/{orderId} a overi, ze objednavka je pred platbou stale InProgress.",
+          "description": "Zavola GET /v1/client/coupons/purchase/orders/{orderId} a overi, ze objednavka je pred zahajenim kartove platby stale New.",
           "requiresContext": ["pidCouponPurchaseOrderId"],
           "fields": [
             {
@@ -1408,7 +1408,7 @@
             "assertions": [
               { "path": "$.orderId", "equals": "{{form.orderId}}" },
               { "path": "$.identifierId", "notEmpty": true },
-              { "path": "$.status", "equals": "InProgress" },
+              { "path": "$.status", "equals": "New" },
               { "path": "$.zoneNames", "lengthAtLeast": 1 },
               { "path": "$.totalPrice", "atLeast": 0 },
               { "path": "$.priceCurrency", "equals": "CZK" }
