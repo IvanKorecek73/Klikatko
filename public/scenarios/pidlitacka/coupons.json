@@ -729,8 +729,7 @@
                   "purchasable": true
                 },
                 "message": "Klient nema zadny identifikator, na ktery lze kupon koupit."
-              },
-              { "path": "$.zoneMapUrl", "notEmpty": true }
+              }
             ]
           },
           "selection": {
@@ -1217,8 +1216,7 @@
                   "purchasable": true
                 },
                 "message": "Klient nema zadny identifikator, na ktery lze kupon koupit."
-              },
-              { "path": "$.zoneMapUrl", "notEmpty": true }
+              }
             ]
           },
           "selection": {
