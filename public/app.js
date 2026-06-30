@@ -4074,6 +4074,16 @@ function renderSmokeList() {
   }
 }
 
+function renderRunLockedLists() {
+  if (!state.catalog) {
+    return;
+  }
+
+  renderScenarioList();
+  renderSmokeList();
+  renderFormList();
+}
+
 function renderRedisViewer() {
   if (!elements.redisBridgeUrl) {
     return;
@@ -8572,6 +8582,7 @@ function setWorkflowControls(isRunning) {
   state.workflowRunning = isRunning;
   updateWorkflowControls();
   renderWorkflowList();
+  renderRunLockedLists();
 }
 
 function updateWorkflowControls() {
@@ -13908,7 +13919,7 @@ function createFormCard(form) {
   card.className = "scenario-card";
   card.dataset.formId = form.id;
   card.innerHTML = `
-    <button class="scenario-main" type="button">
+    <button class="scenario-main" type="button" ${state.batchRunning ? "disabled" : ""}>
       <strong>${escapeHtml(form.step.title)}</strong>
       <p>${escapeHtml(form.description || form.scenarioTitle)}</p>
       <div class="form-meta">
