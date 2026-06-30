@@ -12416,6 +12416,9 @@ function buildCardListHtml(items, mapItem, options = {}) {
   return `<div class="app-card-list">${items.map((item, index) => {
     const card = mapItem(item);
     const chips = (card.chips || []).filter(Boolean);
+    const details = Array.isArray(card.details)
+      ? card.details.filter(row => !isEmpty(row?.value))
+      : [];
     const isSelected = selection && selection.selectedIndex === index;
 
     return `
@@ -12423,9 +12426,9 @@ function buildCardListHtml(items, mapItem, options = {}) {
         <strong>${escapeHtml(card.title)}</strong>
         <p>${escapeHtml(card.text || "")}</p>
         ${chips.length > 0 ? `<div class="app-card-meta">${chips.map(renderAppChip).join("")}</div>` : ""}
-        ${Array.isArray(card.details) && card.details.length > 0 ? `
+        ${details.length > 0 ? `
           <div class="app-card-details">
-            ${card.details.map(row => `
+            ${details.map(row => `
               <div class="app-detail-row"><span>${escapeHtml(row.label)}</span><span>${escapeHtml(row.value)}</span></div>
             `).join("")}
           </div>` : ""}
@@ -12518,6 +12521,7 @@ function prepareSelection(step, body, status) {
     stepId: step.id,
     config: step.selection,
     items,
+    sourceBody: body,
     selectedIndex: null
   };
 }
@@ -12724,6 +12728,10 @@ function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
   const items = fallbackItems || state.activeSelection?.items || [];
   const selection = getSelectionDescriptor(step, items);
 
+  if (items.some(isNestedSelectionIdentifierItem)) {
+    return renderNestedIdentifierSelectionItemsCardsHtml(items, selection);
+  }
+
   return buildCardListHtml(items, item => ({
     title: getSelectionItemTitle(item),
     text: getSelectionItemText(item),
@@ -12771,6 +12779,55 @@ function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
       { label: "Personalizovaný", value: item.isPersonalized === "true" ? "ano" : item.isPersonalized === "false" ? "ne" : null }
     ]
   }), { selection });
+}
+
+function isNestedSelectionIdentifierItem(item) {
+  return item?.identifier && typeof item.identifier === "object" && !Array.isArray(item.identifier);
+}
+
+function renderNestedIdentifierSelectionItemsCardsHtml(items, selection) {
+  return buildCardListHtml(items, item => {
+    const identifier = item.identifier || {};
+    const title = getIdentifierDisplayName(identifier);
+    const text = [
+      identifier.identifierId ? `ID ${identifier.identifierId}` : null,
+      identifier.type ? `typ ${identifier.type}` : null,
+      item.defaultStartDate ? `od ${formatDate(item.defaultStartDate)}` : null
+    ].filter(Boolean).join(", ") || "Identifikator dostupny pro vyber.";
+
+    return {
+      title,
+      text,
+      chips: [
+        identifier.type || null,
+        identifier.subtype || null,
+        identifier.maskedPan || null,
+        identifier.isActive ? "aktivni" : "neaktivni",
+        identifier.isPersonalized === true ? "personalizovany" : identifier.isPersonalized === false ? "nepersonalizovany" : null,
+        identifier.blockedStatus ? `blokace ${identifier.blockedStatus}` : null,
+        item.purchasable === true ? "lze koupit" : item.purchasable === false ? "nelze koupit" : null,
+        item.isThisDevice === true ? "toto zarizeni" : null
+      ],
+      details: [
+        { label: "ID", value: identifier.identifierId },
+        { label: "Nazev", value: identifier.name },
+        { label: "Typ", value: identifier.type },
+        { label: "Podtyp", value: identifier.subtype },
+        { label: "Maskovana hodnota", value: identifier.maskedPan },
+        { label: "Expirace", value: identifier.expiry },
+        { label: "Aktivni", value: formatBooleanAnswer(identifier.isActive) },
+        { label: "Personalizovany", value: identifier.isPersonalized === null || identifier.isPersonalized === undefined ? null : formatBooleanAnswer(identifier.isPersonalized) },
+        { label: "Blokace", value: identifier.blockedStatus },
+        { label: "Dostupny pro dopravu", value: formatBooleanAnswer(identifier.isAvailableForTransportSystem) },
+        { label: "Aktivni v doprave", value: formatBooleanAnswer(identifier.isActiveForTransportSystem) },
+        { label: "Toto zarizeni", value: formatBooleanAnswer(item.isThisDevice) },
+        { label: "Lze koupit", value: formatBooleanAnswer(item.purchasable) },
+        { label: "Duvod", value: item.purchasableReason },
+        { label: "Vychozi zacatek", value: item.defaultStartDate ? formatDate(item.defaultStartDate) : null },
+        { label: "Aktivni kupony", value: Array.isArray(item.activeCoupons) ? item.activeCoupons.length : null }
+      ]
+    };
+  }, { selection });
 }
 
 function getSelectionItemTitle(item) {
@@ -12835,7 +12892,7 @@ function applySelection(index) {
   state.activeSelection.selectedIndex = index;
 
   for (const [key, selector] of Object.entries(state.activeSelection.config.store || {})) {
-    state.context[key] = resolveSelectionStoreValue(item, selector);
+    state.context[key] = resolveSelectionStoreValue(item, selector, state.activeSelection.sourceBody);
   }
 
   addLog("ok", "Položka vybrána", {
@@ -12863,7 +12920,7 @@ function applySelection(index) {
   }
 }
 
-function resolveSelectionStoreValue(item, selector) {
+function resolveSelectionStoreValue(item, selector, sourceBody = null) {
   if (selector && typeof selector === "object") {
     if (Object.hasOwn(selector, "literal")) {
       return selector.literal;
@@ -12872,7 +12929,7 @@ function resolveSelectionStoreValue(item, selector) {
     if (Object.hasOwn(selector, "arrayUnique")) {
       const values = Array.isArray(selector.arrayUnique)
         ? selector.arrayUnique
-            .map(entry => resolveSelectionStoreValue(item, entry))
+            .map(entry => resolveSelectionStoreValue(item, entry, sourceBody))
             .filter(value => !isEmpty(value))
             .map(value => String(value))
         : [];
@@ -12882,6 +12939,10 @@ function resolveSelectionStoreValue(item, selector) {
 
     if (Object.hasOwn(selector, "path")) {
       return getPath(item, selector.path);
+    }
+
+    if (Object.hasOwn(selector, "bodyPath")) {
+      return getPath(sourceBody, selector.bodyPath);
     }
 
     if (Object.hasOwn(selector, "identifierPersonalizationResource")) {

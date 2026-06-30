@@ -742,12 +742,12 @@
             "emptyTitle": "Zadne identifikatory",
             "emptyText": "Aktualni klient nema zadny identifikator, na ktery lze podle BE pravidel koupit kupon. Zkontrolujte pole blockers a purchasableReason v odpovedi options.",
             "store": {
-              "pidCouponPurchaseIdentifierId": "$.identifierId",
-              "pidCouponPurchaseIdentifierName": "$.name",
-              "pidCouponPurchaseIdentifierType": "$.type",
-              "pidCouponPurchaseIdentifierMaskedValue": "$.maskedPan",
+              "pidCouponPurchaseIdentifierId": "$.identifier.identifierId",
+              "pidCouponPurchaseIdentifierName": "$.identifier.name",
+              "pidCouponPurchaseIdentifierType": "$.identifier.type",
+              "pidCouponPurchaseIdentifierMaskedValue": "$.identifier.maskedPan",
               "pidCouponPurchaseDefaultStartDate": "$.defaultStartDate",
-              "pidCouponPurchaseMaxStartDate": "$.maxStartDate",
+              "pidCouponPurchaseMaxStartDate": { "bodyPath": "$.maxStartDate" },
               "pidCouponPurchaseActiveCouponZones": "$.activeCouponZoneLabels"
             }
           }
@@ -1229,12 +1229,12 @@
             "emptyTitle": "Zadne identifikatory",
             "emptyText": "Aktualni klient nema zadny identifikator, na ktery lze podle BE pravidel koupit kupon. Zkontrolujte pole blockers a purchasableReason v odpovedi options.",
             "store": {
-              "pidCouponPurchaseIdentifierId": "$.identifierId",
-              "pidCouponPurchaseIdentifierName": "$.name",
-              "pidCouponPurchaseIdentifierType": "$.type",
-              "pidCouponPurchaseIdentifierMaskedValue": "$.maskedPan",
+              "pidCouponPurchaseIdentifierId": "$.identifier.identifierId",
+              "pidCouponPurchaseIdentifierName": "$.identifier.name",
+              "pidCouponPurchaseIdentifierType": "$.identifier.type",
+              "pidCouponPurchaseIdentifierMaskedValue": "$.identifier.maskedPan",
               "pidCouponPurchaseDefaultStartDate": "$.defaultStartDate",
-              "pidCouponPurchaseMaxStartDate": "$.maxStartDate",
+              "pidCouponPurchaseMaxStartDate": { "bodyPath": "$.maxStartDate" },
               "pidCouponPurchaseActiveCouponZones": "$.activeCouponZoneLabels"
             }
           }
