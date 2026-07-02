@@ -17,6 +17,7 @@
         "subtitle": "Tokenizator"
       },
       "instructions": [
+        "Prostredi tokenizatoru prepnete v hornim vyberu prostredi projektu: INT vola int-api.tokenizace-mos.cz, PROD vola tapi.tokenizace-mos.cz.",
         "Do poli STP-APIKEY a API secret vlozte prihlasovaci udaje tokenizatoru.",
         "Klikatko z apiSecret pro kazdy request spocita STP-TIMESTAMP a STP-SIGNATURE.",
         "Scenar vola tokenizator pres proxy Klikatka primo na vybrane prostredi. Pri TLS nebo sitove chybe bude v Logu odpoved ProxyError vcetne detailu z Node proxy.",

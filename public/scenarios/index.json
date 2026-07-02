@@ -388,11 +388,17 @@
         "apiKeyLabel": "STP-APIKEY",
         "apiKeyPlaceholder": "Vlozte API key pro cilovy externi endpoint"
       },
-      "defaultEnvironmentId": "tokenizer-tapi",
+      "defaultEnvironmentId": "tokenizer-int",
       "environments": [
         {
-          "id": "tokenizer-tapi",
-          "name": "TOKENIZER TAPI",
+          "id": "tokenizer-int",
+          "name": "TOKENIZER INT",
+          "targetBaseUrl": "https://int-api.tokenizace-mos.cz",
+          "ignoreTlsCertificateErrors": true
+        },
+        {
+          "id": "tokenizer-prod",
+          "name": "TOKENIZER PROD (TAPI)",
           "targetBaseUrl": "https://tapi.tokenizace-mos.cz",
           "ignoreTlsCertificateErrors": true
         }
