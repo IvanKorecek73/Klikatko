@@ -374,6 +374,29 @@
           "targetBaseUrl": "https://pre-core.mos.oict.cz"
         }
       ]
+    },
+    {
+      "id": "external-diagnostics",
+      "name": "Externi EP diagnostika",
+      "description": "Prime diagnosticke scenare pro volani externich endpointu mimo PidLitacka BE, se zamerenim na request/response a transportni chyby.",
+      "manifest": "external-diagnostics/index.json",
+      "defaultBaseUrl": "/api",
+      "auth": {
+        "type": "apiKey",
+        "panelTitle": "Pristup (externi API key)",
+        "apiKeyHeader": "STP-APIKEY",
+        "apiKeyLabel": "STP-APIKEY",
+        "apiKeyPlaceholder": "Vlozte API key pro cilovy externi endpoint"
+      },
+      "defaultEnvironmentId": "tokenizer-tapi",
+      "environments": [
+        {
+          "id": "tokenizer-tapi",
+          "name": "TOKENIZER TAPI",
+          "targetBaseUrl": "https://tapi.tokenizace-mos.cz",
+          "ignoreTlsCertificateErrors": true
+        }
+      ]
     }
   ]
 }

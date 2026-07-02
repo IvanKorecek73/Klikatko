@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "name": "Externi EP - Tokenizator",
+  "description": "Diagnosticke scenare pro prime volani externich tokenizacnich endpointu.",
+  "scenarios": [
+    {
+      "id": "external-tokenizer-create-mobapp-identifier",
+      "title": "Tokenizator - vytvorit MobApp identifikator",
+      "description": "Prime diagnosticke volani POST /api/v1/identifier stejnymi daty, ktera PidLitacka BE posila pri nove tokenizaci mobilniho zarizeni.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["external", "tokenizer", "mobapp", "diagnostics"],
+      "app": {
+        "section": "diagnostics",
+        "title": "Externi EP",
+        "subtitle": "Tokenizator"
+      },
+      "instructions": [
+        "V panelu Pristup vlozte STP-APIKEY pro tokenizator.",
+        "Do pole API secret vlozte odpovidajici apiSecret. Klikatko z nej pro kazdy request spocita STP-SIGNATURE.",
+        "Scenar vola tokenizator pres proxy Klikatka primo na vybrane prostredi. Pri TLS nebo sitove chybe bude v Logu odpoved ProxyError vcetne detailu z Node proxy.",
+        "Cilem je diagnostika: v Logu zkontrolujte resolvedUrl, odeslane telo, HTTP status, content-type a cele body odpovedi."
+      ],
+      "steps": [
+        {
+          "id": "external-tokenizer-create-mobapp-identifier-call",
+          "title": "Zavolat create identifier",
+          "description": "Odesle presnou kopii tokenizacniho volani pro MobApp identifikator. STP-TIMESTAMP a STP-SIGNATURE se pocitaji pri odeslani requestu.",
+          "fields": [
+            {
+              "name": "apiSecret",
+              "label": "API secret",
+              "type": "password",
+              "value": "",
+              "persist": false,
+              "placeholder": "apiSecret pro STP-SIGNATURE"
+            },
+            {
+              "name": "identType",
+              "label": "Ident type",
+              "value": "mobapp"
+            },
+            {
+              "name": "identValue",
+              "label": "Ident value",
+              "value": "B862B4EB-CBBA-40B2-9E60-FA2B58C990DD2859320",
+              "placeholder": "NORMALIZED_DEVICE_ID + customerId"
+            },
+            {
+              "name": "identRef",
+              "label": "Ident ref",
+              "value": "iPhone 15 Pro",
+              "placeholder": "Model zarizeni, max. 16 UTF-8 bytu"
+            },
+            {
+              "name": "p1",
+              "label": "p1",
+              "type": "number",
+              "value": 7,
+              "min": 0,
+              "step": 1
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/api/v1/identifier",
+            "headers": {
+              "STP-TIMESTAMP": "{{stpTimestamp}}",
+              "STP-SIGNATURE": "{{stpSignature:form.apiSecret}}"
+            },
+            "body": {
+              "identType": "{{form.identType}}",
+              "identValue": "{{form.identValue}}",
+              "identRef": "{{form.identRef}}",
+              "p1": "{{form.p1}}"
+            }
+          },
+          "expected": {
+            "statusIn": [200, 201, 400, 401, 403, 404, 409, 422, 500, 502, 503],
+            "assertions": []
+          },
+          "remember": {
+            "externalTokenizerLastIdentValue": "{{form.identValue}}",
+            "externalTokenizerLastIdentRef": "{{form.identRef}}"
+          }
+        }
+      ]
+    }
+  ]
+}

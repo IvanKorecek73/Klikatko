@@ -8,6 +8,7 @@ const { handleRedisBridgeRequest } = require("./tools/redis-bridge/src/server");
 const host = process.env.HARNESS_HOST || "127.0.0.1";
 const port = Number(process.env.PORT || 5096);
 let targetBaseUrl = process.env.TICKET_SERVICE_BASE_URL || "http://localhost:5087";
+let targetIgnoreTlsCertificateErrors = false;
 const proxyTimeoutMs = Number(process.env.HARNESS_PROXY_TIMEOUT_MS || 30000);
 const publicDir = path.join(__dirname, "public");
 
@@ -63,7 +64,8 @@ function serveMeta(response) {
     host,
     port,
     proxyBasePath: "/api",
-    proxyTarget: targetBaseUrl
+    proxyTarget: targetBaseUrl,
+    proxyIgnoreTlsCertificateErrors: targetIgnoreTlsCertificateErrors
   }));
 }
 
@@ -88,6 +90,7 @@ function configureProxyTarget(request, response) {
       }
 
       targetBaseUrl = parsed.toString().replace(/\/$/, "");
+      targetIgnoreTlsCertificateErrors = Boolean(payload.ignoreTlsCertificateErrors);
       response.writeHead(200, {
         "Content-Type": "application/json; charset=utf-8",
         "Cache-Control": "no-store",
@@ -95,7 +98,8 @@ function configureProxyTarget(request, response) {
       });
       response.end(JSON.stringify({
         status: "OK",
-        proxyTarget: targetBaseUrl
+        proxyTarget: targetBaseUrl,
+        proxyIgnoreTlsCertificateErrors: targetIgnoreTlsCertificateErrors
       }));
     } catch (error) {
       response.writeHead(400, {
@@ -178,7 +182,7 @@ function proxyApi(request, response) {
     }
   };
 
-  if (targetUrl.protocol === "https:" && isLocalHostname(targetUrl.hostname)) {
+  if (targetUrl.protocol === "https:" && (isLocalHostname(targetUrl.hostname) || targetIgnoreTlsCertificateErrors)) {
     requestOptions.rejectUnauthorized = false;
   }
 
@@ -215,8 +219,10 @@ function proxyApi(request, response) {
     response.writeHead(502, { "Content-Type": "application/json; charset=utf-8" });
     response.end(JSON.stringify({
       error: "ProxyError",
-      message: "Backend is not reachable. Start the WebApi or change the API proxy target.",
+      message: "Target service is not reachable. Check the API proxy target, network, TLS, or service availability.",
       detail: error.message,
+      code: error.code || "",
+      name: error.name || "",
       target: targetUrl.toString()
     }));
   });

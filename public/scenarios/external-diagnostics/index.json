@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "defaultPackId": "external-tokenizer",
+  "packs": [
+    {
+      "id": "external-tokenizer",
+      "name": "Externi EP - Tokenizator",
+      "description": "Diagnosticke prime volani externi tokenizacni sluzby mimo PidLitacka BE.",
+      "file": "tokenizer.json"
+    }
+  ]
+}
