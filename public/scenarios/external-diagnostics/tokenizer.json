@@ -7,7 +7,7 @@
       "id": "external-tokenizer-create-mobapp-identifier",
       "title": "Tokenizator - vytvorit MobApp identifikator",
       "description": "Prime diagnosticke volani POST /api/v1/identifier stejnymi daty, ktera PidLitacka BE posila pri nove tokenizaci mobilniho zarizeni.",
-      "requiresAuth": true,
+      "requiresAuth": false,
       "smoke": false,
       "manualInputRequired": true,
       "tags": ["external", "tokenizer", "mobapp", "diagnostics"],
@@ -17,8 +17,8 @@
         "subtitle": "Tokenizator"
       },
       "instructions": [
-        "V panelu Pristup vlozte STP-APIKEY pro tokenizator.",
-        "Do pole API secret vlozte odpovidajici apiSecret. Klikatko z nej pro kazdy request spocita STP-SIGNATURE.",
+        "Do poli STP-APIKEY a API secret vlozte prihlasovaci udaje tokenizatoru.",
+        "Klikatko z apiSecret pro kazdy request spocita STP-TIMESTAMP a STP-SIGNATURE.",
         "Scenar vola tokenizator pres proxy Klikatka primo na vybrane prostredi. Pri TLS nebo sitove chybe bude v Logu odpoved ProxyError vcetne detailu z Node proxy.",
         "Cilem je diagnostika: v Logu zkontrolujte resolvedUrl, odeslane telo, HTTP status, content-type a cele body odpovedi."
       ],
@@ -28,6 +28,14 @@
           "title": "Zavolat create identifier",
           "description": "Odesle presnou kopii tokenizacniho volani pro MobApp identifikator. STP-TIMESTAMP a STP-SIGNATURE se pocitaji pri odeslani requestu.",
           "fields": [
+            {
+              "name": "apiKey",
+              "label": "STP-APIKEY",
+              "type": "password",
+              "value": "",
+              "persist": false,
+              "placeholder": "API key pro STP-APIKEY"
+            },
             {
               "name": "apiSecret",
               "label": "API secret",
@@ -66,6 +74,7 @@
             "method": "POST",
             "path": "/api/v1/identifier",
             "headers": {
+              "STP-APIKEY": "{{form.apiKey}}",
               "STP-TIMESTAMP": "{{stpTimestamp}}",
               "STP-SIGNATURE": "{{stpSignature:form.apiSecret}}"
             },
