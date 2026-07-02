@@ -126,6 +126,7 @@
         "title": "Příprava klienta s kupónem",
         "contextKeys": [
           "userName",
+          "pidCurrentDeviceId",
           "mobileIdentifierId",
           "bankCardRegistrationId",
           "bankCardGatewayRedirectUrl",
@@ -254,6 +255,7 @@
         "title": "Příprava klienta s kupónem placeným kartou",
         "contextKeys": [
           "userName",
+          "pidCurrentDeviceId",
           "mobileIdentifierId",
           "bankCardRegistrationId",
           "bankCardIdentifierId",

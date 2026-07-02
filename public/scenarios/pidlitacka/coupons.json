@@ -714,6 +714,7 @@
             "method": "GET",
             "path": "/v1/client/coupons/purchase/options",
             "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}",
               "X-Device-RegId": "{{context.pidCurrentDeviceRegId}}"
             }
           },
@@ -746,6 +747,7 @@
               "pidCouponPurchaseIdentifierName": "$.identifier.name",
               "pidCouponPurchaseIdentifierType": "$.identifier.type",
               "pidCouponPurchaseIdentifierMaskedValue": "$.identifier.maskedPan",
+              "pidCouponPurchaseIdentifierIsThisDevice": "$.isThisDevice",
               "pidCouponPurchaseDefaultStartDate": "$.defaultStartDate",
               "pidCouponPurchaseMaxStartDate": { "bodyPath": "$.maxStartDate" },
               "pidCouponPurchaseActiveCouponZones": "$.activeCouponZoneLabels"
@@ -1201,6 +1203,7 @@
             "method": "GET",
             "path": "/v1/client/coupons/purchase/options",
             "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}",
               "X-Device-RegId": "{{context.pidCurrentDeviceRegId}}"
             }
           },
@@ -1233,6 +1236,7 @@
               "pidCouponPurchaseIdentifierName": "$.identifier.name",
               "pidCouponPurchaseIdentifierType": "$.identifier.type",
               "pidCouponPurchaseIdentifierMaskedValue": "$.identifier.maskedPan",
+              "pidCouponPurchaseIdentifierIsThisDevice": "$.isThisDevice",
               "pidCouponPurchaseDefaultStartDate": "$.defaultStartDate",
               "pidCouponPurchaseMaxStartDate": { "bodyPath": "$.maxStartDate" },
               "pidCouponPurchaseActiveCouponZones": "$.activeCouponZoneLabels"

@@ -609,7 +609,7 @@
     {
       "id": "client-identifiers-tokenize-phone",
       "title": "Klientská data - tokenizace telefonu",
-      "description": "Ověří celé aktuální flow MobApp tokenizace: identRegistration pouze potvrdí registraci, TokenID se očekává z AssignToken a následně je možné volitelně provést personalizaci identifikátoru.",
+      "description": "Ověří nové flow MobApp tokenizace: Klikátko pošle deviceId/deviceModel, backend vytvoří token přes tokenizační službu, provede AssignToken a následně je možné volitelně provést personalizaci identifikátoru.",
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
@@ -628,69 +628,39 @@
       "instructions": [
         "Použijte účet, který má založeného aktivního klienta v Core MOS.",
         "Scénář zapisuje nový MobApp identifikátor, proto není součástí smoke runu.",
-        "RegId, CLN a token jsou předvyplněné náhodnými hodnotami. Při opakovaném průchodu ponechte nové vygenerované hodnoty, aby nedošlo ke kolizi s dříve uloženým tokenem.",
+        "Device ID a model zařízení jsou převzaté z aktuálního mobilního profilu v záložce Uživatel.",
         "STP hlavičky a podpis řeší backend z konfigurace, v Klikátku se nezadávají.",
-        "Úspěšné flow tokenizace musí projít v pořadí: identRegistration -> AssignToken -> SetTokenIsPersonalized(false). TokenID má přijít až z AssignToken.",
+        "Úspěšné flow tokenizace musí projít v pořadí: TokenizerIdentifierCreation -> AssignToken -> SetTokenIsPersonalized(false). TokenID má přijít až z AssignToken.",
         "Nově lze navazujícím volitelným krokem nastavit telefon jako personalizovaný. Pro nákup nepřenosných kupónů je personalizace žádoucí.",
         "Pokud v personalizačním kroku zvolíte Ne, Klikátko krok označí jako záměrně přeskočený a request neodešle.",
-        "Pokud se vrátí PartiallyCompleted nebo chyba, v Mobilu a Logu zkontrolujte, zda prošla identRegistration a co přesně vrátil AssignToken.",
+        "Pokud se vrátí PartiallyCompleted nebo chyba, v Mobilu a Logu zkontrolujte, zda prošla tokenizační služba a co přesně vrátil AssignToken.",
         "Po tokenizaci se znovu načtou identifikátory, aby bylo možné ověřit, že ukládací část propsala nový záznam."
       ],
       "steps": [
         {
           "id": "client-identifiers-tokenize-phone-step",
           "title": "Tokenizovat telefon",
-          "description": "Odešle tokenizační požadavek. Backend má nejprve potvrdit identRegistration, potom získat TokenID z AssignToken a nakonec nastavit počáteční SetTokenIsPersonalized(false).",
+          "description": "Odešle nový tokenizační požadavek pro mobilní zařízení. Backend má nejprve získat token z tokenizační služby, potom získat TokenID z AssignToken a nakonec nastavit počáteční SetTokenIsPersonalized(false).",
           "fields": [
             {
-              "name": "regId",
-              "label": "Registrační ID",
-              "value": "{{uuid}}",
-              "placeholder": "Unikátní registrační identifikátor"
+              "name": "deviceId",
+              "label": "Device ID",
+              "value": "{{auth.deviceId}}",
+              "placeholder": "ID aktualniho zarizeni z prihlaseneho mobilniho profilu"
             },
             {
-              "name": "cln",
-              "label": "CLN telefonu",
-              "value": "{{uuid}}",
-              "placeholder": "Identifikátor zařízení / telefonu"
-            },
-            {
-              "name": "maskedPan",
-              "label": "Zobrazený název",
-              "value": "TestPhone-001",
-              "placeholder": "Max. 16 znaků, např. TestPhone-001"
-            },
-            {
-              "name": "identifierSubtype",
-              "label": "Podtyp identifikátoru",
-              "type": "select",
-              "value": "1",
-              "options": [
-                {
-                  "value": "1",
-                  "text": "1 - mobilní aplikace"
-                }
-              ]
-            },
-            {
-              "name": "tokenVersion",
-              "label": "Verze tokenu",
-              "type": "number",
-              "value": 1,
-              "min": 1,
-              "step": 1
+              "name": "deviceModel",
+              "label": "Model zarizeni",
+              "value": "{{auth.deviceName}}",
+              "placeholder": "Napriklad Test Android 1 nebo iPhone 15 Pro"
             }
           ],
           "request": {
             "method": "POST",
             "path": "/v1/client/identifiers/mobile",
             "body": {
-              "regId": "{{form.regId}}",
-              "cln": "{{form.cln}}",
-              "maskedPan": "{{form.maskedPan}}",
-              "identifierSubtype": "{{form.identifierSubtype}}",
-              "tokenValue": "{{mobAppToken}}",
-              "tokenVersion": "{{form.tokenVersion}}"
+              "deviceId": "{{form.deviceId}}",
+              "deviceModel": "{{form.deviceModel}}"
             }
           },
           "expected": {
@@ -726,7 +696,7 @@
               },
               {
                 "path": "$.steps[1].name",
-                "equals": "IdentRegistration"
+                "equals": "TokenizerIdentifierCreation"
               },
               {
                 "path": "$.steps[1].status",
@@ -754,7 +724,8 @@
             "mobileIdentifierId": "$.identifierId"
           },
           "remember": {
-            "pidCurrentDeviceRegId": "{{form.regId}}"
+            "pidCurrentDeviceId": "{{form.deviceId}}",
+            "pidCurrentDeviceRegId": "{{form.deviceId}}"
           }
         },
         {
