@@ -6731,6 +6731,7 @@ async function runCurrentStep() {
       return;
     }
 
+    await applyStepProxyTarget(step);
     request = buildRequest(step);
     const startedAt = performance.now();
     let response = await fetch(request.url, request.options);
@@ -9030,7 +9031,6 @@ function buildRequest(step) {
   const method = step.request.method || "GET";
   const baseUrl = elements.baseUrl.value.replace(/\/$/, "");
   const path = resolveTemplate(step.request.path, { fieldValues: state.values });
-  const url = /^https?:\/\//i.test(path) ? path : `${baseUrl}${path}`;
   const headers = {};
   const visibleHeaders = {};
   const requestContext = {
@@ -9104,12 +9104,32 @@ function buildRequest(step) {
   }
 
   return {
-    url,
-    resolvedUrl: resolveDisplayedRequestUrl(url),
+    url: `${baseUrl}${path}`,
+    resolvedUrl: resolveDisplayedRequestUrl(`${baseUrl}${path}`),
     options: { method, headers, body },
     visibleHeaders,
     visibleBody
   };
+}
+
+async function applyStepProxyTarget(step) {
+  const proxyTargetBaseUrlTemplate = step?.request?.proxyTargetBaseUrl;
+
+  if (!proxyTargetBaseUrlTemplate) {
+    return;
+  }
+
+  const targetBaseUrl = resolveTemplate(proxyTargetBaseUrlTemplate, { fieldValues: state.values }).trim();
+
+  if (!targetBaseUrl) {
+    return;
+  }
+
+  await updateHarnessProxyTarget({
+    targetBaseUrl,
+    ignoreTlsCertificateErrors: Boolean(step.request.proxyIgnoreTlsCertificateErrors)
+  });
+  renderTargetInfo();
 }
 
 function validateMosSessionContextForStep(step) {
@@ -13765,10 +13785,15 @@ async function updateHarnessProxyTarget(environmentOrTargetBaseUrl) {
     ? false
     : Boolean(environmentOrTargetBaseUrl?.ignoreTlsCertificateErrors);
 
-  await postJson("/__harness/config/proxy-target", {
+  const result = await postJson("/__harness/config/proxy-target", {
     targetBaseUrl,
     ignoreTlsCertificateErrors
   });
+  state.harnessMeta = {
+    ...(state.harnessMeta || {}),
+    proxyTarget: result.proxyTarget || targetBaseUrl,
+    proxyIgnoreTlsCertificateErrors: Boolean(result.proxyIgnoreTlsCertificateErrors)
+  };
 }
 
 function parseResponse(raw) {

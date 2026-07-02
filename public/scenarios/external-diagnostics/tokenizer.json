@@ -89,7 +89,9 @@
           ],
           "request": {
             "method": "POST",
-            "path": "{{form.tokenizerBaseUrl}}/api/v1/identifier",
+            "proxyTargetBaseUrl": "{{form.tokenizerBaseUrl}}",
+            "proxyIgnoreTlsCertificateErrors": true,
+            "path": "/api/v1/identifier",
             "headers": {
               "STP-APIKEY": "{{form.apiKey}}",
               "STP-TIMESTAMP": "{{stpTimestamp}}",
