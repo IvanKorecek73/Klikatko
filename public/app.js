@@ -9030,6 +9030,7 @@ function buildRequest(step) {
   const method = step.request.method || "GET";
   const baseUrl = elements.baseUrl.value.replace(/\/$/, "");
   const path = resolveTemplate(step.request.path, { fieldValues: state.values });
+  const url = /^https?:\/\//i.test(path) ? path : `${baseUrl}${path}`;
   const headers = {};
   const visibleHeaders = {};
   const requestContext = {
@@ -9103,8 +9104,8 @@ function buildRequest(step) {
   }
 
   return {
-    url: `${baseUrl}${path}`,
-    resolvedUrl: resolveDisplayedRequestUrl(`${baseUrl}${path}`),
+    url,
+    resolvedUrl: resolveDisplayedRequestUrl(url),
     options: { method, headers, body },
     visibleHeaders,
     visibleBody

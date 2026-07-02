@@ -17,7 +17,7 @@
         "subtitle": "Tokenizator"
       },
       "instructions": [
-        "Prostredi tokenizatoru prepnete v hornim vyberu prostredi projektu: INT vola int-api.tokenizace-mos.cz, PROD vola tapi.tokenizace-mos.cz.",
+        "Prostredi tokenizatoru prepnete primo ve formulari kroku polem Prostredi.",
         "Do poli STP-APIKEY a API secret vlozte prihlasovaci udaje tokenizatoru.",
         "Klikatko z apiSecret pro kazdy request spocita STP-TIMESTAMP a STP-SIGNATURE.",
         "Scenar vola tokenizator pres proxy Klikatka primo na vybrane prostredi. Pri TLS nebo sitove chybe bude v Logu odpoved ProxyError vcetne detailu z Node proxy.",
@@ -29,6 +29,22 @@
           "title": "Zavolat create identifier",
           "description": "Odesle presnou kopii tokenizacniho volani pro MobApp identifikator. STP-TIMESTAMP a STP-SIGNATURE se pocitaji pri odeslani requestu.",
           "fields": [
+            {
+              "name": "tokenizerBaseUrl",
+              "label": "Prostredi",
+              "type": "select",
+              "value": "https://int-api.tokenizace-mos.cz",
+              "options": [
+                {
+                  "text": "INT",
+                  "value": "https://int-api.tokenizace-mos.cz"
+                },
+                {
+                  "text": "PROD (TAPI)",
+                  "value": "https://tapi.tokenizace-mos.cz"
+                }
+              ]
+            },
             {
               "name": "apiKey",
               "label": "STP-APIKEY",
@@ -73,7 +89,7 @@
           ],
           "request": {
             "method": "POST",
-            "path": "/api/v1/identifier",
+            "path": "{{form.tokenizerBaseUrl}}/api/v1/identifier",
             "headers": {
               "STP-APIKEY": "{{form.apiKey}}",
               "STP-TIMESTAMP": "{{stpTimestamp}}",
