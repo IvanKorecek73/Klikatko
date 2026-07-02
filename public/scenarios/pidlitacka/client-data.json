@@ -673,12 +673,6 @@
               ]
             },
             {
-              "name": "tokenValue",
-              "label": "Token",
-              "value": "{{hex64}}",
-              "placeholder": "64 znaků SHA-256 hex"
-            },
-            {
               "name": "tokenVersion",
               "label": "Verze tokenu",
               "type": "number",
@@ -695,7 +689,7 @@
               "cln": "{{form.cln}}",
               "maskedPan": "{{form.maskedPan}}",
               "identifierSubtype": "{{form.identifierSubtype}}",
-              "tokenValue": "{{form.tokenValue}}",
+              "tokenValue": "{{mobAppToken}}",
               "tokenVersion": "{{form.tokenVersion}}"
             }
           },
