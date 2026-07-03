@@ -11305,10 +11305,11 @@ function renderCouponMovePreviewCardHtml(body) {
 
 function renderMoveCouponsReportCardHtml(body) {
   const moved = Array.isArray(body.moved) ? body.moved : [];
+  const skipped = Array.isArray(body.skipped) ? body.skipped : [];
   const failed = Array.isArray(body.failed) ? body.failed : [];
   const steps = Array.isArray(body.steps) ? body.steps : [];
-  const skipped = steps.filter(step => String(step.status || "").toLowerCase() === "skipped");
-  const completed = String(body.status || "").toLowerCase() === "completed" && failed.length === 0;
+  const skippedSteps = steps.filter(step => String(step.status || "").toLowerCase() === "skipped");
+  const completed = String(body.status || "").toLowerCase() === "completed" && failed.length === 0 && skipped.length === 0;
 
   return `
     <div class="app-card-list">
@@ -11319,16 +11320,18 @@ function renderMoveCouponsReportCardHtml(body) {
           ${renderAppChip(body.status || "status neznámý")}
           ${renderAppChip(`přesunuto: ${sumCouponCounts(moved)}`)}
           ${renderAppChip(`selhalo: ${sumCouponCounts(failed)}`)}
-          ${skipped.length > 0 ? renderAppChip(`přeskočeno: ${skipped.length}`) : ""}
+          ${skipped.length > 0 ? renderAppChip(`přeskočeno: ${sumCouponCounts(skipped)}`) : ""}
         </div>
         <div class="app-card-details">
           <div class="app-detail-row"><span>Cílové ID</span><span>${escapeHtml(body.targetIdentifierId || "-")}</span></div>
-          <div class="app-detail-row"><span>Zdroje přesunuty</span><span>${escapeHtml(moved.length)}</span></div>
-          <div class="app-detail-row"><span>Zdroje selhaly</span><span>${escapeHtml(failed.length)}</span></div>
-          <div class="app-detail-row"><span>Kroky přeskočeny</span><span>${escapeHtml(skipped.length)}</span></div>
+          <div class="app-detail-row"><span>Skupiny přesunuty</span><span>${escapeHtml(moved.length)}</span></div>
+          <div class="app-detail-row"><span>Skupiny přeskočeny</span><span>${escapeHtml(skipped.length)}</span></div>
+          <div class="app-detail-row"><span>Skupiny selhaly</span><span>${escapeHtml(failed.length)}</span></div>
+          <div class="app-detail-row"><span>Kroky přeskočeny</span><span>${escapeHtml(skippedSteps.length)}</span></div>
         </div>
       </article>
       ${moved.length > 0 ? renderMoveCouponsResultListHtml("Přesunuto", moved) : ""}
+      ${skipped.length > 0 ? renderMoveCouponsResultListHtml("Přeskočeno", skipped) : ""}
       ${failed.length > 0 ? renderMoveCouponsResultListHtml("Selhalo", failed) : ""}
       ${renderMoveCouponsStepsCardHtml(steps)}
     </div>
@@ -11538,17 +11541,22 @@ function renderMoveCouponsResultListHtml(title, items) {
   return `
     <article class="app-card">
       <strong>${escapeHtml(title)}</strong>
-      <p>${escapeHtml(formatCount(items.length, "zdroj", "zdroje", "zdrojů"))}</p>
+      <p>${escapeHtml(formatCount(sumCouponCounts(items), "kupón", "kupóny", "kupónů"))}</p>
       <div class="app-card-details">
         ${items.map(item => {
           const sourceLabel = getKnownIdentifierLabel(item.sourceIdentifierId) || (item.sourceIdentifierId ? `Zdroj ${item.sourceIdentifierId}` : "Zdroj");
+          const coupons = Array.isArray(item.coupons) ? item.coupons : [];
+          const couponIds = coupons
+            .map(coupon => coupon?.couponId)
+            .filter(couponId => !isEmpty(couponId));
 
           return `
             <div class="app-detail-row">
               <span>${escapeHtml(sourceLabel)}</span>
               <span>${escapeHtml([
               formatCount(Number(item.couponCount || 0), "kupón", "kupóny", "kupónů"),
-              item.resultText || item.reason || item.message || null,
+              couponIds.length > 0 ? `CouponId: ${couponIds.join(", ")}` : null,
+              item.failureReason || item.skipReason || item.resultText || item.reason || item.message || null,
               item.resultType || null,
               item.resultId !== undefined ? `Result ${item.resultId}` : null
               ].filter(Boolean).join(" | "))}</span>
@@ -11584,7 +11592,7 @@ function renderMoveCouponsStepsCardHtml(steps) {
 }
 
 function getMoveCouponsSummaryText(body, moved, failed, skipped) {
-  if (String(body.status || "").toLowerCase() === "completed" && failed.length === 0) {
+  if (String(body.status || "").toLowerCase() === "completed" && failed.length === 0 && skipped.length === 0) {
     const movedCoupons = sumCouponCounts(moved);
     return movedCoupons > 0
       ? `Hotovo: přesunuto ${formatCount(movedCoupons, "kupón", "kupóny", "kupónů")} na cílový identifikátor ${body.targetIdentifierId}.`
@@ -11596,7 +11604,7 @@ function getMoveCouponsSummaryText(body, moved, failed, skipped) {
   }
 
   if (skipped.length > 0) {
-    return "Operace byla dokončena, ale některé kroky byly přeskočeny.";
+    return `Přesun není kompletní: přeskočeno ${formatCount(sumCouponCounts(skipped), "kupón", "kupóny", "kupónů")} na ${formatCount(skipped.length, "skupině", "skupinách", "skupinách")}.`;
   }
 
   return `Business status: ${body.status || "neznámý"}.`;
@@ -13438,6 +13446,7 @@ function isMoveCouponsResponse(value) {
     && !Array.isArray(value)
     && "targetIdentifierId" in value
     && Array.isArray(value.moved)
+    && Array.isArray(value.skipped)
     && Array.isArray(value.failed)
     && Array.isArray(value.steps);
 }

@@ -324,8 +324,9 @@
       "instructions": [
         "Používejte jen testovacího klienta. Tento scénář skutečně volá mutační endpoint a MOS se pokusí kupóny přesunout.",
         "Vyberte cílový identifikátor, na který mají skončit kupóny ze všech ostatních identifikátorů aktuálního klienta.",
-        "Preview před přesunem je orientační pro FE dialog. Execute používá stejnou přípravu a volá MOS best-effort pro každý zdroj.",
+        "Preview před přesunem je orientační pro FE dialog. Execute používá stejnou kandidátní množinu jako preview a volá MOS best-effort pro každý konkrétní kupón.",
         "HTTP 200 znamená, že BE request zpracoval. Business výsledek čtěte z pole status: Completed, Failed nebo PartiallyCompleted.",
+        "Výsledek execute je rozpadlý do moved/skipped/failed skupin. Každá skupina obsahuje coupons[] s konkrétními couponId.",
         "Po execute se spustí kontrolní preview nad stejným cílem; pokud vše prošlo, obvykle už nebude co přesouvat."
       ],
       "steps": [
@@ -389,7 +390,7 @@
         {
           "id": "client-coupons-move-execute",
           "title": "Provést přesun kupónů",
-          "description": "Zavolá POST /v1/client/coupons/move. Business status může být Completed, Failed nebo PartiallyCompleted podle výsledků jednotlivých zdrojů v MOS.",
+          "description": "Zavolá POST /v1/client/coupons/move. Business status může být Completed, Failed nebo PartiallyCompleted podle výsledků jednotlivých kupónů v MOS.",
           "requiresContext": ["pidCouponMoveTargetIdentifierId"],
           "readonlyContext": {
             "kind": "couponMoveTargetIdentifier",
@@ -425,6 +426,7 @@
               { "path": "$.status", "notEmpty": true },
               { "path": "$.targetIdentifierId", "notEmpty": true },
               { "path": "$.moved", "lengthAtLeast": 0 },
+              { "path": "$.skipped", "lengthAtLeast": 0 },
               { "path": "$.failed", "lengthAtLeast": 0 },
               { "path": "$.steps", "lengthAtLeast": 4 },
               { "path": "$.steps[0].name", "equals": "CustomerResolution" },
@@ -439,10 +441,12 @@
             "sourcePath": "$.failed",
             "buttonLabel": "Označit selhání",
             "selectedButtonLabel": "Selhání označeno",
-            "emptyTitle": "Bez selhaných zdrojů",
-            "emptyText": "Backend nevrátil žádný selhaný zdroj. Pokud je status Completed, přesun proběhl bez business chyb.",
+            "emptyTitle": "Bez selhaných skupin",
+            "emptyText": "Backend nevrátil žádnou selhanou skupinu kupónů. Pokud je status Completed, přesun proběhl bez business chyb.",
             "store": {
               "pidCouponFailedSourceIdentifierId": "$.sourceIdentifierId",
+              "pidCouponFailedCouponId": "$.coupons[0].couponId",
+              "pidCouponFailedReason": "$.failureReason",
               "pidCouponFailedSourceResultId": "$.resultId",
               "pidCouponFailedSourceResultType": "$.resultType"
             }
@@ -466,7 +470,7 @@
     {
       "id": "client-coupons-move-empty-or-no-source",
       "title": "Kupóny - přesun bez zdrojových kupónů",
-      "description": "Okrajový scénář pro klienta nebo cílový identifikátor, u kterého preview nevrací žádný zdroj s kupóny. Execute má skončit Completed a bez moved/failed položek.",
+      "description": "Okrajový scénář pro klienta nebo cílový identifikátor, u kterého preview nevrací žádný zdroj s kupóny. Execute má skončit Completed a bez moved/skipped/failed položek.",
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
@@ -479,7 +483,7 @@
       "instructions": [
         "Použijte testovací účet, kde ostatní identifikátory nemají žádné kupóny, případně zvolte cílový identifikátor tak, aby nebylo co přesouvat.",
         "První krok má potvrdit couponCount = 0.",
-        "Druhý krok ověřuje, že BE nevolá MOS move operaci a vrací Completed s prázdnými poli moved a failed."
+        "Druhý krok ověřuje, že BE nevolá MOS move operaci a vrací Completed s prázdnými poli moved, skipped a failed."
       ],
       "steps": [
         {
@@ -515,7 +519,7 @@
         {
           "id": "client-coupons-empty-move",
           "title": "Provést prázdný přesun",
-          "description": "Execute nad stejným cílem má vrátit Completed, prázdné moved/failed a krok MoveCouponFromToken ve stavu Skipped.",
+          "description": "Execute nad stejným cílem má vrátit Completed, prázdné moved/skipped/failed a krok MoveCouponFromToken ve stavu Skipped.",
           "requiresContext": ["pidCouponEmptyTargetIdentifierId"],
           "fields": [
             {
@@ -538,6 +542,7 @@
               { "path": "$.status", "equals": "Completed" },
               { "path": "$.targetIdentifierId", "notEmpty": true },
               { "path": "$.moved", "equals": [] },
+              { "path": "$.skipped", "equals": [] },
               { "path": "$.failed", "equals": [] },
               { "path": "$.steps[3].name", "equals": "MoveCouponFromToken" },
               { "path": "$.steps[3].status", "equals": "Skipped" }

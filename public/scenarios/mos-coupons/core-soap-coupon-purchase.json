@@ -1773,7 +1773,7 @@
     {
       "id": "mos-coupon-move-between-tokens-soap",
       "title": "MOS - přesun kupónů mezi identifikátory",
-      "description": "Jednoduchý diagnostický scénář pro MoveCouponFromToken: načte identifikátory, vybere zdroj s kupóny, vybere cílový identifikátor a přesune všechny kupóny ze zdroje na cíl.",
+      "description": "Jednoduchý diagnostický scénář pro MoveCouponFromToken: načte identifikátory, vybere zdroj s kupóny, vybere konkrétní kupón, vybere cílový identifikátor a přesune tento kupón ze zdroje na cíl.",
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
@@ -1793,9 +1793,9 @@
         "V panelu Přístup vložte Core MOS ServiceKey.",
         "Scenar automaticky nacte MOS SessionID z Redis podle PidLitacka IdentityId. Rucni MOS login je dostupny jen pres zalozku Formulare.",
         "Nejprve vyberte zdrojový identifikátor, ze kterého se mají kupóny přesunout.",
-        "Scénář potom načte kupóny na zdrojovém identifikátoru. Pokud zdroj nemá žádné kupóny, krok záměrně selže a v přesunu se nepokračuje.",
+        "Scénář potom načte kupóny na zdrojovém identifikátoru a nechá vybrat konkrétní CouponID. Pokud zdroj nemá žádné kupóny, krok záměrně selže a v přesunu se nepokračuje.",
         "Poté vyberte cílový identifikátor. Zdrojový a cílový identifikátor nesmí být stejný.",
-        "MoveCouponFromToken se volá s CouponID prázdným, tedy přesouvá všechny kupóny ze zdrojového identifikátoru."
+        "MoveCouponFromToken se volá s vybraným CouponID, stejně jako nová backendová orchestrace, která přesouvá kupóny postupně po jednotlivých ID."
       ],
       "steps": [
         {
@@ -2003,10 +2003,11 @@
         {
           "id": "mos-coupon-move-coupons",
           "title": "Přesunout kupóny na cílový identifikátor",
-          "description": "Zavolá MoveCouponFromToken s prázdným CouponID, tedy přesune všechny kupóny ze zdrojového tokenu na cílový token.",
+          "description": "Zavolá MoveCouponFromToken s konkrétním CouponID, tedy přesune vybraný kupón ze zdrojového tokenu na cílový token.",
           "requiresContext": [
             "mosCouponSessionId",
             "mosCouponSourceTokenId",
+            "mosCouponSourceCouponIdPreview",
             "mosCouponTargetTokenId"
           ],
           "fields": [
@@ -2021,6 +2022,12 @@
               "label": "Cílový TokenID",
               "type": "number",
               "value": "{{context.mosCouponTargetTokenId}}"
+            },
+            {
+              "name": "couponId",
+              "label": "CouponID",
+              "type": "number",
+              "value": "{{context.mosCouponSourceCouponIdPreview}}"
             }
           ],
           "request": {
@@ -2030,11 +2037,12 @@
             "headers": {
               "SOAPAction": "\"globdata/MoveCouponFromToken\""
             },
-            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <MoveCouponFromToken xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <CurrentTokenID>{{form.currentTokenId}}</CurrentTokenID>\n      <NewTokenID>{{form.newTokenId}}</NewTokenID>\n      <CouponID xsi:nil=\"true\" />\n    </MoveCouponFromToken>\n  </soap:Body>\n</soap:Envelope>"
+            "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\n  <soap:Body>\n    <MoveCouponFromToken xmlns=\"globdata\">\n      <ServiceKey>{{auth.apiKey}}</ServiceKey>\n      <SessionID>{{context.mosCouponSessionId}}</SessionID>\n      <CurrentTokenID>{{form.currentTokenId}}</CurrentTokenID>\n      <NewTokenID>{{form.newTokenId}}</NewTokenID>\n      <CouponID>{{form.couponId}}</CouponID>\n    </MoveCouponFromToken>\n  </soap:Body>\n</soap:Envelope>"
           },
           "remember": {
             "mosCouponSourceTokenId": "{{form.currentTokenId}}",
-            "mosCouponTargetTokenId": "{{form.newTokenId}}"
+            "mosCouponTargetTokenId": "{{form.newTokenId}}",
+            "mosCouponSourceCouponIdPreview": "{{form.couponId}}"
           },
           "expected": {
             "status": 200,
