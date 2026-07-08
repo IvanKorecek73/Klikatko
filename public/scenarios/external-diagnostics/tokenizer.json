@@ -40,6 +40,10 @@
                   "value": "https://int-api.tokenizace-mos.cz"
                 },
                 {
+                  "text": "TEST",
+                  "value": "https://test.tokenizace-mos.cz"
+                },
+                {
                   "text": "PROD (TAPI)",
                   "value": "https://tapi.tokenizace-mos.cz"
                 }
@@ -102,6 +106,131 @@
               "identValue": "{{form.identValue}}",
               "identRef": "{{form.identRef}}",
               "p1": "{{form.p1}}"
+            }
+          },
+          "expected": {
+            "statusIn": [200, 201, 400, 401, 403, 404, 409, 422, 500, 502, 503],
+            "assertions": []
+          },
+          "remember": {
+            "externalTokenizerLastIdentValue": "{{form.identValue}}",
+            "externalTokenizerLastIdentRef": "{{form.identRef}}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "external-tokenizer-create-litacka-identifier-colleague-example",
+      "title": "Tokenizator - vytvorit litacka identifikator (priklad kolegy)",
+      "description": "Prime diagnosticke volani POST /api/v1/identifier presne podle prikladu, ktery poslal kolega (Windows curl). Identifikator typu litacka s p1/p2/p3 jako retezci. Pouziva se pro overeni konektivity a spravnosti podpisu, jakmile bude dostupne sitove spojeni na tokenizator.",
+      "requiresAuth": false,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["external", "tokenizer", "litacka", "diagnostics"],
+      "app": {
+        "section": "diagnostics",
+        "title": "Externi EP",
+        "subtitle": "Tokenizator"
+      },
+      "instructions": [
+        "Prostredi tokenizatoru prepnete primo ve formulari kroku polem Prostredi. Koleguv priklad byl proti PROD (TAPI); INT je vychozi bezpecnejsi.",
+        "Do poli STP-APIKEY a API secret vlozte prihlasovaci udaje tokenizatoru (shodne s IdentifierTokenization ApiKey/Secret v BE).",
+        "Klikatko z apiSecret pro kazdy request spocita STP-TIMESTAMP a STP-SIGNATURE nad retezcem timestamp+METHOD+path+telo. Puvodni timestamp/signature z prikladu kolegy se nepouzivaji, pocitaji se cerstve pri odeslani.",
+        "Telo je zamerne shodne s prikladem kolegy: identType=litacka, p1/p2/p3 jako retezce.",
+        "Cilem je diagnostika: v Logu zkontrolujte resolvedUrl, odeslane telo, HTTP status, content-type a cele body odpovedi. Pri TLS nebo sitove chybe bude v Logu ProxyError vcetne detailu z Node proxy."
+      ],
+      "steps": [
+        {
+          "id": "external-tokenizer-create-litacka-identifier-colleague-example-call",
+          "title": "Zavolat create identifier (litacka)",
+          "description": "Odesle presnou kopii tokenizacniho volani z prikladu kolegy pro identifikator typu litacka. STP-TIMESTAMP a STP-SIGNATURE se pocitaji pri odeslani requestu.",
+          "fields": [
+            {
+              "name": "tokenizerBaseUrl",
+              "label": "Prostredi",
+              "type": "select",
+              "value": "https://int-api.tokenizace-mos.cz",
+              "options": [
+                {
+                  "text": "INT",
+                  "value": "https://int-api.tokenizace-mos.cz"
+                },
+                {
+                  "text": "TEST",
+                  "value": "https://test.tokenizace-mos.cz"
+                },
+                {
+                  "text": "PROD (TAPI)",
+                  "value": "https://tapi.tokenizace-mos.cz"
+                }
+              ]
+            },
+            {
+              "name": "apiKey",
+              "label": "STP-APIKEY",
+              "type": "password",
+              "value": "",
+              "persist": false,
+              "placeholder": "API key pro STP-APIKEY"
+            },
+            {
+              "name": "apiSecret",
+              "label": "API secret",
+              "type": "password",
+              "value": "",
+              "persist": false,
+              "placeholder": "apiSecret pro STP-SIGNATURE"
+            },
+            {
+              "name": "identType",
+              "label": "Ident type",
+              "value": "litacka"
+            },
+            {
+              "name": "identValue",
+              "label": "Ident value",
+              "value": "04421D522D5880"
+            },
+            {
+              "name": "identRef",
+              "label": "Ident ref",
+              "value": "9203111020757102"
+            },
+            {
+              "name": "p1",
+              "label": "p1",
+              "value": "2"
+            },
+            {
+              "name": "p2",
+              "label": "p2",
+              "value": "20181002",
+              "placeholder": "napr. platnost od RRRRMMDD"
+            },
+            {
+              "name": "p3",
+              "label": "p3",
+              "value": "20251002",
+              "placeholder": "napr. platnost do RRRRMMDD"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "proxyTargetBaseUrl": "{{form.tokenizerBaseUrl}}",
+            "proxyIgnoreTlsCertificateErrors": true,
+            "path": "/api/v1/identifier",
+            "headers": {
+              "STP-APIKEY": "{{form.apiKey}}",
+              "STP-TIMESTAMP": "{{stpTimestamp}}",
+              "STP-SIGNATURE": "{{stpSignature:form.apiSecret}}"
+            },
+            "body": {
+              "identType": "{{form.identType}}",
+              "identValue": "{{form.identValue}}",
+              "identRef": "{{form.identRef}}",
+              "p1": "{{form.p1}}",
+              "p2": "{{form.p2}}",
+              "p3": "{{form.p3}}"
             }
           },
           "expected": {
