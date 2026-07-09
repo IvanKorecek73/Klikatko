@@ -132,7 +132,7 @@
               "parkingSectionCode": "{{form.parkingSectionCode}}",
               "requestedMinutes": "{{form.requestedMinutes}}",
               "paymentDetails": {
-                "paymentMethod": "Card",
+                "paymentMethod": "PaymentCard",
                 "createCardToken": true,
                 "cardToken": null,
                 "returnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}",
@@ -252,7 +252,7 @@
               "parkingSectionCode": "{{form.parkingSectionCode}}",
               "requestedMinutes": "{{form.requestedMinutes}}",
               "paymentDetails": {
-                "paymentMethod": "Card",
+                "paymentMethod": "PaymentCard",
                 "createCardToken": true,
                 "cardToken": null,
                 "returnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}",
@@ -469,7 +469,7 @@
               "parkingSectionCode": "{{form.parkingSectionCode}}",
               "requestedMinutes": "{{form.requestedMinutes}}",
               "paymentDetails": {
-                "paymentMethod": "Card",
+                "paymentMethod": "PaymentCard",
                 "savePaymentCard": "{{form.savePaymentCard}}",
                 "returnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}",
                 "automaticPaymentResultProcessing": false,

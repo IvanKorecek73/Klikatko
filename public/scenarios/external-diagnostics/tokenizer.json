@@ -33,8 +33,12 @@
               "name": "tokenizerBaseUrl",
               "label": "Prostredi",
               "type": "select",
-              "value": "https://int-api.tokenizace-mos.cz",
+              "value": "https://pre-tokenizace.mos.oict.cz",
               "options": [
+                {
+                  "text": "PRE (pre-tokenizace)",
+                  "value": "https://pre-tokenizace.mos.oict.cz"
+                },
                 {
                   "text": "INT",
                   "value": "https://int-api.tokenizace-mos.cz"
@@ -44,8 +48,16 @@
                   "value": "https://test.tokenizace-mos.cz"
                 },
                 {
+                  "text": "TEST2",
+                  "value": "https://test-tokenizace-mos.cz"
+                },
+                {
                   "text": "PROD (TAPI)",
                   "value": "https://tapi.tokenizace-mos.cz"
+                },
+                {
+                  "text": "IP 10.200.0.150",
+                  "value": "https://10.200.0.150"
                 }
               ]
             },
@@ -149,8 +161,12 @@
               "name": "tokenizerBaseUrl",
               "label": "Prostredi",
               "type": "select",
-              "value": "https://int-api.tokenizace-mos.cz",
+              "value": "https://pre-tokenizace.mos.oict.cz",
               "options": [
+                {
+                  "text": "PRE (pre-tokenizace)",
+                  "value": "https://pre-tokenizace.mos.oict.cz"
+                },
                 {
                   "text": "INT",
                   "value": "https://int-api.tokenizace-mos.cz"
@@ -160,8 +176,16 @@
                   "value": "https://test.tokenizace-mos.cz"
                 },
                 {
+                  "text": "TEST2",
+                  "value": "https://test-tokenizace-mos.cz"
+                },
+                {
                   "text": "PROD (TAPI)",
                   "value": "https://tapi.tokenizace-mos.cz"
+                },
+                {
+                  "text": "IP 10.200.0.150",
+                  "value": "https://10.200.0.150"
                 }
               ]
             },

@@ -9255,6 +9255,84 @@ async function readResponseBody(response) {
   return parseResponse(raw);
 }
 
+function isExternalTokenizerStep(step) {
+  return typeof step?.id === "string" && step.id.startsWith("external-tokenizer");
+}
+
+function getTokenizerTokens(body) {
+  return body && typeof body === "object" && Array.isArray(body.tokens) ? body.tokens : null;
+}
+
+function isTokenizerServiceUnavailableHtml(body) {
+  if (typeof body !== "string") {
+    return false;
+  }
+  const lower = body.toLowerCase();
+  if (!lower.includes("<html") && !lower.includes("<!doctype html")) {
+    return false;
+  }
+  return body.includes("Tato služba není dostupná")
+    || lower.includes("step--404")
+    || lower.includes("error-404");
+}
+
+function evaluateExternalTokenizerStep(step, status, body) {
+  const tokens = getTokenizerTokens(body);
+  if (tokens) {
+    const activeCount = tokens.filter(token => (token.tokenState || token.state) === "active").length;
+    const tokenWord = tokens.length === 1 ? "token" : tokens.length >= 2 && tokens.length <= 4 ? "tokeny" : "tokenů";
+    return {
+      level: "ok",
+      appMessage: `Tokenizátor je DOSTUPNÝ — vrátil ${tokens.length} ${tokenWord}`
+        + `${body.identState ? ` (identState: ${body.identState})` : ""}.`,
+      messages: [
+        `HTTP ${status}. Služba odpověděla platným tokenizačním JSON.`,
+        activeCount ? `Aktivních tokenů: ${activeCount} z ${tokens.length}.` : "",
+        tokens.map((token, index) => `token[${index}] v${token.tokenVersion ?? "?"} ${token.tokenState || ""}`.trim()).join(" | ")
+      ].filter(Boolean)
+    };
+  }
+
+  if (isTokenizerServiceUnavailableHtml(body)) {
+    return {
+      level: "warn",
+      appMessage: `Tokenizátor zatím NENÍ dostupný — vrátil HTML stránku „Tato služba není dostupná“ (HTTP ${status}).`,
+      messages: [
+        "Server odpověděl, ale místo tokenizačního JSON vrátil chybovou HTML stránku (Switchio/Monet+).",
+        "Zkuste to znovu později — jakmile služba naběhne, uvidíte zde počet vrácených tokenů."
+      ]
+    };
+  }
+
+  if (typeof body === "string") {
+    const looksLikeHtml = /<html|<!doctype html/i.test(body);
+    return {
+      level: "warn",
+      appMessage: looksLikeHtml
+        ? `Tokenizátor vrátil HTML místo JSON (HTTP ${status}) — pravděpodobně ještě není dostupný.`
+        : `Tokenizátor vrátil neočekávanou textovou odpověď (HTTP ${status}).`,
+      messages: [body.slice(0, 300)]
+    };
+  }
+
+  if (body && typeof body === "object") {
+    const errorText = body.message || body.error || body.detail || body.title;
+    return {
+      level: status >= 400 ? "warn" : "ok",
+      appMessage: errorText
+        ? `Tokenizátor odpověděl (HTTP ${status}): ${errorText}`
+        : `Tokenizátor odpověděl JSON (HTTP ${status}), ale bez pole tokens.`,
+      messages: [JSON.stringify(body).slice(0, 500)]
+    };
+  }
+
+  return {
+    level: "warn",
+    appMessage: `Tokenizátor vrátil prázdnou odpověď (HTTP ${status}).`,
+    messages: ["Odpověď neobsahovala žádné tělo."]
+  };
+}
+
 function evaluateStep(step, status, body) {
   const expected = step.expected || {};
   const messages = [];
@@ -9284,6 +9362,10 @@ function evaluateStep(step, status, body) {
         body?.detail || body?.title || ""
       ].filter(Boolean)
     };
+  }
+
+  if (isExternalTokenizerStep(step)) {
+    return evaluateExternalTokenizerStep(step, status, body);
   }
 
   if (expected.status !== undefined && expected.status !== status) {

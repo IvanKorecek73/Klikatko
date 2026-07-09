@@ -1041,7 +1041,7 @@
             "body": {
               "orderId": "{{form.orderId}}",
               "paymentDetails": {
-                "paymentMethod": "Card",
+                "paymentMethod": "PaymentCard",
                 "returnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}",
                 "automaticPaymentResultProcessing": false
               }
@@ -1530,7 +1530,7 @@
             "body": {
               "orderId": "{{form.orderId}}",
               "paymentDetails": {
-                "paymentMethod": "Card",
+                "paymentMethod": "PaymentCard",
                 "returnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}",
                 "automaticPaymentResultProcessing": false
               }
@@ -1689,7 +1689,7 @@
             "body": {
               "orderId": "00000000-0000-0000-0000-000000000000",
               "paymentDetails": {
-                "paymentMethod": "Card",
+                "paymentMethod": "PaymentCard",
                 "returnUrlFromPaymentGateway": "http://localhost:5096/analysis/html/GwResponsePage.html",
                 "automaticPaymentResultProcessing": false
               }
@@ -1710,7 +1710,7 @@
             "body": {
               "orderId": "11111111-1111-1111-1111-111111111111",
               "paymentDetails": {
-                "paymentMethod": "Card",
+                "paymentMethod": "PaymentCard",
                 "returnUrlFromPaymentGateway": "http://localhost:5096/analysis/html/GwResponsePage.html",
                 "automaticPaymentResultProcessing": true
               }

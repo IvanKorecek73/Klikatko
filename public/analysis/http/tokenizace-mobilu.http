@@ -1,0 +1,19 @@
+### Tokenizace — litacka (příklad kolegy). Přepni @host podle prostředí.
+@host = https://pre-tokenizace.mos.oict.cz
+# @host = https://test-tokenizace-mos.cz
+# @host = https://int-api.tokenizace-mos.cz
+# @host = https://tapi.tokenizace-mos.cz
+# @host = https://10.200.0.150
+# @host = https://test.tokenizace.mos.oict.cz
+
+@apiKey = 9c0f5009f5ab43a9bddfdce837e30e80
+@ts  = 1783496833
+@sig = 81430a007227b2a61f9abf3077d003f37c64dcf938c05d04dae221e750ba379d
+
+POST {{host}}/api/v1/identifier
+Content-Type: application/json
+STP-APIKEY: {{apiKey}}
+STP-TIMESTAMP: {{ts}}
+STP-SIGNATURE: {{sig}}
+
+{"identType":"litacka","identValue":"04421D522D5880","identRef":"9203111020757102","p1":"2","p2":"20181002","p3":"20251002"}
