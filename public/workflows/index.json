@@ -142,12 +142,35 @@
       "id": "pidlitacka-client-with-card-coupon",
       "name": "PidLitacka - klient s kupónem placeným kartou v mobilu",
       "description": "Jako pidlitacka-client-with-phone-and-card, ale kupón se platí kartou v mobilu přes BE PidLitacka (ne přes pobočku). Od založení a aktivace uživatele, přes klientská data, tokenizaci telefonu a karty, kontrolu identifikátorů a zjištění placené zóny (GetTokenTariffs) až po kartovou platbu s ručním průchodem branou. Čistá data každý běh = scénáře nejsou falešně negativní.",
-      "tags": ["pidlitacka", "client", "coupons", "card-payment", "setup"],
+      "tags": [
+        "pidlitacka",
+        "client",
+        "coupons",
+        "card-payment",
+        "setup"
+      ],
       "inputs": [
-        { "name": "userName", "label": "E-mail nového uživatele", "placeholder": "nech prázdné = výchozí ze scénáře" },
-        { "name": "password", "label": "Heslo", "secret": true, "placeholder": "nech prázdné = výchozí ze scénáře" },
-        { "name": "name", "label": "Jméno / firma na dokladu (fakturace)", "value": "Jan Testovaci" },
-        { "name": "returnUrlFromPaymentGateway", "label": "Návratová URL z platební brány", "value": "http://localhost:5096/analysis/html/GwResponsePage.html" }
+        {
+          "name": "userName",
+          "label": "E-mail nového uživatele",
+          "placeholder": "nech prázdné = výchozí ze scénáře"
+        },
+        {
+          "name": "password",
+          "label": "Heslo",
+          "secret": true,
+          "placeholder": "nech prázdné = výchozí ze scénáře"
+        },
+        {
+          "name": "name",
+          "label": "Jméno / firma na dokladu (fakturace)",
+          "value": "Jan Testovaci"
+        },
+        {
+          "name": "returnUrlFromPaymentGateway",
+          "label": "FE návratový target pro GW → BE → FE",
+          "value": "http://localhost:5096/analysis/html/GwResponsePage.html?flow=coupon-card-gw-be-fe&target=unchanged#gw-be-fe"
+        }
       ],
       "items": [
         {
@@ -215,19 +238,42 @@
           "packId": "pidlitacka-coupons",
           "scenarioId": "client-coupons-purchase-card-full-flow",
           "title": "Koupit kupón kartou v mobilu",
-          "description": "BE PidLitacka kartová platba. Krok Nabídka použije zóny vybrané v předchozím MOS lookupu (např. P + 0), protože samotné P je zdarma → 0 Kč → kartovou platbu nelze zahájit. Workflow se zastaví po inicializaci platby kvůli ručnímu průchodu branou; úklidové zrušení objednávky se po úspěšné platbě automaticky přeskočí.",
+          "description": "BE PidLitacka kartova platba. FE pri initiate posle presny navratovy target, BE preda MOS/GDPay svuj gateway-return callback a po gateway POSTu vrati 303 na puvodni FE target. Workflow se zastavi kvuli rucnimu pruchodu branou a potom polluje payment-status az do finalniho stavu.",
           "stopAfter": [
             {
               "stepId": "client-coupons-purchase-card-initiate-payment",
               "message": "Otevřete platební bránu a zaplaťte kartou.",
               "preserveResult": true,
               "instructions": [
-                "V odpovědi kroku je paymentGatewayRedirectUrl.",
-                "Otevřete URL v prohlížeči a dokončete testovací platbu kartou.",
-                "Po návratu z brány zkopírujte raw payment data z GwResponsePage.html.",
-                "Vložte je v dalším kroku do pole Payment gateway data a pokračujte — gateway-result dokončí nákup a ověří kupón."
+                "V odpovedi kroku je paymentGatewayRedirectUrl.",
+                "Otevrete URL v novem panelu prohlizece a dokoncete testovaci platbu kartou.",
+                "Brana odesle POST na BE gateway-return. BE jej zpracuje a vrati 303 na presny FE target poslany pri initiate.",
+                "Na GwResponsePage musi byt zeleny vysledek GW -> BE -> FE: URL je beze zmeny, BE nepridalo orderId/status a FE nedostalo POST body.",
+                "Vratte se do puvodniho panelu Klikatka a pokracujte ve workflow. Dalsi krok opakovane vola payment-status.",
+                "Pokud payment-status vrati pending, krok zopakujte; workflow nepusti dalsi kroky, dokud neprijde finalni paid.",
+                "Teprve potom pokracujte detailem objednavky a stazenim dokladu."
               ],
-              "contextKeys": ["pidCouponPurchaseOrderId", "pidCouponPurchasePaymentGatewayReference", "pidCouponPurchasePaymentGatewayRedirectUrl"]
+              "contextKeys": [
+                "pidCouponPurchaseOrderId",
+                "pidCouponPurchasePaymentGatewayReference",
+                "pidCouponPurchasePaymentGatewayRedirectUrl",
+                "pidCouponPurchaseFrontendReturnDeepLink"
+              ]
+            },
+            {
+              "stepId": "client-coupons-purchase-card-payment-status",
+              "message": "Zkontrolujte stav platby a pripadne polling krok zopakujte.",
+              "preserveResult": true,
+              "instructions": [
+                "Vysledek kroku ukazuje aktualni payment-status pro objednavku.",
+                "Pokud je status pending, zustante na tomto kroku a kliknete na Zopakovat krok, dokud neuvidite finalni stav.",
+                "Workflow po pending nepokracuje na doklad; dalsi kroky spoustejte az po statusu paid.",
+                "Pokud je status paid, muzete kliknout na Pokracovat ve workflow a prejit na detail objednavky a doklad."
+              ],
+              "contextKeys": [
+                "pidCouponPurchaseOrderId",
+                "pidCouponPurchasePaymentStatus"
+              ]
             }
           ]
         },
@@ -264,7 +310,8 @@
           "mosLookupSelectedPrice",
           "pidCouponPurchaseOrderId",
           "pidCouponPurchasePaymentGatewayReference",
-          "pidCouponPurchaseCouponCreated",
+          "pidCouponPurchaseFrontendReturnDeepLink",
+          "pidCouponPurchasePaymentStatus",
           "pidCouponPurchaseOrderStatus",
           "mosCouponOrderId",
           "pidCouponReceiptMosOrderId"

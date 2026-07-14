@@ -7774,7 +7774,7 @@ function syncCompletedWorkflowStepResults(item, scenario) {
   for (let index = 0; index < scenario.steps.length; index += 1) {
     const result = state.stepResults[String(index)];
 
-    if (!result || result.level === "error") {
+    if (!result || result.level === "error" || result.blockAdvance) {
       continue;
     }
 
@@ -7818,7 +7818,7 @@ function findFirstIncompleteWorkflowStepIndex(scenario) {
 
     const result = state.stepResults[String(index)];
 
-    if (!result || result.level === "error") {
+    if (!result || result.level === "error" || result.blockAdvance) {
       return index;
     }
 
@@ -9387,7 +9387,8 @@ function evaluateStep(step, status, body) {
     return {
       level: "warn",
       appMessage: warnings[0].appMessage || warnings[0].message || makeAppMessage(body, status, "warn"),
-      messages
+      messages,
+      blockAdvance: warnings.some(warning => warning.blockAdvance)
     };
   }
 
@@ -9400,11 +9401,11 @@ function evaluateStep(step, status, body) {
       : undefined;
 
     if (assertion.equals !== undefined && !deepEqual(actual, expectedValue)) {
-      failures.push(`Očekáváno ${assertion.path} = ${JSON.stringify(expectedValue)}, vráceno ${JSON.stringify(actual)}.`);
+      failures.push(assertion.message || `Očekáváno ${assertion.path} = ${JSON.stringify(expectedValue)}, vráceno ${JSON.stringify(actual)}.`);
     }
 
     if (assertion.notEmpty && isEmpty(actual)) {
-      failures.push(`Očekáváno, že ${assertion.path} nebude prázdné.`);
+      failures.push(assertion.message || `Očekáváno, že ${assertion.path} nebude prázdné.`);
     }
 
     if (assertion.regex !== undefined && !(new RegExp(assertion.regex, "is")).test(String(actual || ""))) {
@@ -9412,15 +9413,15 @@ function evaluateStep(step, status, body) {
     }
 
     if (assertion.lengthEquals !== undefined && (!Array.isArray(actual) || actual.length !== assertion.lengthEquals)) {
-      failures.push(`Očekáváno, že ${assertion.path} bude mít ${assertion.lengthEquals} položek, vráceno ${Array.isArray(actual) ? actual.length : JSON.stringify(actual)}.`);
+      failures.push(assertion.message || `Očekáváno, že ${assertion.path} bude mít ${assertion.lengthEquals} položek, vráceno ${Array.isArray(actual) ? actual.length : JSON.stringify(actual)}.`);
     }
 
     if (assertion.lengthAtLeast !== undefined && (!Array.isArray(actual) || actual.length < assertion.lengthAtLeast)) {
-      failures.push(`Očekáváno, že ${assertion.path} bude mít alespoň ${assertion.lengthAtLeast} položek.`);
+      failures.push(assertion.message || `Očekáváno, že ${assertion.path} bude mít alespoň ${assertion.lengthAtLeast} položek.`);
     }
 
     if (assertion.atLeast !== undefined && (typeof actual !== "number" || actual < assertion.atLeast)) {
-      failures.push(`Očekáváno ${assertion.path} >= ${assertion.atLeast}, vráceno ${JSON.stringify(actual)}.`);
+      failures.push(assertion.message || `Očekáváno ${assertion.path} >= ${assertion.atLeast}, vráceno ${JSON.stringify(actual)}.`);
     }
   }
 
@@ -9819,7 +9820,7 @@ function getCurrentStepResult() {
 function canAdvanceFromCurrentStep() {
   const result = getCurrentStepResult();
 
-  if (!state.scenario || !currentStep() || !result || result.level === "error") {
+  if (!state.scenario || !currentStep() || !result || result.level === "error" || result.blockAdvance) {
     return false;
   }
 

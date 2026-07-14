@@ -689,12 +689,18 @@
     {
       "id": "client-coupons-purchase-card-full-flow",
       "title": "Kupony - nakup kartou",
-      "description": "Plny rucni scenar pro nakup kuponu kartou pres BE a MOS V19/GDPay: overi vstupni podminky klienta, vybere identifikator, nacte nabidku, vytvori objednavku, inicializuje kartovou platbu a zpracuje navratova data z platebni brany.",
+      "description": "Plny rucni scenar pro nakup kuponu kartou pres BE a MOS V19/GDPay: FE posle vlastni navratovy target, BE preda brane svuj gateway-return callback, po platbe zpracuje POST a pres 303 presmeruje prohlizec na puvodni FE target beze zmeny. Nakonec scenar overi stav pres BE polling/detail.",
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "prewarmReturnUrl": true,
-      "tags": ["profile", "coupons", "purchase", "payment-card", "client-save"],
+      "prewarmReturnUrl": false,
+      "tags": [
+        "profile",
+        "coupons",
+        "purchase",
+        "payment-card",
+        "client-save"
+      ],
       "app": {
         "section": "profile",
         "title": "Kupony",
@@ -704,10 +710,10 @@
         "Pouzijte jen testovaciho klienta. Scenar vytvari realnou objednavku v MOS a inicializuje platbu kartou pres MOS V19/GDPay.",
         "V zalozce Uzivatel musi byt pripraven BE JWT a platna MOS session.",
         "Prvni krok vola GET /v1/client/coupons/purchase/options a overi, ze klient je eligible, ma alespon jeden purchasable identifikator a muze pokracovat do nakupu.",
-        "Po vyberu identifikatoru lze upravit datum zacatku a zony. Vychozi pozitivni cesta pouziva zonu P stejne jako pripravny MOS pobočkovy workflow; jine zony volte jen pokud vite, ze jsou pro dany ucet, datum a tarif cenitelne.",
-        "Krok s nabidkou pracuje s prvnim tarifnim blokem v odpovedi. Vybrany tarif lze v dalsim kroku rucne prepsat.",
-        "Po inicializaci kartove platby otevrite paymentGatewayRedirectUrl mimo Klikatko. Vychozi navratova URL miri na lokalni GwResponsePage.html, kde lze zkopirovat raw navratova data pro posledni krok.",
-        "Kartovy redirect pro kupony nepouziva SDK ani browser payload v requestu; 3DS probiha na hostovane strance platebni brany.",
+        "Po vyberu identifikatoru lze upravit datum zacatku a zony. Vychozi pozitivni cesta pouziva P + 0, aby mela platba kladnou cenu.",
+        "Po inicializaci kartove platby otevrite paymentGatewayRedirectUrl v novem panelu. Navrat z platebni brany jde POSTem na BE gateway-return, ktery jej zpracuje a vrati 303 na FE target poslany pri initiate.",
+        "Vychozi FE target vede na univerzalni GwResponsePage s kontrolnimi markery. Cilova stranka musi potvrdit nezmenenou URL, zadne BE-pridane orderId/status a zadne gateway POST body na FE.",
+        "Po navratu z brany se vratte do puvodniho panelu Klikatka a pokracujte pollingem payment-status a detailem objednavky. Pokud je stav stale pending, pockejte chvili a krok zopakujte.",
         "Pokud nechcete platbu dokoncovat, pouzijte krok Zrusit objednavku, aby v BE nezustala otevrena testovaci objednavka."
       ],
       "steps": [
@@ -719,16 +725,24 @@
             "method": "GET",
             "path": "/v1/client/coupons/purchase/options",
             "headers": {
-              "X-Device-Id": "{{context.pidCurrentDeviceId}}",
-              "X-Device-RegId": "{{context.pidCurrentDeviceRegId}}"
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
             }
           },
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.eligible", "equals": true },
-              { "path": "$.blockers", "equals": [] },
-              { "path": "$.identifiers", "lengthAtLeast": 1 },
+              {
+                "path": "$.eligible",
+                "equals": true
+              },
+              {
+                "path": "$.blockers",
+                "equals": []
+              },
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 1
+              },
               {
                 "path": "$.identifiers",
                 "containsItem": {
@@ -754,7 +768,9 @@
               "pidCouponPurchaseIdentifierMaskedValue": "$.identifier.maskedPan",
               "pidCouponPurchaseIdentifierIsThisDevice": "$.isThisDevice",
               "pidCouponPurchaseDefaultStartDate": "$.defaultStartDate",
-              "pidCouponPurchaseMaxStartDate": { "bodyPath": "$.maxStartDate" },
+              "pidCouponPurchaseMaxStartDate": {
+                "bodyPath": "$.maxStartDate"
+              },
               "pidCouponPurchaseActiveCouponZones": "$.activeCouponZoneLabels"
             }
           }
@@ -763,7 +779,9 @@
           "id": "client-coupons-purchase-card-offer",
           "title": "Nacist nabidku kuponu",
           "description": "Zavola GET /v1/client/coupons/purchase/offer pro vybrany identifikator, datum zacatku a zony.",
-          "requiresContext": ["pidCouponPurchaseIdentifierId"],
+          "requiresContext": [
+            "pidCouponPurchaseIdentifierId"
+          ],
           "fields": [
             {
               "name": "identifierId",
@@ -785,20 +803,59 @@
               "label": "Zony",
               "type": "tag-list",
               "value": "{{context.mosLookupSelectedZoneNames}}",
-              "fallbackValue": ["P", "0"],
+              "fallbackValue": [
+                "P",
+                "0"
+              ],
               "options": [
-                { "value": "P", "text": "P" },
-                { "value": "0", "text": "0" },
-                { "value": "B", "text": "B" },
-                { "value": "1", "text": "1" },
-                { "value": "2", "text": "2" },
-                { "value": "3", "text": "3" },
-                { "value": "4", "text": "4" },
-                { "value": "5", "text": "5" },
-                { "value": "6", "text": "6" },
-                { "value": "7", "text": "7" },
-                { "value": "8", "text": "8" },
-                { "value": "9", "text": "9" }
+                {
+                  "value": "P",
+                  "text": "P"
+                },
+                {
+                  "value": "0",
+                  "text": "0"
+                },
+                {
+                  "value": "B",
+                  "text": "B"
+                },
+                {
+                  "value": "1",
+                  "text": "1"
+                },
+                {
+                  "value": "2",
+                  "text": "2"
+                },
+                {
+                  "value": "3",
+                  "text": "3"
+                },
+                {
+                  "value": "4",
+                  "text": "4"
+                },
+                {
+                  "value": "5",
+                  "text": "5"
+                },
+                {
+                  "value": "6",
+                  "text": "6"
+                },
+                {
+                  "value": "7",
+                  "text": "7"
+                },
+                {
+                  "value": "8",
+                  "text": "8"
+                },
+                {
+                  "value": "9",
+                  "text": "9"
+                }
               ],
               "emptyText": "Doplnte alespon jednu zonu, napriklad P a 0 pro prazsky kupon."
             }
@@ -815,9 +872,18 @@
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.identifierId", "equals": "{{form.identifierId}}" },
-              { "path": "$.tariffGroups", "lengthAtLeast": 1 },
-              { "path": "$.tariffGroups[0].items", "lengthAtLeast": 1 }
+              {
+                "path": "$.identifierId",
+                "equals": "{{form.identifierId}}"
+              },
+              {
+                "path": "$.tariffGroups",
+                "lengthAtLeast": 1
+              },
+              {
+                "path": "$.tariffGroups[0].items",
+                "lengthAtLeast": 1
+              }
             ]
           },
           "selection": {
@@ -841,7 +907,10 @@
           "id": "client-coupons-purchase-card-create-order",
           "title": "Vytvorit objednavku kuponu",
           "description": "Zavola POST /v1/client/coupons/purchase/orders a ulozi lokalni orderId pro rekapitulaci a platbu.",
-          "requiresContext": ["pidCouponPurchaseIdentifierId", "pidCouponPurchaseTariffId"],
+          "requiresContext": [
+            "pidCouponPurchaseIdentifierId",
+            "pidCouponPurchaseTariffId"
+          ],
           "fields": [
             {
               "name": "identifierId",
@@ -892,9 +961,18 @@
           "expected": {
             "status": 201,
             "assertions": [
-              { "path": "$.orderId", "notEmpty": true },
-              { "path": "$.totalPrice", "atLeast": 0 },
-              { "path": "$.priceCurrency", "equals": "CZK" }
+              {
+                "path": "$.orderId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.totalPrice",
+                "atLeast": 0
+              },
+              {
+                "path": "$.priceCurrency",
+                "equals": "CZK"
+              }
             ]
           }
         },
@@ -902,7 +980,9 @@
           "id": "client-coupons-purchase-card-order-detail",
           "title": "Nacist rekapitulaci objednavky",
           "description": "Zavola GET /v1/client/coupons/purchase/orders/{orderId} a overi data objednavky pred platbou.",
-          "requiresContext": ["pidCouponPurchaseOrderId"],
+          "requiresContext": [
+            "pidCouponPurchaseOrderId"
+          ],
           "fields": [
             {
               "name": "orderId",
@@ -924,12 +1004,30 @@
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.orderId", "equals": "{{form.orderId}}" },
-              { "path": "$.identifierId", "notEmpty": true },
-              { "path": "$.status", "notEmpty": true },
-              { "path": "$.zoneNames", "lengthAtLeast": 1 },
-              { "path": "$.totalPrice", "atLeast": 0 },
-              { "path": "$.priceCurrency", "equals": "CZK" }
+              {
+                "path": "$.orderId",
+                "equals": "{{form.orderId}}"
+              },
+              {
+                "path": "$.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.status",
+                "notEmpty": true
+              },
+              {
+                "path": "$.zoneNames",
+                "lengthAtLeast": 1
+              },
+              {
+                "path": "$.totalPrice",
+                "atLeast": 0
+              },
+              {
+                "path": "$.priceCurrency",
+                "equals": "CZK"
+              }
             ]
           }
         },
@@ -937,7 +1035,9 @@
           "id": "client-coupons-purchase-card-receipt-details",
           "title": "Doplnit fakturacni udaje",
           "description": "Zavola PUT /v1/client/coupons/purchase/orders/{orderId}/receipt-details. Core MOS vyzaduje fakturacni adresu na objednavce pred zaplacenim drazsiho kuponu. Jmeno/firma a adresa se posilaji v requestu; IČO/DIČ jen pro firemni doklad.",
-          "requiresContext": ["pidCouponPurchaseOrderId"],
+          "requiresContext": [
+            "pidCouponPurchaseOrderId"
+          ],
           "workflowStop": {
             "message": "Zkontrolujte fakturacni udaje pred platbou.",
             "instructions": [
@@ -1019,8 +1119,10 @@
         {
           "id": "client-coupons-purchase-card-initiate-payment",
           "title": "Inicializovat kartovou platbu",
-          "description": "Zavola POST /v1/client/coupons/purchase/payment/card/initiate a vrati V19/GDPay redirect URL platebni brany.",
-          "requiresContext": ["pidCouponPurchaseOrderId"],
+          "description": "Zavola POST /v1/client/coupons/purchase/payment/card/initiate. ReturnUrlFromPaymentGateway zde predstavuje presny FE target, ktery BE ulozi. Do MOS/GDPay BE sam posle svou nakonfigurovanou gateway-return URL a vrati redirect URL platebni brany.",
+          "requiresContext": [
+            "pidCouponPurchaseOrderId"
+          ],
           "fields": [
             {
               "name": "orderId",
@@ -1029,10 +1131,9 @@
             },
             {
               "name": "returnUrlFromPaymentGateway",
-              "label": "Navratova URL",
-              "type": "url",
-              "value": "http://localhost:5096/analysis/html/GwResponsePage.html",
-              "placeholder": "URL, kam brana vrati payment data"
+              "label": "FE návratový target (ReturnUrlFromPaymentGateway)",
+              "type": "text",
+              "value": "http://localhost:5096/analysis/html/GwResponsePage.html?flow=coupon-card-gw-be-fe&target=unchanged#gw-be-fe"
             }
           ],
           "request": {
@@ -1049,7 +1150,7 @@
           },
           "remember": {
             "pidCouponPurchaseOrderId": "{{form.orderId}}",
-            "pidCouponPurchaseReturnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}"
+            "pidCouponPurchaseFrontendReturnDeepLink": "{{form.returnUrlFromPaymentGateway}}"
           },
           "extract": {
             "pidCouponPurchasePaymentGatewayReference": "$.paymentGatewayReference",
@@ -1058,58 +1159,135 @@
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.couponSuccessfullyCreated", "equals": false },
-              { "path": "$.paymentGatewayReference", "notEmpty": true },
-              { "path": "$.paymentGatewayRedirectUrl", "notEmpty": true },
-              { "path": "$.order.orderId", "equals": "{{form.orderId}}" }
+              {
+                "path": "$.couponSuccessfullyCreated",
+                "equals": false
+              },
+              {
+                "path": "$.paymentGatewayReference",
+                "notEmpty": true
+              },
+              {
+                "path": "$.paymentGatewayRedirectUrl",
+                "notEmpty": true
+              },
+              {
+                "path": "$.order.orderId",
+                "equals": "{{form.orderId}}"
+              }
             ]
           }
         },
         {
-          "id": "client-coupons-purchase-card-process-gateway-result",
-          "title": "Zpracovat navrat z platebni brany",
-          "description": "Po dokonceni platby vlozte raw payment data vratena platebni branou a zavolejte POST /v1/client/coupons/purchase/payment/card/gateway-result.",
-          "requiresContext": ["pidCouponPurchaseOrderId"],
+          "id": "client-coupons-purchase-card-payment-status",
+          "title": "Pollovat stav platby",
+          "description": "Rucni polling po navratu z platebni brany. Opakovane volejte GET /v1/client/coupons/purchase/orders/{orderId}/payment-status tlacitkem Zopakovat krok, dokud status neni paid.",
+          "requiresContext": [
+            "pidCouponPurchaseOrderId"
+          ],
+          "workflowStop": {
+            "message": "Dokoncete platbu v platebni brane a pollujte stav platby.",
+            "instructions": [
+              "V predchozi odpovedi je paymentGatewayRedirectUrl.",
+              "Otevrete URL v prohlizeci a dokoncete testovaci platbu kartou.",
+              "Brana odesle POST na BE gateway-return. BE data zpracuje a pres 303 presmeruje na ulozeny FE target; raw payment data se do Klikatka nekopiruji.",
+              "Na GwResponsePage zkontrolujte zeleny vysledek GW -> BE -> FE: presna URL, zadne orderId/status navic a zadne POST body na FE.",
+              "Pak se vratte do puvodniho panelu Klikatka.",
+              "Tento krok opakovane spoustejte, dokud status neni finalni. Pending je validni mezistav a nepousti workflow dal.",
+              "Na stazeni dokladu a dalsi kroky pokracujte az po statusu paid."
+            ]
+          },
           "fields": [
             {
               "name": "orderId",
               "label": "Order ID",
               "value": "{{context.pidCouponPurchaseOrderId}}"
-            },
-            {
-              "name": "paymentData",
-              "label": "Payment gateway data",
-              "type": "textarea",
-              "value": "",
-              "placeholder": "Raw data z platebni brany"
             }
           ],
           "request": {
-            "method": "POST",
-            "path": "/v1/client/coupons/purchase/payment/card/gateway-result",
-            "body": {
-              "orderId": "{{form.orderId}}",
-              "paymentData": "{{form.paymentData}}"
-            }
+            "method": "GET",
+            "path": "/v1/client/coupons/purchase/orders/{{form.orderId}}/payment-status"
           },
           "remember": {
             "pidCouponPurchaseOrderId": "{{form.orderId}}"
           },
           "extract": {
-            "pidCouponPurchaseCouponCreated": "$.couponSuccessfullyCreated",
-            "pidCouponPurchaseOrderStatus": "$.order.status",
-            "pidCouponPurchaseOrderTariffProfileName": "$.order.tariffProfileName",
-            "pidCouponPurchaseOrderValidFrom": "$.order.validFrom",
-            "pidCouponPurchaseOrderValidTill": "$.order.validTill"
+            "pidCouponPurchasePaymentStatus": "$.status"
+          },
+          "expected": {
+            "status": 200,
+            "warnings": [
+              {
+                "appMessage": "Platba je stale ve zpracovani. Pockejte chvili a kliknete na Zopakovat krok.",
+                "message": "payment-status vratil pending. Jde o ocekavany mezistav; FE ma endpoint pollovat, dokud se stav nezmeni na finalni. Workflow zustava na tomto kroku.",
+                "blockAdvance": true,
+                "when": [
+                  {
+                    "path": "$.status",
+                    "equals": "pending"
+                  }
+                ]
+              }
+            ],
+            "assertions": [
+              {
+                "path": "$.orderId",
+                "equals": "{{form.orderId}}"
+              },
+              {
+                "path": "$.status",
+                "equals": "paid",
+                "message": "Pro happy-path nakup kuponu kartou musi polling skoncit stavem paid. Stav cancelled je finalni, ale nelze po nem pokracovat stazenim dokladu."
+              }
+            ]
+          }
+        },
+        {
+          "id": "client-coupons-purchase-card-order-detail-after-payment",
+          "title": "Nacist objednavku po platbe",
+          "description": "Overi detail objednavky po BE gateway-return zpracovani. Detail ma po zaplaceni ukazat CouponReady a data kuponu.",
+          "requiresContext": [
+            "pidCouponPurchaseOrderId"
+          ],
+          "fields": [
+            {
+              "name": "orderId",
+              "label": "Order ID",
+              "value": "{{context.pidCouponPurchaseOrderId}}"
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons/purchase/orders/{{form.orderId}}"
+          },
+          "remember": {
+            "pidCouponPurchaseOrderId": "{{form.orderId}}"
+          },
+          "extract": {
+            "pidCouponPurchaseOrderStatus": "$.status",
+            "pidCouponPurchaseOrderTariffProfileName": "$.tariffProfileName",
+            "pidCouponPurchaseOrderValidFrom": "$.validFrom",
+            "pidCouponPurchaseOrderValidTill": "$.validTill"
           },
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.couponSuccessfullyCreated", "equals": true },
-              { "path": "$.order.orderId", "equals": "{{form.orderId}}" },
-              { "path": "$.order.status", "equals": "CouponReady" },
-              { "path": "$.order.tariffProfileName", "notEmpty": true },
-              { "path": "$.order.zoneNames", "lengthAtLeast": 1 }
+              {
+                "path": "$.orderId",
+                "equals": "{{form.orderId}}"
+              },
+              {
+                "path": "$.status",
+                "equals": "CouponReady"
+              },
+              {
+                "path": "$.tariffProfileName",
+                "notEmpty": true
+              },
+              {
+                "path": "$.zoneNames",
+                "lengthAtLeast": 1
+              }
             ]
           }
         },
@@ -1117,17 +1295,32 @@
           "id": "client-coupons-purchase-card-verify-coupons",
           "title": "Zkontrolovat kupony po platbe",
           "description": "Znovu nacte GET /v1/client/coupons a overi, ze po uspesne platbe existuje kupon pro vybrany identifikator a tarif.",
-          "requiresContext": ["pidCouponPurchaseIdentifierId", "pidCouponPurchaseOrderTariffProfileName"],
+          "requiresContext": [
+            "pidCouponPurchaseIdentifierId",
+            "pidCouponPurchaseOrderTariffProfileName"
+          ],
           "request": {
             "method": "GET",
-            "path": "/v1/client/coupons"
+            "path": "/v1/client/coupons",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.status", "equals": "Completed" },
-              { "path": "$.identifiers", "lengthAtLeast": 1 },
-              { "path": "$.coupons", "lengthAtLeast": 1 },
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 1
+              },
+              {
+                "path": "$.coupons",
+                "lengthAtLeast": 1
+              },
               {
                 "path": "$.coupons",
                 "containsItem": {
@@ -1157,9 +1350,14 @@
           "id": "client-coupons-purchase-card-cancel-order",
           "title": "Zrusit objednavku",
           "description": "Volitelny uklidovy krok pro pripad, kdy platbu nechcete dokoncit. Automaticky se preskoci, kdyz uz je objednavka ve stavu CouponReady (kupon byl uspesne zaplacen).",
-          "requiresContext": ["pidCouponPurchaseOrderId"],
+          "requiresContext": [
+            "pidCouponPurchaseOrderId"
+          ],
           "skipWhen": {
-            "contextEquals": { "key": "pidCouponPurchaseOrderStatus", "value": "CouponReady" }
+            "contextEquals": {
+              "key": "pidCouponPurchaseOrderStatus",
+              "value": "CouponReady"
+            }
           },
           "fields": [
             {
@@ -1181,12 +1379,20 @@
     {
       "id": "client-coupons-purchase-card-incomplete",
       "title": "Kupóny - platba kartou - nedokončeno",
-      "description": "Rucni scenar pro overeni lazy dorovnani objednavky po dokoncene kartove platbe, kdy aplikace zamerne nezavola POST /v1/client/coupons/purchase/payment/card/gateway-result.",
+      "description": "Rucni scenar pro overeni kartove platby, kdy Klikatko uz nevola autorizovany gateway-result. Navrat z platebni brany zpracuje BE gateway-return.",
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "prewarmReturnUrl": true,
-      "tags": ["profile", "coupons", "purchase", "payment-card", "lazy-reconcile", "no-gateway-result", "client-save"],
+      "prewarmReturnUrl": false,
+      "tags": [
+        "profile",
+        "coupons",
+        "purchase",
+        "payment-card",
+        "lazy-reconcile",
+        "no-gateway-result",
+        "client-save"
+      ],
       "app": {
         "section": "profile",
         "title": "Kupony",
@@ -1194,10 +1400,9 @@
       },
       "instructions": [
         "Pouzijte jen testovaciho klienta. Scenar vytvari realnou objednavku v MOS a inicializuje platbu kartou pres MOS V19/GDPay.",
-        "Cilem je overit stav, kdy uzivatel platbu v brane dokonci, ale aplikace nezpracuje navratova data pres gateway-result.",
         "Po inicializaci kartove platby otevrite paymentGatewayRedirectUrl mimo Klikatko a platbu dokoncete.",
-        "Raw payment data z GwResponsePage.html v tomto scenari nikam nevkladejte a krok gateway-result zamerne nespoustejte.",
-        "Nasledujici GET detailu objednavky ma objednavku dorovnat podle MOS a vratit CouponReady. Pokud MOS jeste kupon nevystavil, pockejte chvili a kontrolni krok spustte znovu."
+        "Navrat z brany smeruje na BE gateway-return; raw payment data do Klikatka nevkladejte a autorizovany gateway-result nespoustejte.",
+        "Nasledujici GET detailu objednavky overi, ze je platba dorovnana a objednavka prejde na CouponReady. Pokud MOS jeste kupon nevystavil, pockejte chvili a kontrolni krok spustte znovu."
       ],
       "steps": [
         {
@@ -1208,16 +1413,24 @@
             "method": "GET",
             "path": "/v1/client/coupons/purchase/options",
             "headers": {
-              "X-Device-Id": "{{context.pidCurrentDeviceId}}",
-              "X-Device-RegId": "{{context.pidCurrentDeviceRegId}}"
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
             }
           },
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.eligible", "equals": true },
-              { "path": "$.blockers", "equals": [] },
-              { "path": "$.identifiers", "lengthAtLeast": 1 },
+              {
+                "path": "$.eligible",
+                "equals": true
+              },
+              {
+                "path": "$.blockers",
+                "equals": []
+              },
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 1
+              },
               {
                 "path": "$.identifiers",
                 "containsItem": {
@@ -1243,7 +1456,9 @@
               "pidCouponPurchaseIdentifierMaskedValue": "$.identifier.maskedPan",
               "pidCouponPurchaseIdentifierIsThisDevice": "$.isThisDevice",
               "pidCouponPurchaseDefaultStartDate": "$.defaultStartDate",
-              "pidCouponPurchaseMaxStartDate": { "bodyPath": "$.maxStartDate" },
+              "pidCouponPurchaseMaxStartDate": {
+                "bodyPath": "$.maxStartDate"
+              },
               "pidCouponPurchaseActiveCouponZones": "$.activeCouponZoneLabels"
             }
           }
@@ -1252,7 +1467,9 @@
           "id": "client-coupons-purchase-card-incomplete-offer",
           "title": "Nacist nabidku kuponu",
           "description": "Zavola GET /v1/client/coupons/purchase/offer pro vybrany identifikator, datum zacatku a zony.",
-          "requiresContext": ["pidCouponPurchaseIdentifierId"],
+          "requiresContext": [
+            "pidCouponPurchaseIdentifierId"
+          ],
           "fields": [
             {
               "name": "identifierId",
@@ -1274,20 +1491,59 @@
               "label": "Zony",
               "type": "tag-list",
               "value": "{{context.mosLookupSelectedZoneNames}}",
-              "fallbackValue": ["P", "0"],
+              "fallbackValue": [
+                "P",
+                "0"
+              ],
               "options": [
-                { "value": "P", "text": "P" },
-                { "value": "0", "text": "0" },
-                { "value": "B", "text": "B" },
-                { "value": "1", "text": "1" },
-                { "value": "2", "text": "2" },
-                { "value": "3", "text": "3" },
-                { "value": "4", "text": "4" },
-                { "value": "5", "text": "5" },
-                { "value": "6", "text": "6" },
-                { "value": "7", "text": "7" },
-                { "value": "8", "text": "8" },
-                { "value": "9", "text": "9" }
+                {
+                  "value": "P",
+                  "text": "P"
+                },
+                {
+                  "value": "0",
+                  "text": "0"
+                },
+                {
+                  "value": "B",
+                  "text": "B"
+                },
+                {
+                  "value": "1",
+                  "text": "1"
+                },
+                {
+                  "value": "2",
+                  "text": "2"
+                },
+                {
+                  "value": "3",
+                  "text": "3"
+                },
+                {
+                  "value": "4",
+                  "text": "4"
+                },
+                {
+                  "value": "5",
+                  "text": "5"
+                },
+                {
+                  "value": "6",
+                  "text": "6"
+                },
+                {
+                  "value": "7",
+                  "text": "7"
+                },
+                {
+                  "value": "8",
+                  "text": "8"
+                },
+                {
+                  "value": "9",
+                  "text": "9"
+                }
               ],
               "emptyText": "Doplnte alespon jednu zonu, napriklad P a 0 pro prazsky kupon."
             }
@@ -1304,9 +1560,18 @@
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.identifierId", "equals": "{{form.identifierId}}" },
-              { "path": "$.tariffGroups", "lengthAtLeast": 1 },
-              { "path": "$.tariffGroups[0].items", "lengthAtLeast": 1 }
+              {
+                "path": "$.identifierId",
+                "equals": "{{form.identifierId}}"
+              },
+              {
+                "path": "$.tariffGroups",
+                "lengthAtLeast": 1
+              },
+              {
+                "path": "$.tariffGroups[0].items",
+                "lengthAtLeast": 1
+              }
             ]
           },
           "selection": {
@@ -1330,7 +1595,10 @@
           "id": "client-coupons-purchase-card-incomplete-create-order",
           "title": "Vytvorit objednavku kuponu",
           "description": "Zavola POST /v1/client/coupons/purchase/orders a ulozi lokalni orderId pro rekapitulaci a platbu.",
-          "requiresContext": ["pidCouponPurchaseIdentifierId", "pidCouponPurchaseTariffId"],
+          "requiresContext": [
+            "pidCouponPurchaseIdentifierId",
+            "pidCouponPurchaseTariffId"
+          ],
           "fields": [
             {
               "name": "identifierId",
@@ -1381,9 +1649,18 @@
           "expected": {
             "status": 201,
             "assertions": [
-              { "path": "$.orderId", "notEmpty": true },
-              { "path": "$.totalPrice", "atLeast": 0 },
-              { "path": "$.priceCurrency", "equals": "CZK" }
+              {
+                "path": "$.orderId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.totalPrice",
+                "atLeast": 0
+              },
+              {
+                "path": "$.priceCurrency",
+                "equals": "CZK"
+              }
             ]
           }
         },
@@ -1391,7 +1668,9 @@
           "id": "client-coupons-purchase-card-incomplete-order-detail-before-payment",
           "title": "Overit objednavku pred platbou",
           "description": "Zavola GET /v1/client/coupons/purchase/orders/{orderId} a overi, ze objednavka je pred zahajenim kartove platby stale New.",
-          "requiresContext": ["pidCouponPurchaseOrderId"],
+          "requiresContext": [
+            "pidCouponPurchaseOrderId"
+          ],
           "fields": [
             {
               "name": "orderId",
@@ -1413,12 +1692,30 @@
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.orderId", "equals": "{{form.orderId}}" },
-              { "path": "$.identifierId", "notEmpty": true },
-              { "path": "$.status", "equals": "New" },
-              { "path": "$.zoneNames", "lengthAtLeast": 1 },
-              { "path": "$.totalPrice", "atLeast": 0 },
-              { "path": "$.priceCurrency", "equals": "CZK" }
+              {
+                "path": "$.orderId",
+                "equals": "{{form.orderId}}"
+              },
+              {
+                "path": "$.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.status",
+                "equals": "New"
+              },
+              {
+                "path": "$.zoneNames",
+                "lengthAtLeast": 1
+              },
+              {
+                "path": "$.totalPrice",
+                "atLeast": 0
+              },
+              {
+                "path": "$.priceCurrency",
+                "equals": "CZK"
+              }
             ]
           }
         },
@@ -1426,7 +1723,9 @@
           "id": "client-coupons-purchase-card-incomplete-receipt-details",
           "title": "Doplnit fakturacni udaje",
           "description": "Zavola PUT /v1/client/coupons/purchase/orders/{orderId}/receipt-details. Core MOS vyzaduje fakturacni adresu na objednavce pred zaplacenim drazsiho kuponu.",
-          "requiresContext": ["pidCouponPurchaseOrderId"],
+          "requiresContext": [
+            "pidCouponPurchaseOrderId"
+          ],
           "workflowStop": {
             "message": "Zkontrolujte fakturacni udaje pred platbou.",
             "instructions": [
@@ -1508,8 +1807,10 @@
         {
           "id": "client-coupons-purchase-card-incomplete-initiate-payment",
           "title": "Inicializovat kartovou platbu",
-          "description": "Zavola POST /v1/client/coupons/purchase/payment/card/initiate a vrati V19/GDPay redirect URL platebni brany.",
-          "requiresContext": ["pidCouponPurchaseOrderId"],
+          "description": "Spusti kartovou platbu bez nasledneho volani autorizovaneho gateway-result. FE target posle v requestu; BE jej ulozi a do MOS/GDPay posle vlastni nakonfigurovany gateway-return callback.",
+          "requiresContext": [
+            "pidCouponPurchaseOrderId"
+          ],
           "fields": [
             {
               "name": "orderId",
@@ -1518,10 +1819,10 @@
             },
             {
               "name": "returnUrlFromPaymentGateway",
-              "label": "Navratova URL",
-              "type": "url",
-              "value": "http://localhost:5096/analysis/html/GwResponsePage.html",
-              "placeholder": "URL, kam brana vrati payment data"
+              "label": "FE návratový target (ReturnUrlFromPaymentGateway)",
+              "type": "text",
+              "value": "http://localhost:5096/analysis/html/GwResponsePage.html?flow=coupon-card-gw-be-fe&target=unchanged#gw-be-fe",
+              "placeholder": "Přesný target, na který má BE po zpracování callbacku přesměrovat"
             }
           ],
           "request": {
@@ -1538,7 +1839,7 @@
           },
           "remember": {
             "pidCouponPurchaseOrderId": "{{form.orderId}}",
-            "pidCouponPurchaseReturnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}"
+            "pidCouponPurchaseFrontendReturnDeepLink": "{{form.returnUrlFromPaymentGateway}}"
           },
           "extract": {
             "pidCouponPurchasePaymentGatewayReference": "$.paymentGatewayReference",
@@ -1547,24 +1848,40 @@
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.couponSuccessfullyCreated", "equals": false },
-              { "path": "$.paymentGatewayReference", "notEmpty": true },
-              { "path": "$.paymentGatewayRedirectUrl", "notEmpty": true },
-              { "path": "$.order.orderId", "equals": "{{form.orderId}}" }
+              {
+                "path": "$.couponSuccessfullyCreated",
+                "equals": false
+              },
+              {
+                "path": "$.paymentGatewayReference",
+                "notEmpty": true
+              },
+              {
+                "path": "$.paymentGatewayRedirectUrl",
+                "notEmpty": true
+              },
+              {
+                "path": "$.order.orderId",
+                "equals": "{{form.orderId}}"
+              }
             ]
-          }
+          },
+          "inputs": []
         },
         {
           "id": "client-coupons-purchase-card-incomplete-lazy-order-detail",
           "title": "Dohledat objednavku bez gateway-result",
           "description": "Po dokoncene platbe zamerne nevola gateway-result. GET detailu objednavky ma stav dorovnat podle MOS a vratit CouponReady.",
-          "requiresContext": ["pidCouponPurchaseOrderId"],
+          "requiresContext": [
+            "pidCouponPurchaseOrderId"
+          ],
           "workflowStop": {
             "message": "Dokoncete platbu mimo Klikatko a nevolejte gateway-result.",
             "instructions": [
               "V predchozi odpovedi je paymentGatewayRedirectUrl.",
               "Otevete URL v prohlizeci a dokoncete testovaci platbu kartou.",
-              "Po navratu z brany nevkladejte raw payment data do zadneho kroku a nespoustejte POST /payment/card/gateway-result.",
+              "Brana posle POST na BE gateway-return; BE jej zpracuje a pres 303 presmeruje na FE target z initiate requestu.",
+              "Na GwResponsePage overte zeleny vysledek GW -> BE -> FE a potom nevkladejte raw payment data do zadneho kroku ani nespoustejte POST /payment/card/gateway-result.",
               "Pokracujte rovnou timto GET detailem objednavky. Pokud MOS jeste kupon nevystavil a kontrola selze, pockejte chvili a krok zopakujte."
             ]
           },
@@ -1591,12 +1908,30 @@
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.orderId", "equals": "{{form.orderId}}" },
-              { "path": "$.status", "equals": "CouponReady" },
-              { "path": "$.tariffProfileName", "notEmpty": true },
-              { "path": "$.validFrom", "notEmpty": true },
-              { "path": "$.validTill", "notEmpty": true },
-              { "path": "$.zoneNames", "lengthAtLeast": 1 }
+              {
+                "path": "$.orderId",
+                "equals": "{{form.orderId}}"
+              },
+              {
+                "path": "$.status",
+                "equals": "CouponReady"
+              },
+              {
+                "path": "$.tariffProfileName",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validFrom",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validTill",
+                "notEmpty": true
+              },
+              {
+                "path": "$.zoneNames",
+                "lengthAtLeast": 1
+              }
             ]
           }
         },
@@ -1604,17 +1939,32 @@
           "id": "client-coupons-purchase-card-incomplete-verify-coupons",
           "title": "Zkontrolovat kupony po lazy dorovnani",
           "description": "Znovu nacte GET /v1/client/coupons a overi, ze po zaplacene, ale aplikacne nedokoncene platbe existuje kupon pro vybrany identifikator a tarif.",
-          "requiresContext": ["pidCouponPurchaseIdentifierId", "pidCouponPurchaseOrderTariffProfileName"],
+          "requiresContext": [
+            "pidCouponPurchaseIdentifierId",
+            "pidCouponPurchaseOrderTariffProfileName"
+          ],
           "request": {
             "method": "GET",
-            "path": "/v1/client/coupons"
+            "path": "/v1/client/coupons",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.status", "equals": "Completed" },
-              { "path": "$.identifiers", "lengthAtLeast": 1 },
-              { "path": "$.coupons", "lengthAtLeast": 1 },
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 1
+              },
+              {
+                "path": "$.coupons",
+                "lengthAtLeast": 1
+              },
               {
                 "path": "$.coupons",
                 "containsItem": {
@@ -1649,7 +1999,14 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": false,
-      "tags": ["profile", "coupons", "purchase", "payment-card", "validation", "negative"],
+      "tags": [
+        "profile",
+        "coupons",
+        "purchase",
+        "payment-card",
+        "validation",
+        "negative"
+      ],
       "app": {
         "section": "profile",
         "title": "Kupony",
@@ -1690,7 +2047,7 @@
               "orderId": "00000000-0000-0000-0000-000000000000",
               "paymentDetails": {
                 "paymentMethod": "PaymentCard",
-                "returnUrlFromPaymentGateway": "http://localhost:5096/analysis/html/GwResponsePage.html",
+                "returnUrlFromPaymentGateway": "pid-litacka://coupon-payment/validation-empty-order",
                 "automaticPaymentResultProcessing": false
               }
             }
@@ -1711,8 +2068,28 @@
               "orderId": "11111111-1111-1111-1111-111111111111",
               "paymentDetails": {
                 "paymentMethod": "PaymentCard",
-                "returnUrlFromPaymentGateway": "http://localhost:5096/analysis/html/GwResponsePage.html",
+                "returnUrlFromPaymentGateway": "pid-litacka://coupon-payment/validation-automatic-processing",
                 "automaticPaymentResultProcessing": true
+              }
+            }
+          },
+          "expected": {
+            "status": 400,
+            "outcome": "expectedError"
+          }
+        },
+        {
+          "id": "client-coupons-purchase-card-initiate-missing-return-target",
+          "title": "Inicializace bez FE navratoveho targetu",
+          "description": "Card initiate musi odmitnout chybejici ReturnUrlFromPaymentGateway; tento parametr je FE deeplink ulozeny pro pozdejsi BE redirect.",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/coupons/purchase/payment/card/initiate",
+            "body": {
+              "orderId": "11111111-1111-1111-1111-111111111111",
+              "paymentDetails": {
+                "paymentMethod": "PaymentCard",
+                "automaticPaymentResultProcessing": false
               }
             }
           },

@@ -17,6 +17,10 @@
       --code-bg: #eef3f6;
       --warn-bg: #fff7df;
       --warn-line: #b7791f;
+      --success-bg: #eaf8f2;
+      --success-line: #15805f;
+      --error-bg: #fff0f0;
+      --error-line: #c0392b;
     }
 
     * {
@@ -171,6 +175,44 @@
       padding-top: 4px;
     }
 
+    [hidden] {
+      display: none !important;
+    }
+
+    .bridge-status {
+      border-left: 4px solid var(--success-line);
+      background: var(--success-bg);
+      border-radius: 4px;
+      color: #124b3b;
+      font-weight: 700;
+      padding: 12px 14px;
+    }
+
+    .bridge-status.error {
+      border-left-color: var(--error-line);
+      background: var(--error-bg);
+      color: #7b241c;
+    }
+
+    .bridge-checks {
+      display: grid;
+      gap: 8px;
+      list-style: none;
+      margin: 14px 0 0;
+      padding: 0;
+    }
+
+    .bridge-checks li {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+
+    .bridge-checks li.failed {
+      border-color: var(--error-line);
+      background: var(--error-bg);
+    }
+
     @media (max-width: 760px) {
       h1 {
         font-size: 24px;
@@ -225,6 +267,19 @@
     </p>
   </header>
 
+  <section class="card" id="bridge-verification" hidden>
+    <h2>Ověření GW → BE → FE</h2>
+    <div class="bridge-status" id="bridge-status" role="status"></div>
+    <ul class="bridge-checks" id="bridge-checks"></ul>
+    <p class="hint">
+      Tato kontrola se zobrazí pro kupónový produkční tok: brána pošle POST na BE, BE data zpracuje
+      a odpoví 303 na přesný FE target. Na FE se nesmí přenést gateway POST body ani přidat parametry.
+    </p>
+    <div class="toolbar">
+      <button type="button" id="close-return-tab">Zavřít návratový panel</button>
+    </div>
+  </section>
+
   <section class="card">
     <h2>Celá URL</h2>
     <pre id="full-url"></pre>
@@ -275,6 +330,11 @@
   const paramsElement = document.getElementById("params");
   const copyStatusElement = document.getElementById("copy-status");
   const recommendedUrlElement = document.getElementById("recommended-url");
+  const bridgeVerificationElement = document.getElementById("bridge-verification");
+  const bridgeStatusElement = document.getElementById("bridge-status");
+  const bridgeChecksElement = document.getElementById("bridge-checks");
+  const bridgeFlowName = "coupon-card-gw-be-fe";
+  const expectedBridgeUrl = "http://localhost:5096/analysis/html/GwResponsePage.html?flow=coupon-card-gw-be-fe&target=unchanged#gw-be-fe";
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("gw-post-capture-sw.js").catch(() => {});
@@ -290,6 +350,8 @@
   rawFragmentElement.textContent = rawFragment || "(hash fragment je prázdný)";
   recommendedUrlElement.textContent = recommendedUrl;
 
+  renderBridgeVerification(url);
+
   const rows = [
     ...readParams(rawQuery, "query"),
     ...readParams(rawFragment, "hash"),
@@ -304,6 +366,57 @@
       copyText(target?.textContent || "");
     });
   });
+
+  document.getElementById("close-return-tab").addEventListener("click", () => {
+    window.close();
+  });
+
+  function renderBridgeVerification(currentUrl) {
+    if (currentUrl.searchParams.get("flow") !== bridgeFlowName) {
+      return;
+    }
+
+    const allowedQueryKeys = new Set(["flow", "target"]);
+    const unexpectedQueryKeys = [...currentUrl.searchParams.keys()]
+      .filter(key => !allowedQueryKeys.has(key));
+    const capturedPostBody = window.__GW_POST_BODY__?.body || "";
+    const checks = [
+      {
+        label: "FE target dorazil přesně beze změny",
+        passed: window.location.href === expectedBridgeUrl,
+        detail: window.location.href === expectedBridgeUrl
+          ? expectedBridgeUrl
+          : `Očekáváno ${expectedBridgeUrl}; dorazilo ${window.location.href}`
+      },
+      {
+        label: "BE nepřidalo orderId, status ani jiné query parametry",
+        passed: unexpectedQueryKeys.length === 0,
+        detail: unexpectedQueryKeys.length === 0
+          ? "Query obsahuje pouze kontrolní markery flow a target."
+          : `Neočekávané parametry: ${unexpectedQueryKeys.join(", ")}`
+      },
+      {
+        label: "Gateway POST body skončilo na BE, ne na FE",
+        passed: capturedPostBody.length === 0,
+        detail: capturedPostBody.length === 0
+          ? "FE stránka byla načtena bez zachyceného POST body."
+          : "FE stránka obdržela POST body; tok neodpovídá GW → BE → FE."
+      }
+    ];
+    const allPassed = checks.every(check => check.passed);
+
+    bridgeVerificationElement.hidden = false;
+    bridgeStatusElement.classList.toggle("error", !allPassed);
+    bridgeStatusElement.textContent = allPassed
+      ? "Ověřeno: přesměrování GW → BE → FE odpovídá produkčnímu toku."
+      : "Kontrola selhala: návrat neodpovídá očekávanému GW → BE → FE toku.";
+    bridgeChecksElement.innerHTML = checks.map(check => `
+      <li class="${check.passed ? "" : "failed"}">
+        <strong>${check.passed ? "✓" : "✗"} ${escapeHtml(check.label)}</strong><br>
+        <span class="hint">${escapeHtml(check.detail)}</span>
+      </li>
+    `).join("");
+  }
 
   function readParams(rawValue, source) {
     if (!rawValue) {
