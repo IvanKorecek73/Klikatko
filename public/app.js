@@ -11273,7 +11273,7 @@ function renderMosCouponSubformHtml(coupons) {
           </div>
           <div class="app-coupon-item-meta">
             ${[
-              coupon.zones ? `zóny ${coupon.zones}` : null,
+              formatCouponZonesLabel(coupon.zones),
               coupon.price ? `${coupon.price} Kč` : null,
               coupon.couponId ? `ID ${coupon.couponId}` : null
             ].filter(Boolean).map(renderAppChip).join("")}
@@ -11308,7 +11308,7 @@ function getMosTokenDescription(token) {
 function getMosCouponSummary(coupon) {
   return [
     coupon.tariffName || coupon.name || (coupon.tariffId ? `Tarif ${coupon.tariffId}` : null),
-    coupon.zones ? `zóny ${coupon.zones}` : null,
+    formatCouponZonesLabel(coupon.zones),
     coupon.dateTimeFrom && coupon.dateTimeTo ? `${formatDate(coupon.dateTimeFrom)} - ${formatDate(coupon.dateTimeTo)}` : null,
     coupon.status || coupon.customStatusName || null,
     coupon.price ? `${coupon.price} Kč` : null
@@ -11466,7 +11466,7 @@ function renderPidCouponSubformHtml(coupons, title = "Kupóny") {
           </div>
           <div class="app-coupon-item-meta">
             ${[
-              coupon.zones ? `zóny ${coupon.zones}` : null,
+              formatCouponZonesLabel(coupon.zones),
               coupon.status || coupon.customStatusName || null,
               coupon.price !== undefined ? `${coupon.price} Kč` : null,
               coupon.customerProfileName || null
@@ -12844,6 +12844,19 @@ function normalizeXmlPrefixes(source) {
     .replace(/(<\/?)([A-Za-z_][\w.-]*):/g, "$1");
 }
 
+function formatCouponZones(zones) {
+  const zoneNames = Array.isArray(zones) ? zones : String(zones ?? "").split(",");
+  return zoneNames
+    .map(zone => String(zone ?? "").trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+function formatCouponZonesLabel(zones) {
+  const formatted = formatCouponZones(zones);
+  return formatted ? `zóny ${formatted}` : null;
+}
+
 function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
   const items = fallbackItems || state.activeSelection?.items || [];
   const selection = getSelectionDescriptor(step, items);
@@ -12864,7 +12877,7 @@ function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
       item.isPersonalized === "true" ? "personalizovaný" : item.isPersonalized === "false" ? "nepersonalizovaný" : null,
       item.isDefault === "true" ? "výchozí profil" : null,
       item.zoneName ? `zóna ${item.zoneName}` : null,
-      item.zones ? `zóny ${item.zones}` : null,
+      formatCouponZonesLabel(item.zones),
       item.customerProfileId2 ? "lomený tarif" : item.tariffZoneId ? "normální tarif" : null,
       item.price ? `${item.price} Kč` : null,
       item.displayPrice ? `tarif ${item.displayPrice} Kč` : null,
@@ -12883,7 +12896,7 @@ function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
       { label: "CustomerProfileID2", value: item.customerProfileId2 },
       { label: "SplitDate", value: item.splitDate ? formatDate(item.splitDate) : null },
       { label: "Zóna", value: item.zoneName },
-      { label: "Zóny", value: item.zones },
+      { label: "Zóny", value: formatCouponZones(item.zones) },
       { label: "Platnost od", value: item.dateTimeFrom || item.validFrom ? formatDate(item.dateTimeFrom || item.validFrom) : null },
       { label: "Platnost do", value: item.dateTimeTo || item.validTill ? formatDate(item.dateTimeTo || item.validTill) : null },
       { label: "Cena", value: item.price ? `${item.price} Kč` : null },
@@ -12964,7 +12977,7 @@ function getSelectionItemText(item) {
   if (item.couponId) {
     return [
       item.dateTimeFrom && item.dateTimeTo ? `${formatDate(item.dateTimeFrom)} - ${formatDate(item.dateTimeTo)}` : null,
-      item.zones ? `zóny ${item.zones}` : null
+      formatCouponZonesLabel(item.zones)
     ].filter(Boolean).join(", ") || "Kupón";
   }
 
