@@ -1,0 +1,163 @@
+{
+  "version": 1,
+  "name": "PidLitacka - task 1067: produktový podtyp zakoupené jízdenky",
+  "description": "Autonomní lokální E2E ověření productSubTypeCode a productSubTypeDetail přes BE PidLitacka.",
+  "scenarios": [
+    {
+      "id": "pidlitacka-ticket-1067-product-subtype",
+      "title": "Task 1067 - ověřit kategorii a ikonu zakoupené jízdenky",
+      "description": "Připraví AVAILABLE jízdenku s podtypem adult a ověří nezměněná data v seznamu, aktivační odpovědi a detailu.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": false,
+      "tags": ["tickets", "task-1067", "product-subtype", "activation", "local-fixture"],
+      "app": {
+        "section": "tickets",
+        "title": "Jízdné",
+        "subtitle": "Kategorie a ikona jízdenky"
+      },
+      "instructions": [
+        "Scénář je určen pouze pro LOCAL prostředí a testovací jízdenku připraví automaticky v izolované databázi Tickets.",
+        "Očekávaný podtyp adult má lokalizovaný český název Dospělý, ikonu adult a pořadí 1.",
+        "Všechny ověřované odpovědi vedou přes veřejné endpointy BE PidLitacka; BE nesmí kvůli podtypu volat produktový katalog podruhé."
+      ],
+      "steps": [
+        {
+          "id": "ticket-1067-create-fixture",
+          "title": "Připravit jízdenku s podtypem adult",
+          "description": "Vytvoří zakoupenou neaktivovanou jízdenku nad testovacím produktem s produktovým podtypem adult.",
+          "request": {
+            "method": "POST",
+            "path": "/__harness/fixtures/task-960",
+            "headers": { "X-Klikatko-Local-Fixture": "task-960" },
+            "body": {
+              "userId": "{{session.identityId}}",
+              "variant": "fixed",
+              "count": 1
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.count", "equals": 1 },
+              { "path": "$.items[0].status", "equals": "AVAILABLE" },
+              { "path": "$.items[0].productId", "equals": 960001 },
+              { "path": "$.items[0].productSubTypeCode", "equals": "adult" }
+            ]
+          },
+          "extract": { "ticket1067FulfillmentId": "$.items[0].fulfillmentId" }
+        },
+        {
+          "id": "ticket-1067-list-available",
+          "title": "Ověřit podtyp v seznamu jízdenek",
+          "description": "Načte AVAILABLE zásobník a ověří raw kód i celý detail podtypu vrácený přes PID BE.",
+          "requiresContext": ["ticket1067FulfillmentId"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=AVAILABLE"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.ticket1067FulfillmentId}}",
+                  "status": "AVAILABLE",
+                  "productSubTypeCode": "adult",
+                  "productSubTypeDetail.code": "adult",
+                  "productSubTypeDetail.name.cs": "Dospělý",
+                  "productSubTypeDetail.iconName": "adult",
+                  "productSubTypeDetail.sortOrder": 1
+                },
+                "message": "AVAILABLE jízdenka neobsahuje očekávaný produktový podtyp adult."
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1067-register-device",
+          "title": "Připravit zařízení pro aktivaci",
+          "description": "Zaregistruje aktuální instalaci jako Ticket Service zařízení.",
+          "fields": [
+            { "name": "deviceIdentifier", "label": "Identifikátor instalace", "value": "{{auth.deviceId}}", "hidden": true },
+            { "name": "deviceModel", "label": "Model zařízení", "value": "{{auth.model}}", "hidden": true },
+            { "name": "platform", "label": "Platforma", "value": "{{auth.platform}}", "hidden": true },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "headers": { "Idempotency-Key": "{{form.idempotencyKey}}" },
+            "body": {
+              "deviceIdentifier": "{{form.deviceIdentifier}}",
+              "deviceModel": "{{form.deviceModel}}",
+              "platform": "{{form.platform}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [{ "path": "$.deviceId", "notEmpty": true }]
+          },
+          "extract": { "ticket1067DeviceId": "$.deviceId" }
+        },
+        {
+          "id": "ticket-1067-activate",
+          "title": "Ověřit podtyp po aktivaci",
+          "description": "Aktivuje jízdenku a ověří, že aktivační FulfillmentResponse zachoval kategorii a ikonu.",
+          "requiresContext": ["ticket1067FulfillmentId", "ticket1067DeviceId"],
+          "fields": [
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.ticket1067FulfillmentId}}",
+            "headers": { "Idempotency-Key": "{{form.idempotencyKey}}" },
+            "body": {
+              "zones": null,
+              "validSince": null,
+              "deviceId": "{{context.ticket1067DeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.fulfillmentId", "equals": "{{context.ticket1067FulfillmentId}}" },
+              { "sourcePath": "$.status", "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$" },
+              { "path": "$.productSubTypeCode", "equals": "adult" },
+              { "path": "$.productSubTypeDetail.code", "equals": "adult" },
+              { "path": "$.productSubTypeDetail.name.cs", "equals": "Dospělý" },
+              { "path": "$.productSubTypeDetail.iconName", "equals": "adult" },
+              { "path": "$.productSubTypeDetail.sortOrder", "equals": 1 }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1067-detail",
+          "title": "Ověřit podtyp v detailu jízdenky",
+          "description": "Načte detail z jiného zařízení, aby bez volání HSM ověřil i bezpečnostní větev nulující pouze ETD.",
+          "requiresContext": ["ticket1067FulfillmentId"],
+          "fields": [
+            { "name": "otherDeviceId", "label": "Jiné zařízení", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.ticket1067FulfillmentId}}",
+            "headers": { "X-Device-Id": "{{form.otherDeviceId}}" }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.fulfillment.fulfillmentId", "equals": "{{context.ticket1067FulfillmentId}}" },
+              { "path": "$.fulfillment.productSubTypeCode", "equals": "adult" },
+              { "path": "$.fulfillment.productSubTypeDetail.code", "equals": "adult" },
+              { "path": "$.fulfillment.productSubTypeDetail.name.cs", "equals": "Dospělý" },
+              { "path": "$.fulfillment.productSubTypeDetail.iconName", "equals": "adult" },
+              { "path": "$.fulfillment.productSubTypeDetail.sortOrder", "equals": 1 }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,155 @@
+# Lokální scénář: přihlášení a historie jízdenek
+#
+# Předpoklady:
+# - PID Lítačka BE běží na http://localhost:5065.
+# - Tickets běží na http://localhost:5000 (výchozí adresa používaná PID BE v lokálním Aspire).
+# - Pokud spouštíš Tickets samostatně přes launchSettings, bývá na http://localhost:5132.
+#   V tom případě změň @ticketsBaseUrl a také TicketService:BaseUrl PID Lítačka BE.
+# - Lokální PID BE musí mít dostupný Core MOS a Redis, jinak přihlášení neproběhne.
+#
+# Soubor obsahuje testovací přihlašovací údaje a je uložen v git-ignorovaném adresáři logs.
+# Nepřidávat do repozitáře ani neposílat mimo tým.
+
+@pidBaseUrl = http://localhost:5065
+@ticketsBaseUrl = http://localhost:5000
+
+# Výchozí je účet odesílatele z testu transferu. U něj by měla být původní
+# převedená jízdenka vidět v historii (typicky CANCELLED).
+@userEmail = maussamukoqui-3731@yopmail.com
+
+# Pro kontrolu účtu příjemce nahraď @userEmail touto hodnotou a zopakuj login:
+@recipientEmail = zeugojedeibra-6351@yopmail.com
+
+@userPassword = abc123abc123
+@deviceId = 96700000-0000-4000-8000-000000000001
+
+# Po provedení kroku 2 sem ručně zkopíruj hodnoty accessToken a refreshToken
+# z JSON odpovědi bez uvozovek.
+@accessToken = PASTE_ACCESS_TOKEN_FROM_LOGIN_RESPONSE
+@refreshToken = PASTE_REFRESH_TOKEN_FROM_LOGIN_RESPONSE
+
+# Historické stavy podporované API. Čárky jsou URL-encoded.
+@historyStatuses = EXPIRED%2CCANCELLED%2CREFUNDED
+
+###############################################################################
+# 1. Volitelné ověření, že oba backendy odpovídají
+###############################################################################
+
+GET {{pidBaseUrl}}/healthz/live
+Accept: application/json
+
+###
+
+GET {{ticketsBaseUrl}}/api/v1/ping
+Accept: application/json
+
+###############################################################################
+# 2. Přihlášení do PID Lítačka BE
+#
+# Očekávání: HTTP 200.
+# Z odpovědi zkopíruj:
+# - accessToken  -> @accessToken nahoře
+# - refreshToken -> @refreshToken nahoře (potřeba pouze pro volitelný krok 6)
+#
+# PID Lítačka BE vydá JWT. Stejný token pak při volání ticket endpointu
+# automaticky přepošle do Tickets jako Authorization: Bearer.
+###############################################################################
+
+POST {{pidBaseUrl}}/v1/auth/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "{{userEmail}}",
+  "password": "{{userPassword}}",
+  "deviceId": "{{deviceId}}",
+  "deviceName": "HTTP scenario task 967",
+  "deviceMetadata": {
+    "platform": "local-http",
+    "scenario": "ticket-history"
+  },
+  "deviceLanguage": "cs",
+  "deviceMessagingToken": null
+}
+
+###############################################################################
+# 3. Všechny jízdenky přihlášeného uživatele přes PID Lítačka BE
+#
+# Tento request spusť jako první po vložení @accessToken. Pomůže ověřit,
+# že token projde přes PID BE až do Tickets a ukáže skutečné statusy jízdenek.
+# Očekávání: HTTP 200 a JSON s poli items, total, limit a offset.
+###############################################################################
+
+GET {{pidBaseUrl}}/v1/client/tickets?limit=20&offset=0
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+###############################################################################
+# 4. Historie jízdenek přes PID Lítačka BE
+#
+# Filtr obsahuje EXPIRED, CANCELLED a REFUNDED. Pokud je total > 20,
+# zopakuj request s offset=20, potom 40 atd.
+###############################################################################
+
+GET {{pidBaseUrl}}/v1/client/tickets?limit=20&offset=0&status={{historyStatuses}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Další stránka historie (volitelné)
+
+GET {{pidBaseUrl}}/v1/client/tickets?limit=20&offset=20&status={{historyStatuses}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+###############################################################################
+# 5. Přímé kontrolní volání Tickets (volitelné)
+#
+# Používá tentýž JWT. Výsledek má odpovídat kroku 4. Tento request je užitečný
+# při diagnostice: pokud krok 5 projde, ale krok 4 vrátí 502, je problém mezi
+# PID Lítačka BE a Tickets (typicky TicketService:BaseUrl).
+#
+# Pokud Tickets běží samostatně na portu 5132, změň @ticketsBaseUrl nahoře.
+###############################################################################
+
+GET {{ticketsBaseUrl}}/api/v1/fulfillments?limit=20&offset=0&status={{historyStatuses}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+###############################################################################
+# 6. Obnovení access tokenu po expiraci (volitelné)
+#
+# Očekávání: HTTP 200. Nový accessToken z odpovědi zkopíruj zpět do
+# @accessToken a zopakuj krok 3 nebo 4.
+###############################################################################
+
+POST {{pidBaseUrl}}/v1/auth/token
+Content-Type: application/json
+Accept: application/json
+
+{
+  "refreshToken": "{{refreshToken}}",
+  "deviceId": "{{deviceId}}"
+}
+
+###############################################################################
+# Nejčastější chyby
+#
+# 401 z PID BE:
+# - @accessToken nebyl vložen, expiroval nebo neodpovídá lokálnímu signing key.
+#
+# 401 z přímého Tickets requestu:
+# - Tickets nemá správně nastavený PID Lítačka issuer/audience nebo nedosáhne
+#   na discovery/JWKS PID Lítačka BE.
+#
+# 502 z kroku 3/4:
+# - PID BE nedosáhne na @ticketsBaseUrl nastavené v TicketService:BaseUrl.
+#
+# MOS session se nepodařilo najít v Redis (MissingRedisKey):
+# - PID BE a přihlášení nepoužívají stejnou lokální Redis instanci nebo byl
+#   backend/Redis mezi loginem a dalším requestem restartován.
+#
+# Prázdné items v kroku 4:
+# - nejdřív zkontroluj krok 3 a statusy vrácených jízdenek;
+# - pro přijatou/aktuální jízdenku přepni @userEmail na @recipientEmail,
+#   proveď znovu login a vlož nový accessToken.
+###############################################################################

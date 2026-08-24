@@ -1,0 +1,752 @@
+{
+  "version": 1,
+  "name": "PidLitacka - Jízdenky",
+  "description": "Jednoduché scénáře pro testování veřejných jízdenkových metod BE PidLitacka.",
+  "scenarios": [
+    {
+      "id": "pidlitacka-tickets-list-all",
+      "title": "Vypsat všechny moje jízdenky",
+      "description": "Načte až 100 jízdenek přihlášeného uživatele napříč všemi stavy a zobrazí je jako přehledné karty.",
+      "requiresAuth": true,
+      "smoke": true,
+      "manualInputRequired": false,
+      "tags": ["tickets"],
+      "app": {
+        "section": "tickets",
+        "title": "Moje jízdenky",
+        "subtitle": "Všechny stavy"
+      },
+      "steps": [
+        {
+          "id": "tickets-list-all",
+          "title": "Načíst všechny jízdenky",
+          "description": "Volá veřejný endpoint BE PidLitacka a nepoužije stavový filtr.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.items", "lengthAtLeast": 0 }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-tickets-list-by-status",
+      "title": "Vypsat jízdenky podle stavu",
+      "description": "Ověří filtrování zásobníku, aktivních, prošlých, zrušených nebo refundovaných jízdenek.",
+      "requiresAuth": true,
+      "smoke": true,
+      "manualInputRequired": false,
+      "tags": ["tickets"],
+      "app": {
+        "section": "tickets",
+        "title": "Moje jízdenky",
+        "subtitle": "Filtr podle stavu"
+      },
+      "steps": [
+        {
+          "id": "tickets-list-by-status",
+          "title": "Zvolit stav a načíst jízdenky",
+          "fields": [
+            {
+              "name": "ticketStatus",
+              "label": "Stav jízdenky",
+              "type": "select",
+              "value": "AVAILABLE",
+              "options": [
+                { "value": "AVAILABLE", "text": "K aktivaci" },
+                { "value": "FULFILLED,IN_PROTECTION_DELAY", "text": "Aktivní a naplánované" },
+                { "value": "EXPIRED", "text": "Prošlé" },
+                { "value": "CANCELLED", "text": "Zrušené" },
+                { "value": "REFUNDED", "text": "Refundované" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status={{form.ticketStatus}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.items", "lengthAtLeast": 0 }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-tickets-detail",
+      "title": "Zobrazit detail jízdenky",
+      "description": "Vybere jízdenku ze seznamu a načte její detail, ETD a případné RVI klíče pro aktuální zařízení.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["tickets", "fulfillment"],
+      "app": {
+        "section": "tickets",
+        "title": "Detail jízdenky",
+        "subtitle": "Data pro kontrolu"
+      },
+      "steps": [
+        {
+          "id": "tickets-detail-select",
+          "title": "Vybrat jízdenku",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0"
+          },
+          "selection": {
+            "sourcePath": "$.items",
+            "buttonLabel": "Zobrazit detail",
+            "selectedButtonLabel": "Vybráno",
+            "store": {
+              "ticketDetailId": "$.fulfillmentId"
+            },
+            "emptyTitle": "Žádná jízdenka k výběru",
+            "emptyText": "Nejdříve je potřeba mít na účtu alespoň jednu jízdenku."
+          },
+          "expected": { "status": 200 }
+        },
+        {
+          "id": "tickets-detail-get",
+          "title": "Načíst detail vybrané jízdenky",
+          "requiresContext": ["ticketDetailId"],
+          "fields": [
+            {
+              "name": "currentDeviceId",
+              "label": "ID aktuální instalace",
+              "value": "{{auth.deviceId}}",
+              "help": "Při shodě s aktivačním zařízením vrátí aktivní jízdenka také ETD a RVI klíče."
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.ticketDetailId}}",
+            "headers": {
+              "X-Device-Id": "{{form.currentDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.fulfillment.fulfillmentId", "equals": "{{context.ticketDetailId}}" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-ticket-products",
+      "title": "Vypsat katalog jízdenek",
+      "description": "Načte veřejný katalog produktů Ticket Service přes BE PidLitacka.",
+      "requiresAuth": false,
+      "smoke": true,
+      "manualInputRequired": false,
+      "tags": ["tickets", "catalog"],
+      "app": {
+        "section": "tickets",
+        "title": "Katalog jízdenek",
+        "subtitle": "Prodejné produkty"
+      },
+      "steps": [
+        {
+          "id": "ticket-products-list",
+          "title": "Načíst produkty",
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/products?limit=100&offset=0"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.items", "lengthAtLeast": 0 }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-ticket-devices",
+      "title": "Vypsat a zaregistrovat zařízení pro jízdenky",
+      "description": "Ověří seznam zařízení Ticket Service a idempotentní registraci aktuální instalace.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": false,
+      "tags": ["tickets", "devices", "activation"],
+      "app": {
+        "section": "tickets",
+        "title": "Zařízení pro jízdenky",
+        "subtitle": "Seznam a registrace"
+      },
+      "steps": [
+        {
+          "id": "ticket-devices-list-before",
+          "title": "Načíst registrovaná zařízení",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/devices"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.items", "lengthAtLeast": 0 }
+            ]
+          }
+        },
+        {
+          "id": "ticket-device-register",
+          "title": "Zaregistrovat aktuální zařízení",
+          "fields": [
+            { "name": "deviceIdentifier", "label": "Identifikátor instalace", "value": "{{auth.deviceId}}" },
+            { "name": "deviceModel", "label": "Model zařízení", "value": "{{auth.model}}" },
+            { "name": "platform", "label": "Platforma", "value": "{{auth.platform}}" },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "deviceIdentifier": "{{form.deviceIdentifier}}",
+              "deviceModel": "{{form.deviceModel}}",
+              "platform": "{{form.platform}}"
+            }
+          },
+          "extract": {
+            "registeredTicketDeviceId": "$.deviceId"
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.deviceId", "notEmpty": true },
+              { "path": "$.deviceIdentifier", "equals": "{{form.deviceIdentifier}}" }
+            ]
+          }
+        },
+        {
+          "id": "ticket-devices-list-after",
+          "title": "Ověřit zařízení v seznamu",
+          "requiresContext": ["registeredTicketDeviceId"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/devices"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "deviceId": "{{context.registeredTicketDeviceId}}"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-ticket-activate",
+      "title": "Aktivovat vybranou jízdenku",
+      "description": "Vybere AVAILABLE jízdenku, připraví zařízení a aktivuje ji nyní. Je určen pro jízdenky s již určenými pásmy.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["tickets", "activation", "devices"],
+      "app": {
+        "section": "tickets",
+        "title": "Aktivace jízdenky",
+        "subtitle": "Aktivovat nyní"
+      },
+      "instructions": [
+        "Aktivace mění stav jízdenky a nelze ji vrátit zpět do AVAILABLE.",
+        "Tento jednoduchý scénář neposílá volbu pásem. Pro zonální varianty použijte specializovaný pack tasku 960."
+      ],
+      "steps": [
+        {
+          "id": "ticket-activate-select",
+          "title": "Vybrat jízdenku k aktivaci",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=AVAILABLE"
+          },
+          "selection": {
+            "sourcePath": "$.items",
+            "buttonLabel": "Aktivovat tuto jízdenku",
+            "selectedButtonLabel": "Jízdenka vybrána",
+            "store": {
+              "ticketToActivateId": "$.fulfillmentId"
+            },
+            "emptyTitle": "Žádná jízdenka k aktivaci",
+            "emptyText": "Účet nemá žádnou jízdenku ve stavu AVAILABLE."
+          },
+          "expected": { "status": 200 }
+        },
+        {
+          "id": "ticket-activate-register-device",
+          "title": "Připravit aktuální zařízení",
+          "requiresContext": ["ticketToActivateId"],
+          "fields": [
+            { "name": "deviceIdentifier", "label": "Identifikátor instalace", "value": "{{auth.deviceId}}", "hidden": true },
+            { "name": "deviceModel", "label": "Model zařízení", "value": "{{auth.model}}", "hidden": true },
+            { "name": "platform", "label": "Platforma", "value": "{{auth.platform}}", "hidden": true },
+            { "name": "deviceKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "headers": {
+              "Idempotency-Key": "{{form.deviceKey}}"
+            },
+            "body": {
+              "deviceIdentifier": "{{form.deviceIdentifier}}",
+              "deviceModel": "{{form.deviceModel}}",
+              "platform": "{{form.platform}}"
+            }
+          },
+          "extract": {
+            "ticketActivationDeviceId": "$.deviceId"
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.deviceId", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "ticket-activate-now",
+          "title": "Aktivovat jízdenku nyní",
+          "requiresContext": ["ticketToActivateId", "ticketActivationDeviceId"],
+          "fields": [
+            { "name": "activationKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.ticketToActivateId}}",
+            "headers": {
+              "Idempotency-Key": "{{form.activationKey}}"
+            },
+            "body": {
+              "zones": null,
+              "validSince": null,
+              "deviceId": "{{context.ticketActivationDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.fulfillmentId", "equals": "{{context.ticketToActivateId}}" },
+              { "sourcePath": "$.status", "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$" },
+              { "path": "$.validSince", "notEmpty": true },
+              { "path": "$.validUntil", "notEmpty": true }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-ticket-transfer",
+      "title": "Poslat vybranou jízdenku jinému uživateli",
+      "description": "Vybere AVAILABLE jízdenku a předá ji jinému uloženému účtu podle e-mailu.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["tickets", "fulfillment", "account"],
+      "app": {
+        "section": "tickets",
+        "title": "Poslat jízdenku",
+        "subtitle": "Předání jinému účtu"
+      },
+      "instructions": [
+        "Předání spotřebuje původní jízdenku a vytvoří novou jízdenku příjemci.",
+        "Příjemce musí být jednoznačně registrovaný účet PID Lítačka."
+      ],
+      "steps": [
+        {
+          "id": "ticket-transfer-select",
+          "title": "Vybrat jízdenku k předání",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=AVAILABLE"
+          },
+          "selection": {
+            "sourcePath": "$.items",
+            "buttonLabel": "Poslat tuto jízdenku",
+            "selectedButtonLabel": "Jízdenka vybrána",
+            "store": {
+              "ticketToTransferId": "$.fulfillmentId"
+            },
+            "emptyTitle": "Žádná jízdenka k předání",
+            "emptyText": "Účet nemá žádnou jízdenku ve stavu AVAILABLE."
+          },
+          "expected": { "status": 200 }
+        },
+        {
+          "id": "ticket-transfer-send",
+          "title": "Vybrat příjemce a jízdenku poslat",
+          "requiresContext": ["ticketToTransferId"],
+          "fields": [
+            {
+              "name": "recipientEmail",
+              "label": "Příjemce",
+              "type": "select",
+              "optionsSource": "pidlitacka-auth-profiles",
+              "excludeCurrentSession": true,
+              "value": "",
+              "help": "Nabídka obsahuje uložené registrované účty kromě právě přihlášeného."
+            },
+            { "name": "transferKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/{{context.ticketToTransferId}}/transfer",
+            "headers": {
+              "Idempotency-Key": "{{form.transferKey}}"
+            },
+            "body": {
+              "recipientEmail": "{{form.recipientEmail}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.originalFulfillmentId", "equals": "{{context.ticketToTransferId}}" },
+              { "path": "$.newFulfillmentId", "notEmpty": true },
+              { "path": "$.transferredAt", "notEmpty": true }
+            ]
+          },
+          "extract": {
+            "transferredTicketId": "$.newFulfillmentId"
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-ticket-bookings",
+      "title": "Vypsat historii nákupů a detail objednávky",
+      "description": "Načte historii objednávek přihlášeného uživatele a po výběru zobrazí detail jedné rezervace.",
+      "requiresAuth": true,
+      "smoke": true,
+      "manualInputRequired": true,
+      "tags": ["tickets", "booking"],
+      "app": {
+        "section": "tickets",
+        "title": "Nákupy jízdenek",
+        "subtitle": "Historie objednávek"
+      },
+      "steps": [
+        {
+          "id": "ticket-bookings-search",
+          "title": "Načíst historii objednávek",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/bookings-search",
+            "body": {
+              "status": null,
+              "createdFrom": null,
+              "createdTo": null,
+              "limit": 100,
+              "offset": 0
+            }
+          },
+          "selection": {
+            "sourcePath": "$.items",
+            "buttonLabel": "Zobrazit objednávku",
+            "selectedButtonLabel": "Objednávka vybrána",
+            "store": {
+              "selectedTicketBookingId": "$.bookingId"
+            },
+            "emptyTitle": "Žádné objednávky",
+            "emptyText": "Přihlášený uživatel zatím nemá historii nákupů jízdenek."
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.items", "lengthAtLeast": 0 }
+            ]
+          }
+        },
+        {
+          "id": "ticket-booking-detail",
+          "title": "Načíst detail objednávky",
+          "requiresContext": ["selectedTicketBookingId"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.selectedTicketBookingId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.bookingId", "equals": "{{context.selectedTicketBookingId}}" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-ticket-document",
+      "title": "Stáhnout doklad k nákupu jízdenek",
+      "description": "Vybere objednávku z historie a zkusí stáhnout její fakturu, storno fakturu nebo potvrzení o použití.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["tickets", "booking", "documents"],
+      "app": {
+        "section": "tickets",
+        "title": "Doklad k jízdence",
+        "subtitle": "PDF objednávky"
+      },
+      "steps": [
+        {
+          "id": "ticket-document-select-booking",
+          "title": "Vybrat objednávku",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/bookings-search",
+            "body": {
+              "status": null,
+              "createdFrom": null,
+              "createdTo": null,
+              "limit": 100,
+              "offset": 0
+            }
+          },
+          "selection": {
+            "sourcePath": "$.items",
+            "buttonLabel": "Vybrat pro doklad",
+            "selectedButtonLabel": "Objednávka vybrána",
+            "store": {
+              "ticketDocumentBookingId": "$.bookingId"
+            },
+            "emptyTitle": "Žádná objednávka",
+            "emptyText": "Bez objednávky nelze doklad vyhledat."
+          },
+          "expected": { "status": 200 }
+        },
+        {
+          "id": "ticket-document-download",
+          "title": "Načíst PDF doklad",
+          "requiresContext": ["ticketDocumentBookingId"],
+          "fields": [
+            {
+              "name": "documentType",
+              "label": "Typ dokladu",
+              "type": "select",
+              "value": "Invoice",
+              "options": [
+                { "value": "Invoice", "text": "Faktura" },
+                { "value": "StornoInvoice", "text": "Storno faktura" },
+                { "value": "UseConfirmation", "text": "Potvrzení o použití" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/document/{{context.ticketDocumentBookingId}}?documentType={{form.documentType}}"
+          },
+          "expected": {
+            "statusIn": [200, 404]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-ticket-card-payment",
+      "title": "Zahájit kartovou platbu existující objednávky",
+      "description": "Založí platbu pro existující PREBOOKED objednávku a umožní otevřít sandboxovou platební bránu.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["tickets", "booking", "payment", "cards"],
+      "app": {
+        "section": "tickets",
+        "title": "Platba za jízdenky",
+        "subtitle": "Existující rezervace"
+      },
+      "instructions": [
+        "BE zatím nevytváří nabídku ani rezervaci jízdenky. Booking ID proto musí pocházet z připraveného nákupního toku v Tickets.",
+        "Po otevření paymentUrl a dokončení platby se návrat z brány zpracuje přes anonymní return endpoint BE a aplikace následně ověřuje stav objednávky."
+      ],
+      "steps": [
+        {
+          "id": "ticket-card-payment-initiate",
+          "title": "Zadat rezervaci a zahájit platbu",
+          "fields": [
+            { "name": "bookingId", "label": "Booking ID", "value": "", "placeholder": "UUID existující PREBOOKED objednávky" },
+            { "name": "returnUrl", "label": "Návratová URL aplikace", "type": "url", "value": "http://localhost:5096/analysis/html/GwResponsePage.html?flow=ticket-payment" },
+            {
+              "name": "language",
+              "label": "Jazyk brány",
+              "type": "select",
+              "value": "cs",
+              "options": [
+                { "value": "cs", "text": "Čeština" },
+                { "value": "en", "text": "Angličtina" }
+              ]
+            },
+            { "name": "paymentKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "headers": {
+              "Idempotency-Key": "{{form.paymentKey}}"
+            },
+            "body": {
+              "bookingId": "{{form.bookingId}}",
+              "returnUrlFromPaymentGateway": "{{form.returnUrl}}",
+              "language": "{{form.language}}"
+            }
+          },
+          "remember": {
+            "ticketPaymentBookingId": "{{form.bookingId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.paymentId", "notEmpty": true },
+              { "path": "$.paymentUrl", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "ticket-card-payment-check-booking",
+          "title": "Ověřit stav objednávky po návratu",
+          "description": "Po dokončení platby načte aktuální autoritativní stav objednávky. Krok lze opakovat.",
+          "requiresContext": ["ticketPaymentBookingId"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.ticketPaymentBookingId}}"
+          },
+          "expected": {
+            "status": 200
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-ticket-payment-settings",
+      "title": "Ověřit, změnit a resetovat nastavení plateb jízdenek",
+      "description": "Pokryje GET, PUT a DELETE uživatelských preferencí pro platby a e-mailové doklady.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": false,
+      "tags": ["tickets", "payment", "profile"],
+      "app": {
+        "section": "tickets",
+        "title": "Nastavení plateb",
+        "subtitle": "Jízdenky"
+      },
+      "steps": [
+        {
+          "id": "ticket-payment-settings-get",
+          "title": "Načíst nastavení plateb",
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/ticket-payment-settings"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.sendReceiptsToEmailEnabled", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "ticket-payment-settings-put",
+          "title": "Uložit jednoduché nastavení",
+          "description": "Nastaví výběr poslední použité platební metody a vypne zasílání dokladů e-mailem.",
+          "request": {
+            "method": "PUT",
+            "path": "/v1/accounts/me/ticket-payment-settings",
+            "body": {
+              "defaultPaymentMethod": null,
+              "sendReceiptsToEmailEnabled": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.sendReceiptsToEmailEnabled", "equals": false }
+            ]
+          }
+        },
+        {
+          "id": "ticket-payment-settings-delete",
+          "title": "Resetovat nastavení plateb",
+          "request": {
+            "method": "DELETE",
+            "path": "/v1/accounts/me/ticket-payment-settings"
+          },
+          "expected": { "status": 200 }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-ticket-recommendation-settings",
+      "title": "Ověřit, změnit a resetovat doporučování jízdenek",
+      "description": "Pokryje GET, PATCH a DELETE preferencí pro doporučování jízdného.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": false,
+      "tags": ["tickets", "profile"],
+      "app": {
+        "section": "tickets",
+        "title": "Doporučování jízdenek",
+        "subtitle": "Tarify a kupóny"
+      },
+      "steps": [
+        {
+          "id": "ticket-recommendation-settings-get",
+          "title": "Načíst nastavení doporučování",
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/ticket-recommendation-settings"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.mode", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "ticket-recommendation-settings-patch",
+          "title": "Doporučovat podle tarifů a kupónů",
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/accounts/me/ticket-recommendation-settings",
+            "body": {
+              "mode": "TARIFFS_AND_COUPONS",
+              "tariffCategory": null,
+              "zones": null
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.mode", "equals": "TARIFFS_AND_COUPONS" }
+            ]
+          }
+        },
+        {
+          "id": "ticket-recommendation-settings-delete",
+          "title": "Resetovat nastavení doporučování",
+          "request": {
+            "method": "DELETE",
+            "path": "/v1/accounts/me/ticket-recommendation-settings"
+          },
+          "expected": { "status": 200 }
+        }
+      ]
+    }
+  ]
+}

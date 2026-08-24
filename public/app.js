@@ -19,8 +19,10 @@ const state = {
   forms: [],
   scenarioSearch: "",
   formSearch: "",
+  workflowSearch: "",
   scenarioCategory: "all",
   formCategory: "all",
+  workflowCategory: "all",
   selectedScenarioIds: new Set(),
   batchRunning: false,
   batchStopRequested: false,
@@ -85,8 +87,10 @@ const elements = {
   formList: document.querySelector("#formList"),
   scenarioSearch: document.querySelector("#scenarioSearch"),
   formSearch: document.querySelector("#formSearch"),
+  workflowSearch: document.querySelector("#workflowSearch"),
   scenarioCategoryFilters: document.querySelector("#scenarioCategoryFilters"),
   formCategoryFilters: document.querySelector("#formCategoryFilters"),
+  workflowCategoryFilters: document.querySelector("#workflowCategoryFilters"),
   scenarioSelectionCount: document.querySelector("#scenarioSelectionCount"),
   selectAllScenarios: document.querySelector("#selectAllScenarios"),
   clearScenarioSelection: document.querySelector("#clearScenarioSelection"),
@@ -281,6 +285,10 @@ function bindEventHandlers() {
     state.scenarioSearch = event.target.value.trim().toLowerCase();
     renderScenarioList();
   });
+  elements.workflowSearch.addEventListener("input", event => {
+    state.workflowSearch = event.target.value.trim().toLowerCase();
+    renderWorkflowList();
+  });
   elements.projectSelect.addEventListener("change", async event => {
     try {
       await loadProject(event.target.value);
@@ -398,7 +406,7 @@ function populateProjectOptions() {
 
 async function loadWorkflowIndex() {
   try {
-    state.workflowIndex = await fetchJson("/workflows/index.json");
+    state.workflowIndex = resolveWorkflowIndex(await fetchJson("/workflows/index.json"));
     state.selectedWorkflowId = state.workflowIndex.defaultWorkflowId
       || state.workflowIndex.workflows?.[0]?.id
       || null;
@@ -963,7 +971,7 @@ function getAuthProfiles(authConfig = getProjectAuthConfig()) {
   const customProfileIds = new Set(customProfiles.map(profile => profile.id));
   const hiddenProfiles = getHiddenAuthProfileIds(state.currentProject);
   const staticProfiles = (authConfig.login?.profiles || [])
-    .filter(profile => !hiddenProfiles.has(profile.id))
+    .filter(profile => profile.authRequest === "anonymous" || !hiddenProfiles.has(profile.id))
     .filter(profile => !customProfileIds.has(profile.id))
     .map(profile => applyLocalAuthProfileValues(profile, state.currentProject));
   const anonymousProfiles = staticProfiles.filter(profile => profile.authRequest === "anonymous");
@@ -1147,7 +1155,7 @@ function getPidLitackaAuthProfiles() {
   const customProfileIds = new Set(customProfiles.map(profile => profile.id));
   const hiddenProfiles = getHiddenAuthProfileIds(project);
   const staticProfiles = (authConfig.login?.profiles || [])
-    .filter(profile => !hiddenProfiles.has(profile.id))
+    .filter(profile => profile.authRequest === "anonymous" || !hiddenProfiles.has(profile.id))
     .filter(profile => !customProfileIds.has(profile.id))
     .map(profile => applyLocalAuthProfileValues(profile, project));
   const anonymousProfiles = staticProfiles.filter(profile => profile.authRequest === "anonymous");
@@ -1245,6 +1253,10 @@ function getPidLitackaIdentityValues() {
     ...state.identityFormValues,
     __selectedProfileId: selectedProfile.id
   };
+
+  for (const hiddenField of selectedProfile.hiddenFields || []) {
+    delete result[hiddenField];
+  }
 
   if (selectedProfileIdentityId) {
     result.identityId = selectedProfileIdentityId;
@@ -1667,6 +1679,12 @@ function applyAuthProfileSelection(profileId, options = {}) {
     return;
   }
 
+  if (options.overwrite && profile.authRequest === "anonymous") {
+    for (const field of authConfig.login?.fields || []) {
+      delete state.authFormValues[field.name];
+    }
+  }
+
   for (const [name, value] of Object.entries(profile.values || {})) {
     if (options.overwrite || (state.authFormValues?.[name] ?? "") === "") {
       state.authFormValues[name] = value;
@@ -2055,6 +2073,12 @@ async function applyIdentityProfileSelection(profileId) {
   if (profile.isNewProfile) {
     Object.assign(formValues, createNewAuthProfileDraftValues());
   } else {
+    if (profile.authRequest === "anonymous") {
+      for (const field of authConfig.login?.fields || []) {
+        delete formValues[field.name];
+      }
+    }
+
     for (const [name, value] of Object.entries(profile.values || {})) {
       if (value !== undefined) {
         formValues[name] = value;
@@ -2117,6 +2141,10 @@ function saveIdentityFormValues() {
 }
 
 function getIdentityProfileLabel(profile, values = {}) {
+  if (profile?.authRequest === "anonymous") {
+    return profile.label || "Anonymní uživatel";
+  }
+
   const email = String(values.email || profile?.label || "").trim();
   const device = String(values.deviceName || values.deviceId || "").trim();
 
@@ -2196,6 +2224,12 @@ function saveCurrentIdentityProfile() {
 
   const session = loadSavedAuthSession(project, getPidLitackaEnvironmentId(project));
   const selectedProfile = getSelectedPidLitackaProfile();
+
+  if (selectedProfile?.authRequest === "anonymous" || selectedProfile?.noteDisabled) {
+    showRedisResult("error", "Anonymní profil nelze uložit.", "Vestavěný anonymní profil je spravovaný Klikátkem a neobsahuje e-mail ani heslo.");
+    return;
+  }
+
   const note = String(values.__newProfileNote || getPidLitackaIdentityProfileNote(selectedProfile) || "").trim();
   const isExistingProfile = selectedProfile && !selectedProfile.isNewProfile;
   const identityId = values.identityId || session?.identityId || state.redisIdentityId || getIdentityIdFromRedisSession(state.redisLastSession) || "";
@@ -2262,7 +2296,7 @@ function removeCurrentIdentityProfile() {
   const project = getPidLitackaProject();
   const profile = getSelectedPidLitackaProfile();
 
-  if (!project || !profile || profile.isNewProfile) {
+  if (!project || !profile || profile.isNewProfile || profile.authRequest === "anonymous" || profile.noteDisabled) {
     showRedisResult("warn", "Účet nelze odebrat.", "Nejdříve vyberte existující účet.");
     return;
   }
@@ -2449,8 +2483,13 @@ async function executeIdentityAuthAction(action) {
         if (!state.authSession?.accessToken) {
           throw new Error("Neni ulozene aktivni prihlaseni k odhlaseni.");
         }
-        await performAuthRequest("logout", authConfig.logout, { syncDom: false });
-        clearPidLitackaIdentitySession();
+        try {
+          await performAuthRequest("logout", authConfig.logout, { syncDom: false });
+        } finally {
+          // An expired or otherwise rejected JWT must not trap the browser in a
+          // session that can neither be used nor logged out.
+          clearPidLitackaIdentitySession();
+        }
       }
     });
 
@@ -2460,6 +2499,15 @@ async function executeIdentityAuthAction(action) {
     showRedisResult("ok", "Akce přihlášení proběhla.", actionDoneLabels[action] || "Hotovo.");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+
+    if (action === "logout") {
+      state.redisAutoSessionIdentityId = "";
+      renderRedisViewer();
+      showIdentityActionStatus("warn", "Lokální přihlášení bylo vymazáno; BE odhlášení se nepodařilo.");
+      showRedisResult("warn", "Lokální přihlášení bylo vymazáno.", message);
+      return;
+    }
+
     showIdentityActionStatus("error", message);
     showRedisResult(
       "error",
@@ -2917,6 +2965,47 @@ async function executeAuthLogin() {
   }
 
   await performAuthRequest("login", getActiveLoginRequestConfig(authConfig));
+
+  if (state.scenario) {
+    renderStep({ preserveValues: true });
+  }
+}
+
+function resolveWorkflowIndex(index) {
+  const configuredWorkflows = index?.workflows || [];
+  const workflowsById = new Map(configuredWorkflows.map(workflow => [workflow.id, workflow]));
+  const workflows = configuredWorkflows
+    .filter(workflow => workflow.hidden !== true)
+    .map(workflow => {
+      if (!workflow.sourceWorkflowId) {
+        return workflow;
+      }
+
+      const source = workflowsById.get(workflow.sourceWorkflowId);
+      if (!source) {
+        throw new Error(`Zdrojové workflow ${workflow.sourceWorkflowId} nebylo nalezeno.`);
+      }
+
+      const sourceItemsById = new Map((source.items || []).map(item => [item.id, item]));
+      const itemIds = workflow.itemIds || [];
+      const missingItemId = itemIds.find(itemId => !sourceItemsById.has(itemId));
+      if (missingItemId) {
+        throw new Error(`Krok ${missingItemId} nebyl nalezen ve workflow ${source.id}.`);
+      }
+
+      return {
+        ...workflow,
+        mode: workflow.mode || source.mode,
+        tags: workflow.tags || source.tags,
+        items: itemIds.map(itemId => sourceItemsById.get(itemId)),
+        report: workflow.report || source.report
+      };
+    });
+
+  return {
+    ...index,
+    workflows
+  };
 }
 
 async function executeAuthRefresh() {
@@ -2926,6 +3015,10 @@ async function executeAuthRefresh() {
   }
 
   await performAuthRequest("refresh", authConfig.refresh);
+
+  if (state.scenario) {
+    renderStep({ preserveValues: true });
+  }
 }
 
 async function executeAuthSessionRenew() {
@@ -4187,8 +4280,12 @@ function getIdentityProfileOptionLabel(profile, label) {
     return label;
   }
 
-  if (profile?.authRequest === "anonymous" || profile?.noteDisabled) {
-    return `${label} (anonymni)`;
+  if (profile?.authRequest === "anonymous") {
+    return profile.label || "Anonymní uživatel";
+  }
+
+  if (profile?.noteDisabled) {
+    return label;
   }
 
   return label;
@@ -4201,9 +4298,11 @@ function renderIdentityProfileActions() {
 
   const profile = getSelectedPidLitackaProfile();
   const values = getPidLitackaIdentityValues();
-  const canSave = Boolean(String(values.email || "").trim() && String(values.password || "").trim());
+  const isManagedAnonymousProfile = profile?.authRequest === "anonymous" || profile?.noteDisabled;
+  const canSave = !isManagedAnonymousProfile
+    && Boolean(String(values.email || "").trim() && String(values.password || "").trim());
   elements.identitySaveProfileAction.disabled = !canSave;
-  elements.identityRemoveProfileAction.disabled = !profile || profile.isNewProfile;
+  elements.identityRemoveProfileAction.disabled = !profile || profile.isNewProfile || isManagedAnonymousProfile;
 
   if (profile?.isNewProfile) {
     elements.identitySaveProfileAction.textContent = "Uložit účet";
@@ -5099,6 +5198,7 @@ function renderWorkflowList() {
 
   elements.workflowList.innerHTML = "";
   const workflows = state.workflowIndex?.workflows || [];
+  renderWorkflowCategoryFilters(workflows);
 
   if (workflows.length === 0) {
     elements.workflowList.innerHTML = `<div class="empty-state">Žádné workflow není nakonfigurované.</div>`;
@@ -5106,11 +5206,64 @@ function renderWorkflowList() {
     return;
   }
 
-  for (const workflow of workflows) {
+  const visibleWorkflows = workflows.filter(workflow => {
+    if (state.workflowCategory !== "all" && (workflow.category || "other") !== state.workflowCategory) {
+      return false;
+    }
+
+    if (!state.workflowSearch) {
+      return true;
+    }
+
+    return buildWorkflowSearchText(workflow).includes(state.workflowSearch);
+  });
+
+  if (visibleWorkflows.length === 0) {
+    elements.workflowList.innerHTML = `<div class="catalog-empty">Nenalezeno žádné workflow pro zadaný filtr.</div>`;
+    updateWorkflowControls();
+    return;
+  }
+
+  for (const workflow of visibleWorkflows) {
     elements.workflowList.appendChild(createWorkflowCard(workflow));
   }
 
   updateWorkflowControls();
+}
+
+function renderWorkflowCategoryFilters(workflows) {
+  if (!elements.workflowCategoryFilters) {
+    return;
+  }
+
+  elements.workflowCategoryFilters.innerHTML = "";
+  const categories = ["all", ...new Set(workflows.map(workflow => workflow.category || "other"))];
+
+  for (const category of categories) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `filter-chip ${state.workflowCategory === category ? "active" : ""}`;
+    button.textContent = category === "all"
+      ? `Vše (${workflows.length})`
+      : `${getWorkflowCategoryLabel(category)} (${workflows.filter(workflow => (workflow.category || "other") === category).length})`;
+    button.disabled = state.workflowRunning;
+    button.addEventListener("click", () => {
+      state.workflowCategory = category;
+      renderWorkflowList();
+    });
+    elements.workflowCategoryFilters.appendChild(button);
+  }
+}
+
+function buildWorkflowSearchText(workflow) {
+  return [
+    workflow.id,
+    workflow.name,
+    workflow.description,
+    getWorkflowCategoryLabel(workflow.category || "other"),
+    ...(workflow.tags || []).map(tag => getTagLabel(tag)),
+    ...(workflow.items || []).flatMap(item => [item.title, item.description, item.section])
+  ].filter(Boolean).join(" ").toLowerCase();
 }
 
 function createWorkflowCard(workflow) {
@@ -5124,8 +5277,9 @@ function createWorkflowCard(workflow) {
       <strong>${escapeHtml(workflow.name)}</strong>
       <p>${escapeHtml(workflow.description || "")}</p>
       <div class="form-meta">
+        ${workflow.category ? `<span class="meta-badge">${escapeHtml(getWorkflowCategoryLabel(workflow.category))}</span>` : ""}
         ${renderTagChips(workflow.tags)}
-        <span class="meta-badge">${escapeHtml(`${workflow.items?.length || 0} scénářů`)}</span>
+        <span class="meta-badge">${escapeHtml(`${workflow.items?.length || 0} ${workflow.mode === "presentation" ? "prezentačních kroků" : "scénářů"}`)}</span>
       </div>
     </button>
     <button class="scenario-toggle" type="button" aria-expanded="${String(expanded)}" ${state.workflowRunning ? "disabled" : ""}>${expanded ? "Skrýt kroky" : `Kroky (${workflow.items?.length || 0})`}</button>
@@ -5141,10 +5295,10 @@ function createWorkflowCard(workflow) {
               <strong>${escapeHtml(item.title || item.scenarioId)}</strong>
               <small>${escapeHtml(visualState.label)}</small>
             </div>
-            <p>${escapeHtml(`${item.projectId} / ${item.packId} / ${item.scenarioId}`)}</p>
+            <p>${escapeHtml(getWorkflowItemSourceLabel(item))}</p>
           </div>
           <div class="workflow-step-actions">
-            <button class="workflow-open-source" type="button" data-workflow-step-index="${index}" ${state.workflowRunning ? "disabled" : ""}>Otevřít</button>
+            ${isPresentationWorkflowItem(item) ? "" : `<button class="workflow-open-source" type="button" data-workflow-step-index="${index}" ${state.workflowRunning ? "disabled" : ""}>Otevřít</button>`}
             <button class="workflow-start-at" type="button" data-workflow-step-index="${index}" ${state.workflowRunning ? "disabled" : ""}>Pokra\u010dovat odtud</button>
           </div>
         </li>`;
@@ -5175,6 +5329,18 @@ function createWorkflowCard(workflow) {
   });
   card.classList.toggle("active", state.selectedWorkflowId === workflow.id);
   return card;
+}
+
+function isPresentationWorkflowItem(item) {
+  return item?.type === "presentation";
+}
+
+function getWorkflowItemSourceLabel(item) {
+  if (isPresentationWorkflowItem(item)) {
+    return ["Prezentace v emulátoru", item.section].filter(Boolean).join(" / ");
+  }
+
+  return `${item.projectId} / ${item.packId} / ${item.scenarioId}`;
 }
 
 function getWorkflowItemVisualState(workflow, itemIndex) {
@@ -5247,6 +5413,11 @@ async function openWorkflowSourceItem(workflowId, itemIndex) {
       workflowId || "Neznámé workflow",
       `Krok ${Number.isFinite(itemIndex) ? itemIndex + 1 : "?"}`
     ]);
+    return;
+  }
+
+  if (isPresentationWorkflowItem(item)) {
+    showWorkflowSummary("warn", item.message || item.title, getPresentationWorkflowItemLines(item));
     return;
   }
 
@@ -5747,7 +5918,7 @@ function getMobileActionTitle(step) {
   const pathLower = path.toLowerCase();
   const method = step.request?.method || (step.customAction ? "AKCE" : "GET");
 
-  if (path.includes("/v1/parking/cards")) {
+  if (path.includes("/v1/parking/cards") || path.includes("/v1/accounts/me/saved-cards")) {
     return path.includes("last-used")
       ? "Poslední použitá karta"
       : method === "DELETE"
@@ -5885,7 +6056,7 @@ function getMobileActionTitle(step) {
 function getMobileActionSubtitle(step) {
   const path = step.request?.path || "";
 
-  if (path.includes("/v1/parking/cards")) {
+  if (path.includes("/v1/parking/cards") || path.includes("/v1/accounts/me/saved-cards")) {
     return "Seznam karet uložených k aktuálnímu uživateli.";
   }
 
@@ -5972,9 +6143,10 @@ function renderField(field, value) {
     return renderImageFileField(wrapper, field, value);
   }
 
+  const allowsCustomSelectValue = field.type === "select" && field.allowCustomValue === true;
   const input = field.type === "textarea"
     ? document.createElement("textarea")
-    : field.type === "select"
+    : field.type === "select" && !allowsCustomSelectValue
       ? document.createElement("select")
       : document.createElement("input");
 
@@ -5985,14 +6157,37 @@ function renderField(field, value) {
   input.spellcheck = false;
 
   if (field.type === "select") {
-    for (const option of field.options || []) {
-      const optionElement = document.createElement("option");
-      optionElement.value = String(option.value);
-      optionElement.textContent = option.text ?? String(option.value);
-      input.appendChild(optionElement);
+    const options = getScenarioFieldOptions(field);
+
+    if (allowsCustomSelectValue) {
+      const list = document.createElement("datalist");
+      list.id = `field-${field.name}-options`;
+      input.setAttribute("list", list.id);
+      input.type = field.customInputType || "text";
+
+      for (const option of options) {
+        const optionElement = document.createElement("option");
+        optionElement.value = String(option.value);
+        optionElement.label = option.text ?? String(option.value);
+        list.appendChild(optionElement);
+      }
+
+      wrapper.appendChild(list);
+    } else {
+      for (const option of options) {
+        const optionElement = document.createElement("option");
+        optionElement.value = String(option.value);
+        optionElement.textContent = option.text ?? String(option.value);
+        input.appendChild(optionElement);
+      }
     }
 
     input.value = String(value ?? "");
+
+    if (!input.value && options.length > 0) {
+      input.value = String(options[0].value);
+      state.values[field.name] = input.value;
+    }
   } else if (field.type === "checkbox") {
     input.checked = value === true || value === "true";
     input.value = "true";
@@ -6038,6 +6233,30 @@ function renderField(field, value) {
   }
 
   return wrapper;
+}
+
+function getScenarioFieldOptions(field) {
+  if (field?.optionsSource !== "pidlitacka-auth-profiles") {
+    return field?.options || [];
+  }
+
+  const currentEmail = String(state.authSession?.email || "").trim().toLowerCase();
+
+  return getPidLitackaAuthProfiles()
+    .filter(profile => !profile.isNewProfile && profile.authRequest !== "anonymous")
+    .map(profile => {
+      const email = String(profile.values?.email || profile.label || "").trim();
+      const label = getIdentityProfileLabel(profile, profile.values || {}) || email;
+
+      return {
+        profile,
+        email,
+        value: email,
+        text: getIdentityProfileOptionLabel(profile, label)
+      };
+    })
+    .filter(option => option.email)
+    .filter(option => !field.excludeCurrentSession || option.email.toLowerCase() !== currentEmail);
 }
 
 function renderImageFileField(wrapper, field, value) {
@@ -6843,6 +7062,84 @@ async function runCurrentStep() {
 }
 
 async function runCustomStep(step, runningStepIndex) {
+  if (step.customAction === "loginPidLitackaProfile") {
+    const authConfig = getProjectAuthConfig();
+    const email = resolveTemplate(step.profileLogin?.email || "", { fieldValues: state.values }).trim();
+    const manualPassword = resolveTemplate(step.profileLogin?.password || "", { fieldValues: state.values });
+    const roleLabel = String(step.profileLogin?.roleLabel || "příjemce").trim() || "uživatel";
+
+    if (state.currentProject?.id !== "pidlitacka" || authConfig.type !== "login" || !authConfig.login) {
+      throw new Error("Přihlášení uloženého profilu je dostupné pouze v projektu PidLitacka.");
+    }
+
+    const profile = getAuthProfiles(authConfig).find(candidate =>
+      !candidate.isNewProfile
+      && candidate.authRequest !== "anonymous"
+      && String(candidate.values?.email || candidate.label || "").trim().toLowerCase() === email.toLowerCase());
+
+    if (!email) {
+      throw new Error(`Vyplňte e-mail ${roleLabel === "odesílatel" ? "odesílatele" : "příjemce"}.`);
+    }
+
+    if (profile && !String(profile.values?.password || "")) {
+      throw new Error(`Uložený profil ${email} nemá heslo. Doplňte ho v záložce Uživatel a krok zopakujte.`);
+    }
+
+    if (!profile && !manualPassword) {
+      throw new Error(`Pro ručně zadaný účet ${email} vyplňte heslo.`);
+    }
+
+    await applyStepProxyTarget(step);
+    if (profile) {
+      applyAuthProfileSelection(profile.id, { overwrite: true });
+    } else {
+      state.authFormValues = {
+        ...state.authFormValues,
+        ...createNewAuthProfileDraftValues(),
+        __selectedProfileId: NEW_AUTH_PROFILE_ID,
+        email,
+        password: manualPassword
+      };
+    }
+    await performAuthRequest("login", authConfig.login, { syncDom: false });
+
+    const loggedInEmail = String(state.authSession?.email || "").trim();
+    if (!loggedInEmail || loggedInEmail.toLowerCase() !== email.toLowerCase()) {
+      throw new Error(`Po přihlášení byl očekáván uživatel ${email}, ale backend vrátil ${loggedInEmail || "prázdný e-mail"}.`);
+    }
+
+    const identityContextKey = step.profileLogin?.identityContextKey || "loggedInRecipientIdentityId";
+    state.context[identityContextKey] = state.authSession?.identityId || "";
+    const result = {
+      level: "ok",
+      appMessage: `Přihlášen ${roleLabel}: ${loggedInEmail}.`,
+      messages: [step.profileLogin?.successDetail || "Vybraný účet je připravený pro další krok scénáře."]
+    };
+
+    state.lastStepResult = result;
+    state.stepResults[runningStepIndex] = result;
+    addLog("ok", `${step.title} -> ${profile ? "uložený profil" : "ručně zadaný účet"}`, {
+      request: {
+        action: step.customAction,
+        profileId: profile?.id || null,
+        email: loggedInEmail
+      },
+      response: {
+        identityId: state.authSession?.identityId || ""
+      },
+      expected: step.expected || null,
+      mode: state.dirty ? "exploratory" : "scenario",
+      notes: result.messages
+    });
+    showResult("ok", result.appMessage, {
+      email: loggedInEmail,
+      identityId: state.authSession?.identityId || ""
+    }, step);
+    renderContext();
+    updateNextStepControl();
+    return;
+  }
+
   if (step.customAction === "requireTemplateValue") {
     const templates = step.requireValue?.templates || [step.requireValue?.template || ""];
     const value = templates
@@ -6955,6 +7252,44 @@ async function runCustomStep(step, runningStepIndex) {
       notes: result.messages
     });
 
+    showResult(level, result.appMessage, overview, step);
+    renderContext();
+    updateNextStepControl();
+    return;
+  }
+
+  if (step.customAction === "couponReceiptAvailabilityOverview") {
+    const startedAt = performance.now();
+    const overview = await loadCouponReceiptAvailabilityOverview();
+    const durationMs = Math.round(performance.now() - startedAt);
+    const level = overview.errors.length > 0 ? "warn" : "ok";
+    const result = {
+      level,
+      appMessage: overview.errors.length > 0
+        ? "Přehled dostupnosti dokladů je částečný."
+        : "Přehled dostupnosti dokladů byl načten.",
+      messages: [
+        `Načteno ${formatCount(overview.counts.total, "kupón", "kupóny", "kupónů")}; doklad je dostupný pro ${overview.counts.available}, konečně nedostupný pro ${overview.counts.finalUnavailable}, na platbu čeká ${overview.counts.waiting} a zásah nebo diagnostiku vyžaduje ${overview.counts.actionRequired}.`,
+        ...(overview.errors.length > 0 ? overview.errors : [])
+      ]
+    };
+
+    state.lastStepResult = result;
+    state.stepResults[runningStepIndex] = result;
+    addLog(level, `${step.title} -> dostupnost dokladů`, {
+      request: {
+        action: step.customAction,
+        uniqueOrderRequests: overview.counts.uniqueOrders,
+        calls: overview.requests
+      },
+      response: {
+        durationMs,
+        body: overview
+      },
+      expected: step.expected || null,
+      mode: state.dirty ? "exploratory" : "scenario",
+      notes: result.messages
+    });
     showResult(level, result.appMessage, overview, step);
     renderContext();
     updateNextStepControl();
@@ -7284,6 +7619,314 @@ async function loadCouponMoveTargetOverview(step) {
   };
 }
 
+async function loadCouponReceiptAvailabilityOverview() {
+  let clientCouponsResponse;
+
+  try {
+    clientCouponsResponse = await callPidLitackaJson("/v1/client/coupons");
+  } catch (error) {
+    const failure = getCouponOverviewHttpFailure(error, "coupon-list");
+    const contextualError = new Error(
+      `Seznam kupónů se nepodařilo načíst${failure.httpSuffix}. ${failure.reason}`
+    );
+    contextualError.request = error?.request || null;
+    contextualError.response = error?.response || null;
+    throw contextualError;
+  }
+
+  const sourceCoupons = Array.isArray(clientCouponsResponse.body?.coupons)
+    ? clientCouponsResponse.body.coupons
+    : [];
+  const orderIds = [...new Set(sourceCoupons
+    .map(coupon => Number(coupon.orderId))
+    .filter(orderId => Number.isInteger(orderId) && orderId > 0))];
+  const statusByOrderId = new Map();
+  const errors = [];
+  const requests = [
+    buildPidLitackaCallLog(clientCouponsResponse, {
+      purpose: "Načíst všechny kupóny klienta"
+    })
+  ];
+  const concurrency = 4;
+
+  for (let offset = 0; offset < orderIds.length; offset += concurrency) {
+    const batch = orderIds.slice(offset, offset + concurrency);
+
+    await Promise.all(batch.map(async orderId => {
+      try {
+        const statusResponse = await callPidLitackaJson(`/v1/client/coupons/receipt/${encodeURIComponent(orderId)}/status`);
+        const receiptStatus = String(statusResponse.body?.status || "unknown").toLowerCase();
+        const receiptReasonCode = String(statusResponse.body?.reasonCode || "").trim().toLowerCase();
+        const receiptIsFinal = typeof statusResponse.body?.isFinal === "boolean"
+          ? statusResponse.body.isFinal
+          : null;
+        const receiptRecheckPolicy = getCouponReceiptRecheckPolicy(statusResponse.body?.recheckPolicy);
+        const receiptRecheckAfterSeconds = getCouponReceiptRecheckAfterSeconds(
+          statusResponse.body?.recheckAfterSeconds
+        );
+
+        statusByOrderId.set(orderId, {
+          status: receiptStatus,
+          reasonCode: receiptReasonCode,
+          isFinal: receiptIsFinal,
+          recheckPolicy: receiptRecheckPolicy,
+          recheckAfterSeconds: receiptRecheckAfterSeconds,
+          httpStatus: statusResponse.status,
+          error: ""
+        });
+        requests.push(buildPidLitackaCallLog(statusResponse, {
+          purpose: "Ověřit dostupnost dokladu",
+          mosOrderId: orderId
+        }));
+      } catch (error) {
+        const failure = getCouponOverviewHttpFailure(error, "receipt-status");
+        const message = `Dostupnost dokladu se nepodařilo ověřit${failure.httpSuffix}. ${failure.reason}`;
+        const httpStatus = failure.httpStatus;
+
+        statusByOrderId.set(orderId, {
+          status: "error",
+          reasonCode: failure.reasonCode,
+          isFinal: failure.isFinal,
+          recheckPolicy: failure.recheckPolicy,
+          recheckAfterSeconds: failure.recheckAfterSeconds,
+          httpStatus,
+          error: message,
+          backendProblemTitle: failure.problemTitle
+        });
+        requests.push({
+          purpose: "Ověřit dostupnost dokladu",
+          mosOrderId: orderId,
+          request: error?.request || null,
+          response: error?.response || null,
+          error: message
+        });
+        errors.push(`Objednávka ${orderId}: ${message}`);
+      }
+    }));
+  }
+
+  const coupons = sourceCoupons.map(coupon => {
+    const orderId = Number(coupon.orderId);
+    const hasOrderId = Number.isInteger(orderId) && orderId > 0;
+    const receipt = hasOrderId
+      ? statusByOrderId.get(orderId) || {
+          status: "error",
+          reasonCode: "",
+          isFinal: null,
+          recheckPolicy: "",
+          recheckAfterSeconds: null,
+          httpStatus: null,
+          error: "Stav dokladu nebyl načten."
+        }
+      : {
+          status: "missing-order-id",
+          reasonCode: "order-id-missing",
+          isFinal: null,
+          recheckPolicy: "after-user-action",
+          recheckAfterSeconds: null,
+          httpStatus: null,
+          error: ""
+        };
+
+    return {
+      ...coupon,
+      receiptStatus: receipt.status,
+      receiptAvailable: receipt.status === "available",
+      receiptReasonCode: receipt.reasonCode || "",
+      receiptIsFinal: typeof receipt.isFinal === "boolean" ? receipt.isFinal : null,
+      receiptRecheckPolicy: getCouponReceiptRecheckPolicy(receipt.recheckPolicy),
+      receiptRecheckAfterSeconds: getCouponReceiptRecheckAfterSeconds(receipt.recheckAfterSeconds),
+      receiptStatusHttpStatus: receipt.httpStatus,
+      receiptStatusError: receipt.error,
+      receiptStatusBackendProblemTitle: receipt.backendProblemTitle || ""
+    };
+  });
+  const countStatus = status => coupons.filter(coupon => coupon.receiptStatus === status).length;
+  const countReason = reasonCode => coupons.filter(coupon => coupon.receiptReasonCode === reasonCode).length;
+  const countGroup = groupKey => coupons.filter(coupon => getCouponReceiptGroup(coupon).key === groupKey).length;
+
+  return {
+    kind: "couponReceiptAvailabilityOverview",
+    sourceStatus: clientCouponsResponse.body?.status || "",
+    counts: {
+      total: coupons.length,
+      uniqueOrders: orderIds.length,
+      available: countStatus("available"),
+      notAvailable: countStatus("not-available"),
+      pending: countStatus("pending"),
+      unknown: countStatus("unknown"),
+      final: coupons.filter(coupon => coupon.receiptIsFinal === true).length,
+      finalUnavailable: countGroup("final-unavailable"),
+      waiting: countGroup("waiting"),
+      actionRequired: countGroup("action-required"),
+      verificationFailed: countGroup("verification-failed"),
+      delayed: coupons.filter(coupon => coupon.receiptRecheckPolicy === "delayed").length,
+      afterUserAction: coupons.filter(coupon => coupon.receiptRecheckPolicy === "after-user-action").length,
+      noRecheck: coupons.filter(coupon => coupon.receiptRecheckPolicy === "none").length,
+      withoutDiagnostics: coupons.filter(coupon =>
+        !["missing-order-id", "error"].includes(coupon.receiptStatus)
+        && !coupon.receiptReasonCode).length,
+      reasons: {
+        receiptAvailable: countReason("receipt-available"),
+        paymentPending: countReason("payment-pending"),
+        paymentNotStarted: countReason("payment-not-started"),
+        paymentFailed: countReason("payment-failed"),
+        paymentStatusUnconfirmed: countReason("payment-status-unconfirmed"),
+        paymentConfirmationInconsistent: countReason("payment-confirmation-inconsistent"),
+        awaitingBankTransfer: countReason("awaiting-bank-transfer"),
+        receiptNotCreated: countReason("receipt-not-created"),
+        orderCancelled: countReason("order-cancelled"),
+        paymentTypeNotSupported: countReason("payment-type-not-supported"),
+        orderNotAccessible: countReason("order-not-accessible"),
+        orderNotAssignedToCurrentLogin: countReason("order-not-assigned-to-current-login"),
+        orderNotFound: countReason("order-not-found"),
+        coreMosUnavailable: countReason("core-mos-unavailable"),
+        sessionExpired: countReason("session-expired"),
+        invalidRequest: countReason("invalid-request"),
+        orderIdMissing: countReason("order-id-missing"),
+        unknown: countReason("unknown")
+      },
+      missingOrderId: countStatus("missing-order-id"),
+      error: countStatus("error")
+    },
+    coupons,
+    requests,
+    errors
+  };
+}
+
+function getCouponOverviewHttpFailure(error, operation) {
+  const httpStatus = Number(error?.response?.status || 0) || null;
+  const problem = error?.response?.body && typeof error.response.body === "object"
+    ? error.response.body
+    : {};
+  const problemTitle = String(problem.title || "").trim();
+  const reasonCode = String(problem.reasonCode || "").trim().toLowerCase();
+  const isFinal = typeof problem.isFinal === "boolean" ? problem.isFinal : null;
+  const recheckPolicy = getCouponReceiptRecheckPolicy(problem.recheckPolicy);
+  const recheckAfterSeconds = getCouponReceiptRecheckAfterSeconds(problem.recheckAfterSeconds);
+  const backendStepValue = problem.errors?.step;
+  const backendStep = String(
+    Array.isArray(backendStepValue) ? backendStepValue[0] || "" : backendStepValue || ""
+  ).trim();
+  const isCouponList = operation === "coupon-list";
+  let reason;
+
+  if (httpStatus === 401) {
+    reason = "Přihlášení nebo MOS session už nejsou platné.";
+  } else if (httpStatus === 404) {
+    reason = isCouponList
+      ? "Backend nenašel data aktuálně přihlášeného klienta."
+      : "Objednávka nebyla pro přihlášeného klienta nalezena.";
+  } else if (httpStatus === 400) {
+    reason = isCouponList
+      ? "Backend odmítl načtení kupónů aktuálně přihlášeného klienta."
+      : "Backend odmítl ověření dostupnosti dokladu.";
+  } else if (httpStatus === 502) {
+    reason = "Backend nebo Core MOS nedokázal požadavek dokončit.";
+  } else if (problemTitle) {
+    reason = isCouponList
+      ? "Backend nedokončil načtení kupónů."
+      : "Backend nedokončil ověření dostupnosti dokladu.";
+  } else {
+    reason = "Backend požadavek nedokončil.";
+  }
+
+  if (backendStep) {
+    reason += ` Selhal backendový krok ${backendStep}.`;
+  }
+
+  return {
+    httpStatus,
+    httpSuffix: httpStatus ? ` (HTTP ${httpStatus})` : "",
+    problemTitle,
+    reasonCode,
+    isFinal,
+    recheckPolicy,
+    recheckAfterSeconds,
+    backendStep,
+    reason
+  };
+}
+
+function getCouponReceiptRecheckPolicy(value) {
+  const policy = String(value || "").trim().toLowerCase();
+  return ["none", "delayed", "after-user-action"].includes(policy) ? policy : "";
+}
+
+function getCouponReceiptRecheckAfterSeconds(value) {
+  const seconds = Number(value);
+  return Number.isInteger(seconds) && seconds > 0 ? seconds : null;
+}
+
+function getCouponReceiptRecheckLabel(policy, recheckAfterSeconds) {
+  switch (getCouponReceiptRecheckPolicy(policy)) {
+    case "none":
+      return "další kontrola není potřeba";
+    case "delayed":
+      return recheckAfterSeconds
+        ? `ověřit nejdříve za ${recheckAfterSeconds} s`
+        : "ověřit s časovým odstupem";
+    case "after-user-action":
+      return "ověřit až po zásahu nebo pokynu";
+    default:
+      return "pokyn ke kontrole neuveden";
+  }
+}
+
+function getCouponReceiptGroup(coupon) {
+  const status = String(coupon?.receiptStatus || "").toLowerCase();
+  const reasonCode = String(coupon?.receiptReasonCode || "").toLowerCase();
+
+  if (["error", "missing-order-id"].includes(status)
+    || ["core-mos-unavailable", "session-expired", "invalid-request", "order-id-missing"].includes(reasonCode)) {
+    return {
+      key: "verification-failed",
+      label: "Stav se nepodařilo ověřit",
+      description: "Nejprve je potřeba obnovit přihlášení, opravit požadavek nebo zopakovat diagnostiku později."
+    };
+  }
+
+  if (status === "available" || reasonCode === "receipt-available") {
+    return {
+      key: "available",
+      label: "Doklad je dostupný",
+      description: "Doklad existuje a lze jej stáhnout."
+    };
+  }
+
+  if (coupon?.receiptIsFinal === true) {
+    return {
+      key: "final-unavailable",
+      label: "Doklad konečně není dostupný",
+      description: "Další kontrola stejného stavu už nemá smysl."
+    };
+  }
+
+  if (status === "pending" || ["payment-pending", "awaiting-bank-transfer"].includes(reasonCode)) {
+    return {
+      key: "waiting",
+      label: "Čeká se na dokončení platby",
+      description: "Doklad zatím nemůže vzniknout, protože platba ještě není potvrzená."
+    };
+  }
+
+  if (coupon?.receiptRecheckPolicy === "after-user-action"
+    || ["payment-not-started", "payment-status-unconfirmed", "payment-confirmation-inconsistent"].includes(reasonCode)) {
+    return {
+      key: "action-required",
+      label: "Nutný zásah nebo diagnostika",
+      description: "Automatické krátké opakování není doporučené; stav ověřte až po zásahu nebo novém pokynu."
+    };
+  }
+
+  return {
+    key: "undetermined",
+    label: "Stav není jednoznačně určen",
+    description: "Backend neposkytl dostatek údajů pro spolehlivé zařazení."
+  };
+}
+
 function buildPidLitackaCallLog(call, extra = {}) {
   return {
     ...extra,
@@ -7323,6 +7966,12 @@ async function callPidLitackaJson(path) {
     visibleHeaders.Authorization = "Bearer ***";
   }
 
+  const currentDeviceId = getCurrentDeviceIdForPidLitackaHeader();
+  if (currentDeviceId && shouldSendCurrentDeviceHeader(path)) {
+    headers["X-Device-Id"] = currentDeviceId;
+    visibleHeaders["X-Device-Id"] = currentDeviceId;
+  }
+
   const request = {
     method: "GET",
     url,
@@ -7358,6 +8007,24 @@ async function callPidLitackaJson(path) {
     request,
     body
   };
+}
+
+function getCurrentDeviceIdForPidLitackaHeader() {
+  return String(
+    state.context?.pidCurrentDeviceId
+    || state.workflowContext?.pidCurrentDeviceId
+    || state.authSession?.deviceId
+    || state.authFormValues?.deviceId
+    || ""
+  ).trim();
+}
+
+function shouldSendCurrentDeviceHeader(path) {
+  return path === "/v1/client/identifiers"
+    || path === "/v1/client/coupons"
+    || path.startsWith("/v1/client/coupons?")
+    || path.startsWith("/v1/client/coupons/move-preview")
+    || path.startsWith("/v1/client/coupons/purchase/options");
 }
 
 async function callMosSoap(operation, bodyContent) {
@@ -7559,7 +8226,8 @@ function prepareWorkflowRun(workflow, itemIndex, options = {}) {
     results: previousResults,
     startedAt: new Date().toISOString(),
     status: "running",
-    skipInitialSync
+    skipInitialSync,
+    presentationPendingItemIndex: null
   };
   state.workflowLastReport = null;
 }
@@ -7577,6 +8245,10 @@ function clearOpenWorkflowItemProgress(item) {
 }
 
 function getWorkflowResultItemIndex(workflow, result) {
+  if (Number.isInteger(result.workflowItemIndex)) {
+    return result.workflowItemIndex;
+  }
+
   return (workflow.items || []).findIndex(item =>
     item.projectId === result.projectId
     && item.packId === result.packId
@@ -7614,6 +8286,40 @@ async function continueWorkflowRun() {
       }
 
       const item = workflow.items[state.workflowRun.itemIndex];
+
+      if (isPresentationWorkflowItem(item)) {
+        if (state.workflowRun.presentationPendingItemIndex === state.workflowRun.itemIndex) {
+          const completedItemIndex = state.workflowRun.itemIndex;
+          state.workflowRun.results.push({
+            workflowItemIndex: completedItemIndex,
+            projectId: "presentation",
+            packId: item.section || "emulator",
+            scenarioId: item.section || "emulator",
+            scenarioTitle: item.section || "Prezentace v emulátoru",
+            stepId: item.id || `presentation-${completedItemIndex + 1}`,
+            stepTitle: item.title,
+            level: "ok",
+            messages: ["Prezentační krok potvrzen moderátorem."],
+            mode: "presentation"
+          });
+          addLog("ok", "Presentation workflow item completed", {
+            itemIndex: completedItemIndex,
+            id: item.id || null,
+            title: item.title
+          });
+          state.workflowRun.presentationPendingItemIndex = null;
+          state.workflowRun.itemIndex += 1;
+          state.workflowRun.stepIndex = 0;
+          continue;
+        }
+
+        state.workflowRun.presentationPendingItemIndex = state.workflowRun.itemIndex;
+        pauseWorkflow(item.message || item.title, "warn", getPresentationWorkflowItemLines(item), {
+          presentationItem: item
+        });
+        return;
+      }
+
       const redisSessionReady = await applyWorkflowRedisSession(item);
       if (redisSessionReady?.ok === false) {
         pauseWorkflow(redisSessionReady.message, "error", redisSessionReady.lines);
@@ -7659,6 +8365,7 @@ async function continueWorkflowRun() {
         syncWorkflowContextFromScenario();
 
         const result = {
+          workflowItemIndex: state.workflowRun.itemIndex,
           projectId: item.projectId,
           packId: item.packId,
           scenarioId: item.scenarioId,
@@ -7790,6 +8497,7 @@ function syncCompletedWorkflowStepResults(item, scenario) {
     }
 
     run.results.push({
+      workflowItemIndex: run.itemIndex,
       projectId: item.projectId,
       packId: item.packId,
       scenarioId: item.scenarioId,
@@ -8325,13 +9033,222 @@ function pauseWorkflow(message, level = "warn", extraLines = [], options = {}) {
   ]);
   setWorkflowControls(false);
   updateWorkflowStatus("Pozastaveno");
-  if (!options.preserveResult) {
+  if (options.presentationItem) {
+    showPresentationWorkflowPauseResult(level, message, options.presentationItem);
+  } else if (!options.preserveResult) {
     syncVisibleStepFromWorkflowRun();
     renderStep({ preserveValues: true });
     showWorkflowPauseResult(level, message, extraLines);
   } else {
     showWorkflowPauseNoticeInCurrentResult(level, message, extraLines);
   }
+}
+
+function getPresentationWorkflowItemLines(item) {
+  return [
+    ...(item.instructions || []),
+    ...(item.expected || []).map(line => `Očekáváme: ${line}`),
+    ...(item.notes || []).map(line => `Poznámka: ${line}`)
+  ];
+}
+
+function showPresentationWorkflowPauseResult(level, message, item) {
+  clearResultCountdown();
+  const instructions = item.instructions || [];
+  const expected = item.expected || [];
+  const notes = item.notes || [];
+  const emulator = item.emulator || null;
+  const emulatorSubscenario = getEmulatorSubscenario(emulator?.subscenarioId);
+  const hasEmulatorActions = Boolean(emulator?.actions?.length || emulatorSubscenario?.actions?.length);
+  const emulatorActionLabel = emulator?.label || emulatorSubscenario?.label || "Provést v emulátoru";
+  state.displayedResult = {
+    level,
+    message,
+    body: item,
+    step: null,
+    workflowPaused: true,
+    presentation: true
+  };
+  elements.screenTitle.textContent = item.section || "Prezentace v emulátoru";
+  elements.screenDescription.textContent = item.title || "Ruční prezentační krok";
+  elements.testerTitle.textContent = item.title || "Prezentační krok";
+  elements.testerDescription.textContent = message;
+  elements.testerExpected.textContent = expected.join(" ");
+  elements.stepCounter.textContent = "Ruční krok";
+  elements.stepForm.innerHTML = "";
+  elements.modeBanner.textContent = "Prezentační režim: žádné backendové volání se nespustí; krok potvrďte v ovládání workflow.";
+  elements.resultCard.className = `result-card ${level} workflow-pause-result`;
+  elements.resultCard.innerHTML = `
+    <strong class="result-title">Teď uděláme</strong>
+    <div class="result-message">${escapeHtml(message)}</div>
+    ${instructions.length > 0 ? `<ul class="workflow-pause-lines">${instructions.map(line => `<li>${escapeHtml(line)}</li>`).join("")}</ul>` : ""}
+    ${expected.length > 0 ? `
+      <strong class="result-title">Co má být vidět</strong>
+      <ul class="workflow-pause-lines">${expected.map(line => `<li>${escapeHtml(line)}</li>`).join("")}</ul>
+    ` : ""}
+    ${notes.length > 0 ? `
+      <strong class="result-title">Poznámky pro prezentujícího</strong>
+      <ul class="workflow-pause-lines">${notes.map(line => `<li>${escapeHtml(line)}</li>`).join("")}</ul>
+    ` : ""}
+    ${hasEmulatorActions ? `
+      <div class="toolbar presentation-emulator-actions">
+        <button type="button" id="runPresentationEmulatorAction">${escapeHtml(emulatorActionLabel)}</button>
+        <span id="presentationEmulatorStatus" role="status" aria-live="polite">Emulátor nemusí mít focus.</span>
+      </div>
+    ` : ""}
+    <div class="workflow-pause-next">Až je krok odprezentovaný, klikněte na <strong>Pokračovat ve workflow</strong>.</div>
+  `;
+  elements.nextStep.disabled = true;
+  elements.runStep.disabled = true;
+  elements.previousStep.disabled = true;
+  elements.resetScenario.disabled = true;
+  elements.autoRun.disabled = true;
+  elements.autoRunTarget.disabled = true;
+  elements.nextStep.textContent = "Další";
+  elements.nextStep.title = "Prezentační krok se potvrzuje tlačítkem Pokračovat ve workflow.";
+  elements.nextStep.classList.remove("ready");
+
+  const emulatorButton = document.getElementById("runPresentationEmulatorAction");
+  if (emulatorButton) {
+    emulatorButton.addEventListener("click", () => runPresentationWorkflowItemInEmulator(item, emulatorButton));
+  }
+}
+
+async function runPresentationWorkflowItemInEmulator(item, button) {
+  let emulator;
+  const status = document.getElementById("presentationEmulatorStatus");
+
+  try {
+    emulator = resolvePresentationEmulatorExecution(item);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    button.classList.add("error");
+    if (status) {
+      status.classList.add("error");
+      status.textContent = message;
+    }
+    addLog("error", "Presentation emulator action could not start", {
+      workflowItemId: item.id,
+      message
+    });
+    return;
+  }
+
+  if (emulator.confirm && !window.confirm(emulator.confirm)) {
+    return;
+  }
+
+  button.disabled = true;
+  button.classList.remove("error");
+  button.textContent = "Provádím...";
+  if (status) {
+    status.classList.remove("error");
+    status.textContent = "Klikátko ovládá emulátor přes lokální ADB...";
+  }
+
+  try {
+    const response = await fetch("/__emulator/actions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        deviceId: emulator.deviceId || "emulator-5554",
+        showTouches: emulator.showTouches !== false,
+        actions: emulator.actions || []
+      })
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.ok === false) {
+      throw new Error(payload.message || `Emulátor vrátil HTTP ${response.status}.`);
+    }
+
+    button.textContent = "Provedeno v emulátoru";
+    button.classList.add("ready");
+    if (status) {
+      const labels = (payload.currentLabels || []).slice(0, 4).join(" · ");
+      status.textContent = labels ? `Hotovo. Na obrazovce: ${labels}` : "Akce byla provedena a ověřena.";
+    }
+    addLog("ok", "Presentation emulator action completed", {
+      workflowItemId: item.id,
+      actions: payload.actions,
+      currentLabels: payload.currentLabels
+    });
+  } catch (error) {
+    button.disabled = false;
+    button.classList.add("error");
+    button.textContent = emulator.label || "Zkusit znovu v emulátoru";
+    if (status) {
+      status.classList.add("error");
+      status.textContent = error instanceof Error ? error.message : String(error);
+    }
+    addLog("error", "Presentation emulator action failed", {
+      workflowItemId: item.id,
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+}
+
+function getEmulatorSubscenario(subscenarioId) {
+  if (!subscenarioId) {
+    return null;
+  }
+
+  return (state.workflowIndex?.emulatorSubscenarios || []).find(item => item.id === subscenarioId) || null;
+}
+
+function resolvePresentationEmulatorExecution(item) {
+  const configured = item.emulator || {};
+  const subscenario = getEmulatorSubscenario(configured.subscenarioId);
+  if (configured.subscenarioId && !subscenario) {
+    throw new Error(`Emulator sub-scénář ${configured.subscenarioId} nebyl nalezen.`);
+  }
+
+  const variables = {
+    ...(subscenario?.variables || {}),
+    ...(configured.variables || {})
+  };
+  const profileEmail = String(configured.profileEmail || variables.email || "").trim();
+
+  if (profileEmail) {
+    const profile = getPidLitackaAuthProfiles().find(candidate =>
+      !candidate.isNewProfile
+      && candidate.authRequest !== "anonymous"
+      && String(candidate.values?.email || candidate.label || "").trim().toLowerCase() === profileEmail.toLowerCase());
+    if (!profile) {
+      throw new Error(`Účet ${profileEmail} není uložený v profilech Klikátka.`);
+    }
+    if (!String(profile.values?.password || "")) {
+      throw new Error(`Uložený profil ${profileEmail} nemá heslo.`);
+    }
+    variables.email = String(profile.values.email || profileEmail);
+    variables.password = String(profile.values.password);
+  }
+
+  return {
+    ...subscenario,
+    ...configured,
+    actions: interpolateEmulatorTemplates(configured.actions || subscenario?.actions || [], variables),
+    confirm: configured.confirm || subscenario?.confirm || "",
+    label: configured.label || subscenario?.label || "Provést v emulátoru"
+  };
+}
+
+function interpolateEmulatorTemplates(value, variables) {
+  if (Array.isArray(value)) {
+    return value.map(item => interpolateEmulatorTemplates(item, variables));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, interpolateEmulatorTemplates(item, variables)]));
+  }
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  return value.replace(/\{\{([A-Za-z0-9_.-]+)\}\}/g, (match, key) => {
+    if (variables[key] === undefined || variables[key] === null || variables[key] === "") {
+      throw new Error(`Chybí hodnota ${key} pro emulator sub-scénář.`);
+    }
+    return String(variables[key]);
+  });
 }
 
 function syncVisibleStepFromWorkflowRun() {
@@ -8548,7 +9465,7 @@ function buildWorkflowReport(workflow) {
     .map(key => `${key}: ${formatWorkflowValue(state.workflowContext[key])}`);
   const lines = [
     `Workflow: ${workflow.name}`,
-    `Scénáře: ${workflow.items?.length || 0}`,
+    `${workflow.mode === "presentation" ? "Prezentační kroky" : "Scénáře"}: ${workflow.items?.length || 0}`,
     `Kroky: ${run.results.length}`,
     `Chyby: ${failed.length}`,
     `Upozornění: ${warnings.length}`,
@@ -8558,6 +9475,7 @@ function buildWorkflowReport(workflow) {
   return {
     workflowId: workflow.id,
     workflowName: workflow.name,
+    mode: workflow.mode || "scenario",
     startedAt: run.startedAt,
     completedAt: new Date().toISOString(),
     status: failed.length > 0 ? "Failed" : warnings.length > 0 ? "Warning" : "Completed",
@@ -8599,6 +9517,9 @@ function updateWorkflowControls() {
   elements.stopWorkflow.disabled = !(state.workflowRunning || hasPausedRun);
   if (elements.workflowEnvironmentProfileSelect) {
     elements.workflowEnvironmentProfileSelect.disabled = state.workflowRunning || getWorkflowEnvironmentProfiles().length <= 1;
+  }
+  if (elements.workflowSearch) {
+    elements.workflowSearch.disabled = state.workflowRunning;
   }
   updateWorkflowStatus(state.workflowRunning
     ? "Běží"
@@ -10446,6 +11367,14 @@ function buildAppCardsHtml(body, step = currentStep()) {
     return renderMosTokenCouponsOverviewCardHtml(body);
   }
 
+  if (isCouponReceiptAvailabilityOverviewResponse(body)) {
+    return renderCouponReceiptAvailabilityOverviewCardHtml(body);
+  }
+
+  if (isCouponReceiptStatusResponse(body)) {
+    return renderCouponReceiptStatusCardHtml(body);
+  }
+
   if (isCouponMoveTargetOverviewResponse(body)) {
     return renderCouponMoveTargetOverviewCardHtml(body, step);
   }
@@ -10496,6 +11425,10 @@ function buildAppCardsHtml(body, step = currentStep()) {
     return "";
   }
 
+  if (isTicketPaymentResponse(body)) {
+    return renderTicketPaymentCardHtml(body);
+  }
+
   if (isPaymentCardsStep(step) && Number(body.status) === 404) {
     return renderEmptyAppCardHtml(
       "Žádné uložené karty",
@@ -10516,6 +11449,34 @@ function buildAppCardsHtml(body, step = currentStep()) {
 
   if (isProblemDetailsResponse(body)) {
     return renderProblemDetailsCardHtml(body);
+  }
+
+  if (isValidatedTicketResponse(body)) {
+    return renderValidatedTicketCardHtml(body);
+  }
+
+  if (isTicketFulfillmentResponse(body)) {
+    return renderTicketFulfillmentsCardsHtml([body]);
+  }
+
+  if (isTicketTransferResponse(body)) {
+    return renderTicketTransferCardHtml(body);
+  }
+
+  if (isTicketBookingResponse(body)) {
+    return renderTicketBookingsCardsHtml([body]);
+  }
+
+  if (isFavoriteTicketStep(step) && isFavoriteTicketResponse(body)) {
+    return renderFavoriteTicketsCardsHtml([body]);
+  }
+
+  if (isTicketPaymentSettingsStep(step)) {
+    return renderTicketPaymentSettingsCardHtml(body);
+  }
+
+  if (isTicketRecommendationSettingsStep(step)) {
+    return renderTicketRecommendationSettingsCardHtml(body);
   }
 
   if (isParkingSessionsResponse(body)) {
@@ -10583,6 +11544,17 @@ function buildAppCardsHtml(body, step = currentStep()) {
   }
 
   if (Array.isArray(body)) {
+    if (isFavoriteTicketArray(body, step)) {
+      return body.length > 0
+        ? renderFavoriteTicketsCardsHtml(body, {
+          selection: getSelectionDescriptor(step, body)
+        })
+        : renderEmptyAppCardHtml(
+          "Žádné oblíbené jízdenky",
+          "Účet nyní nemá uloženou žádnou oblíbenou jízdenku."
+        );
+    }
+
     if (isPaymentCardsStep(step) && body.length === 0) {
       return renderEmptyAppCardHtml(
         "Žádné uložené karty",
@@ -10685,6 +11657,24 @@ function buildAppCardsHtml(body, step = currentStep()) {
     }), {
       selection: getSelectionDescriptor(step, body)
     });
+  }
+
+  if (Array.isArray(body.items) && isTicketFulfillmentArray(body.items, step)) {
+    return body.items.length > 0
+      ? renderTicketFulfillmentsCardsHtml(body.items)
+      : renderEmptyAppCardHtml("Žádné jízdenky", "Přihlášený uživatel nemá žádnou jízdenku odpovídající filtru.");
+  }
+
+  if (Array.isArray(body.items) && isTicketDeviceArray(body.items, step)) {
+    return body.items.length > 0
+      ? renderTicketDevicesCardsHtml(body.items)
+      : renderEmptyAppCardHtml("Žádná zařízení", "Pro jízdenky zatím není zaregistrované žádné zařízení.");
+  }
+
+  if (Array.isArray(body.items) && isTicketBookingArray(body.items, step)) {
+    return body.items.length > 0
+      ? renderTicketBookingsCardsHtml(body.items)
+      : renderEmptyAppCardHtml("Žádné objednávky", "Přihlášený uživatel zatím nemá historii nákupů jízdenek.");
   }
 
   if (Array.isArray(body.items)) {
@@ -11057,9 +12047,16 @@ function renderProblemDetailsCardHtml(body) {
     .map(key => body[key])
     .filter(result => result?.type === "Error" && result.text)
     .map(result => result.text);
+  const hasReceiptDiagnostics = Boolean(body.reasonCode || body.recheckPolicy || "isFinal" in body);
+  const receiptRecheckLabel = getCouponReceiptRecheckLabel(
+    body.recheckPolicy,
+    getCouponReceiptRecheckAfterSeconds(body.recheckAfterSeconds)
+  );
   const chips = [
     body.status ? `HTTP ${body.status}` : null,
-    businessMessages.length > 0 ? "business pravidlo" : null
+    businessMessages.length > 0 ? "business pravidlo" : null,
+    hasReceiptDiagnostics && body.reasonCode ? body.reasonCode : null,
+    hasReceiptDiagnostics ? receiptRecheckLabel : null
   ].filter(Boolean);
 
   return `
@@ -11068,8 +12065,14 @@ function renderProblemDetailsCardHtml(body) {
         <strong>${escapeHtml(body.title || "Očekávané upozornění")}</strong>
         <p>${escapeHtml(body.detail || "Backend vrátil očekávanou chybovou odpověď.")}</p>
         ${chips.length > 0 ? `<div class="app-card-meta">${chips.map(renderAppChip).join("")}</div>` : ""}
-        ${validationMessages.length > 0 || businessMessages.length > 0 ? `
+        ${validationMessages.length > 0 || businessMessages.length > 0 || hasReceiptDiagnostics ? `
           <div class="app-card-details">
+            ${hasReceiptDiagnostics ? `
+              <div class="app-detail-row"><span>Kód důvodu</span><span>${escapeHtml(body.reasonCode || "-")}</span></div>
+              <div class="app-detail-row"><span>Konečný stav</span><span>${body.isFinal === true ? "Ano" : body.isFinal === false ? "Ne" : "Neurčeno"}</span></div>
+              <div class="app-detail-row"><span>Další kontrola</span><span>${escapeHtml(receiptRecheckLabel)}</span></div>
+              ${getCouponReceiptRecheckAfterSeconds(body.recheckAfterSeconds) ? `<div class="app-detail-row"><span>Nejdřívější kontrola</span><span>${getCouponReceiptRecheckAfterSeconds(body.recheckAfterSeconds)} s</span></div>` : ""}
+            ` : ""}
             ${validationMessages.map(item => `
               <div class="app-detail-row"><span>${escapeHtml(item.field)}</span><span>${escapeHtml(item.value)}</span></div>
             `).join("")}
@@ -11119,6 +12122,224 @@ function renderSavedCardPaymentCardHtml(body) {
       </article>
     </div>
   `;
+}
+
+function renderTicketPaymentCardHtml(body) {
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>Platba čeká na dokončení</strong>
+        <p>Otevřete platební bránu, dokončete testovací platbu a teprve potom pokračujte pollingem.</p>
+        <div class="app-card-meta">
+          ${renderAppChip(body.status || "IN_PROGRESS")}
+          ${renderAppChip(body.method || "card")}
+        </div>
+        <div class="app-card-details">
+          <div class="app-detail-row"><span>Payment ID</span><span>${escapeHtml(body.paymentId)}</span></div>
+        </div>
+        <div class="app-card-actions">
+          <a class="app-card-link" href="${escapeHtml(body.paymentUrl)}" target="_blank" rel="noopener">Otevřít platební bránu</a>
+        </div>
+      </article>
+    </div>
+  `;
+}
+
+function renderTicketFulfillmentsCardsHtml(fulfillments, options = {}) {
+  return buildCardListHtml(fulfillments, fulfillment => {
+    const title = getLocalizedTitle(fulfillment.productTitle)
+      || `Jízdenka ${shortId(fulfillment.fulfillmentId)}`;
+    const zones = formatTicketZones(fulfillment.validZones);
+    const validity = fulfillment.validSince && fulfillment.validUntil
+      ? `${formatDate(fulfillment.validSince)} – ${formatDate(fulfillment.validUntil)}`
+      : getTicketStatusText(fulfillment.status);
+
+    return {
+      title,
+      text: validity,
+      chips: [
+        getTicketStatusLabel(fulfillment.status),
+        zones ? `pásma ${zones}` : null,
+        fulfillment.fulfillmentMediaType || null
+      ],
+      details: [
+        { label: "ID jízdenky", value: fulfillment.fulfillmentId },
+        { label: "Produkt", value: fulfillment.productId },
+        { label: "Objednávka", value: fulfillment.bookingId },
+        { label: "Stav", value: fulfillment.status },
+        { label: "Pásma", value: zones },
+        { label: "Aktivována", value: fulfillment.activatedAt ? formatDate(fulfillment.activatedAt) : null },
+        { label: "Platnost od", value: fulfillment.validSince ? formatDate(fulfillment.validSince) : null },
+        { label: "Platnost do", value: fulfillment.validUntil ? formatDate(fulfillment.validUntil) : null },
+        { label: "Ochranná lhůta do", value: fulfillment.activationProtectionUntil ? formatDate(fulfillment.activationProtectionUntil) : null },
+        { label: "Zařízení", value: fulfillment.deviceId }
+      ]
+    };
+  }, options);
+}
+
+function renderFavoriteTicketsCardsHtml(favorites, options = {}) {
+  return buildCardListHtml(favorites, favorite => ({
+    title: `Oblíbená jízdenka – produkt ${favorite.productId}`,
+    text: favorite.createdAt
+      ? `Přidána ${formatDate(favorite.createdAt)}`
+      : "Uložená mezi oblíbenými jízdenkami",
+    chips: [
+      "oblíbená",
+      favorite.createdAt ? formatDate(favorite.createdAt) : null
+    ],
+    details: [
+      { label: "Produkt", value: favorite.productId },
+      { label: "ID oblíbené položky", value: favorite.id },
+      { label: "Přidána", value: favorite.createdAt ? formatDate(favorite.createdAt) : null }
+    ]
+  }), options);
+}
+
+function renderValidatedTicketCardHtml(body) {
+  const keys = Array.isArray(body.rviKeys) ? body.rviKeys : [];
+  const fulfillmentCards = renderTicketFulfillmentsCardsHtml([body.fulfillment]);
+
+  return `${fulfillmentCards}
+    <div class="app-card-list">
+      <article class="app-card">
+        <strong>Data pro offline kontrolu</strong>
+        <p>${escapeHtml(keys.length > 0
+          ? `Backend vrátil ${keys.length} časových RVI klíčů pro aktuální zařízení.`
+          : "Pro tuto jízdenku a aktuální zařízení nejsou RVI klíče dostupné.")}</p>
+        <div class="app-card-meta">
+          ${renderAppChip(body.fulfillment?.etd ? "ETD dostupné" : "bez ETD")}
+          ${renderAppChip(`${keys.length} RVI klíčů`)}
+        </div>
+        ${body.rviTimestamp ? `<div class="app-card-details"><div class="app-detail-row"><span>RVI timestamp</span><span>${escapeHtml(body.rviTimestamp)}</span></div></div>` : ""}
+      </article>
+    </div>`;
+}
+
+function renderTicketDevicesCardsHtml(devices, options = {}) {
+  return buildCardListHtml(devices, device => ({
+    title: device.deviceModel || "Zařízení pro jízdenky",
+    text: device.platform || "Registrovaná instalace aplikace",
+    chips: [device.platform, device.createdAt ? formatDate(device.createdAt) : null],
+    details: [
+      { label: "Device ID", value: device.deviceId },
+      { label: "Identifikátor instalace", value: device.deviceIdentifier },
+      { label: "Model", value: device.deviceModel },
+      { label: "Platforma", value: device.platform },
+      { label: "Vytvořeno", value: device.createdAt ? formatDate(device.createdAt) : null }
+    ]
+  }), options);
+}
+
+function renderTicketBookingsCardsHtml(bookings, options = {}) {
+  return buildCardListHtml(bookings, booking => {
+    const price = booking.confirmedPrice || booking.provisionalPrice;
+    const fulfillmentCount = Array.isArray(booking.fulfillments) ? booking.fulfillments.length : 0;
+    const offerCount = Array.isArray(booking.bookedOffers)
+      ? booking.bookedOffers.reduce((sum, offer) => sum + Number(offer.amount || 0), 0)
+      : 0;
+
+    return {
+      title: `Objednávka ${shortId(booking.bookingId)}`,
+      text: booking.createdAt ? `Vytvořena ${formatDate(booking.createdAt)}` : "Objednávka jízdenek",
+      chips: [
+        booking.status || null,
+        booking.paymentState || null,
+        price ? `${price.amount} ${price.currency}` : null,
+        `${fulfillmentCount} vydaných`
+      ],
+      details: [
+        { label: "Booking ID", value: booking.bookingId },
+        { label: "Stav", value: booking.status },
+        { label: "Platba", value: booking.paymentState },
+        { label: "Počet kusů", value: offerCount },
+        { label: "Vydané jízdenky", value: fulfillmentCount },
+        { label: "Zaplaceno", value: booking.paidAt ? formatDate(booking.paidAt) : null },
+        { label: "Vytvořeno", value: booking.createdAt ? formatDate(booking.createdAt) : null }
+      ]
+    };
+  }, options);
+}
+
+function renderTicketTransferCardHtml(body) {
+  return buildCardListHtml([body], transfer => ({
+    title: "Jízdenka byla předána",
+    text: "Původní jízdenka byla spotřebována a příjemci vznikla nová jízdenka.",
+    chips: [transfer.transferredAt ? formatDate(transfer.transferredAt) : "dokončeno"],
+    details: [
+      { label: "Původní jízdenka", value: transfer.originalFulfillmentId },
+      { label: "Nová jízdenka", value: transfer.newFulfillmentId },
+      { label: "Předáno", value: transfer.transferredAt ? formatDate(transfer.transferredAt) : null }
+    ]
+  }));
+}
+
+function renderTicketPaymentSettingsCardHtml(body) {
+  const effective = body.effectivePaymentMethod || {};
+  const preferred = body.defaultPaymentMethod || {};
+
+  return buildCardListHtml([body], () => ({
+    title: "Nastavení plateb jízdenek",
+    text: body.sendReceiptsToEmailEnabled
+      ? "Doklady se mají posílat na e-mail uživatele."
+      : "E-mailové zasílání dokladů je vypnuté.",
+    chips: [effective.type || "bez efektivní metody", body.sendReceiptsToEmailEnabled ? "e-mail zapnutý" : "e-mail vypnutý"],
+    details: [
+      { label: "Výchozí metoda", value: preferred.type || "poslední použitá" },
+      { label: "Efektivní metoda", value: effective.type },
+      { label: "E-mailové doklady", value: formatBooleanAnswer(body.sendReceiptsToEmailEnabled) }
+    ]
+  }));
+}
+
+function renderTicketRecommendationSettingsCardHtml(body) {
+  return buildCardListHtml([body], () => ({
+    title: "Doporučování jízdenek",
+    text: body.mode === "MANUAL_ZONES"
+      ? "Doporučení vychází z ručně zvoleného tarifu a pásem."
+      : "Doporučení vychází z platných tarifů a kupónů uživatele.",
+    chips: [body.mode, formatTicketZones(body.zones)],
+    details: [
+      { label: "Režim", value: body.mode },
+      { label: "Tarifní kategorie", value: body.tariffCategory },
+      { label: "Pásma", value: formatTicketZones(body.zones) }
+    ]
+  }));
+}
+
+function getTicketStatusLabel(status) {
+  const labels = {
+    AVAILABLE: "k aktivaci",
+    IN_PROTECTION_DELAY: "ochranná lhůta",
+    FULFILLED: "aktivní",
+    EXPIRED: "prošlá",
+    CANCELLED: "zrušená",
+    REFUNDED: "refundovaná"
+  };
+
+  return labels[status] || status || "stav neznámý";
+}
+
+function getTicketStatusText(status) {
+  if (status === "AVAILABLE") {
+    return "Jízdenka je připravená k aktivaci nebo předání.";
+  }
+
+  if (status === "IN_PROTECTION_DELAY") {
+    return "Jízdenka je aktivovaná a čeká na konec ochranné lhůty.";
+  }
+
+  if (status === "FULFILLED") {
+    return "Jízdenka je aktivní nebo naplánovaná.";
+  }
+
+  return `Stav jízdenky: ${getTicketStatusLabel(status)}`;
+}
+
+function formatTicketZones(zones) {
+  return Array.isArray(zones)
+    ? zones.filter(zone => !isEmpty(zone)).join(", ")
+    : String(zones || "").trim();
 }
 
 function renderMosParkingOrderCardHtml(body) {
@@ -11457,6 +12678,7 @@ function renderPidCouponSubformHtml(coupons, title = "Kupóny") {
       <strong class="app-coupon-list-title">${escapeHtml(title)}</strong>
       ${coupons.map(coupon => {
         const selection = getCouponSelectionState(coupon);
+        const receipt = getCouponReceiptStatusPresentation(coupon);
 
         return `
         <section class="app-coupon-item ${selection?.isSelected ? "app-card-selected" : ""}">
@@ -11469,7 +12691,8 @@ function renderPidCouponSubformHtml(coupons, title = "Kupóny") {
               formatCouponZonesLabel(coupon.zones),
               coupon.status || coupon.customStatusName || null,
               coupon.price !== undefined ? `${coupon.price} Kč` : null,
-              coupon.customerProfileName || null
+              coupon.customerProfileName || null,
+              receipt?.label || null
             ].filter(Boolean).map(renderAppChip).join("")}
           </div>
           <div class="app-coupon-item-details">
@@ -11478,6 +12701,11 @@ function renderPidCouponSubformHtml(coupons, title = "Kupóny") {
             <div><span>Platnost do</span><span>${escapeHtml(formatDate(coupon.validTo || coupon.dateTimeTo) || "-")}</span></div>
             <div><span>Tarif</span><span>${escapeHtml(coupon.tariffName || coupon.name || "-")}</span></div>
             <div><span>Objednávka</span><span>${escapeHtml(coupon.orderId || "-")}</span></div>
+            ${receipt ? `<div><span>Dostupnost dokladu</span><span>${escapeHtml(receipt.detail)}</span></div>` : ""}
+            ${coupon.receiptReasonCode ? `<div><span>Kód důvodu</span><span>${escapeHtml(coupon.receiptReasonCode)}</span></div>` : ""}
+            ${coupon.receiptReasonCode || coupon.receiptRecheckPolicy ? `<div><span>Konečný stav</span><span>${coupon.receiptIsFinal === true ? "Ano" : coupon.receiptIsFinal === false ? "Ne" : "Neurčeno"}</span></div>` : ""}
+            ${coupon.receiptRecheckPolicy ? `<div><span>Další kontrola</span><span>${escapeHtml(getCouponReceiptRecheckLabel(coupon.receiptRecheckPolicy, coupon.receiptRecheckAfterSeconds))}</span></div>` : ""}
+            ${coupon.receiptStatusError ? `<div><span>Chyba ověření</span><span>${escapeHtml(coupon.receiptStatusError)}</span></div>` : ""}
           </div>
           ${selection ? `
             <div class="app-card-actions">
@@ -11489,6 +12717,190 @@ function renderPidCouponSubformHtml(coupons, title = "Kupóny") {
       `;}).join("")}
     </div>
   `;
+}
+
+function getCouponReceiptStatusPresentation(coupon) {
+  if (!coupon || !Object.prototype.hasOwnProperty.call(coupon, "receiptStatus")) {
+    return null;
+  }
+
+  const httpSuffix = coupon.receiptStatusHttpStatus ? ` (HTTP ${coupon.receiptStatusHttpStatus})` : "";
+  const reasonCode = String(coupon.receiptReasonCode || "").toLowerCase();
+
+  switch (reasonCode) {
+    case "receipt-available":
+      return { label: "doklad dostupný", detail: "Doklad existuje a je dostupný ke stažení" };
+    case "payment-pending":
+      return { label: "čeká na platbu", detail: "Platba ještě není dokončená; pozdější ověření má smysl" };
+    case "payment-not-started":
+      return { label: "platba nezahájena", detail: "Pro objednávku nebyla zahájena operace platební brány; doklad nyní nemůže vzniknout" };
+    case "payment-failed":
+      return { label: "platba selhala", detail: "Platební brána potvrdila neúspěch platby; pro tuto transakci doklad nevznikne" };
+    case "payment-status-unconfirmed":
+      return { label: "výsledek platby nepotvrzen", detail: "Core MOS nemá spolehlivě potvrzený výsledek platby; automatické krátké opakování není doporučené" };
+    case "payment-confirmation-inconsistent":
+      return { label: "rozpor stavu platby", detail: "Stav objednávky a výsledek platební brány si odporují; je potřeba diagnostika" };
+    case "awaiting-bank-transfer":
+      return { label: "čeká na bankovní převod", detail: "Bankovní převod ještě nebyl připsán; doklad zatím nemůže vzniknout" };
+    case "receipt-not-created":
+      return { label: "doklad nevytvořen", detail: "Objednávka je zaplacená, ale Core MOS doklad nevytvořil" };
+    case "order-cancelled":
+      return { label: "objednávka zrušena", detail: "Objednávka byla zrušena a doklad není dostupný" };
+    case "payment-type-not-supported":
+      return { label: "doklad nepodporován", detail: "Pro tento způsob nákupu není elektronický doklad dostupný" };
+    case "order-not-accessible":
+      return { label: "objednávka nedostupná", detail: "Objednávka neexistuje nebo není dostupná přihlášenému klientovi" };
+    case "order-not-assigned-to-current-login":
+      return { label: "jiný MOS login", detail: "Objednávka existuje, ale není přiřazena aktuálnímu MOS loginu; doklad proto tomuto loginu není dostupný" };
+    case "order-not-found":
+      return { label: "objednávka neexistuje", detail: "Core MOS potvrdil, že objednávka s tímto OrderId neexistuje" };
+    case "core-mos-unavailable":
+      return { label: "Core MOS nedostupný", detail: "Stav dokladu se nyní nepodařilo technicky zjistit" };
+    case "session-expired":
+      return { label: "session vypršela", detail: "Před další kontrolou je potřeba obnovit přihlášení nebo MOS session" };
+    case "invalid-request":
+      return { label: "chybný požadavek", detail: "Požadavek je potřeba před další kontrolou opravit" };
+    case "order-id-missing":
+      return { label: "bez OrderId", detail: "Kupón nemá MOS OrderId potřebné pro ověření dokladu" };
+    case "unknown":
+      return { label: "stav nelze určit", detail: "Backend nedokázal kombinaci údajů objednávky bezpečně vyhodnotit" };
+    default:
+      break;
+  }
+
+  switch (String(coupon.receiptStatus || "").toLowerCase()) {
+    case "available":
+      return { label: "doklad dostupný", detail: "Dostupný ke stažení" };
+    case "not-available":
+      return { label: "doklad nedostupný", detail: "Backend nevrátil podrobnější důvod nedostupnosti" };
+    case "pending":
+      return { label: "stav čeká", detail: "Backend vrátil pending bez podrobnějšího důvodu" };
+    case "unknown":
+      return { label: "dostupnost neznámá", detail: "Backend nevrátil podrobnější důvod neznámého stavu" };
+    case "missing-order-id":
+      return { label: "bez OrderId", detail: "Nelze ověřit – kupón nemá MOS OrderId" };
+    case "error":
+      return { label: "ověření selhalo", detail: `Stav se nepodařilo načíst${httpSuffix}` };
+    default:
+      return { label: "stav dokladu neznámý", detail: coupon.receiptStatus || "Neznámý stav" };
+  }
+}
+
+function renderCouponReceiptStatusCardHtml(body) {
+  const receipt = getCouponReceiptStatusPresentation({
+    receiptStatus: body.status,
+    receiptReasonCode: body.reasonCode,
+    receiptIsFinal: body.isFinal,
+    receiptRecheckPolicy: body.recheckPolicy,
+    receiptRecheckAfterSeconds: body.recheckAfterSeconds
+  });
+  const recheckLabel = getCouponReceiptRecheckLabel(body.recheckPolicy, body.recheckAfterSeconds);
+
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <div class="app-card-head">
+          <strong>${escapeHtml(receipt?.label || "Stav daňového dokladu")}</strong>
+          <span>${escapeHtml(body.status || "unknown")}</span>
+        </div>
+        <p>${escapeHtml(receipt?.detail || "Backend vrátil stav dokladu bez dalšího vysvětlení.")}</p>
+        <div class="app-card-meta">
+          ${renderAppChip(body.reasonCode || "důvod neuveden")}
+          ${renderAppChip(body.isFinal === true ? "konečný stav" : "stav se může změnit")}
+          ${renderAppChip(recheckLabel)}
+        </div>
+        <div class="app-card-details">
+          <div class="app-detail-row"><span>MOS objednávka</span><span>${escapeHtml(body.mosOrderId || "-")}</span></div>
+          <div class="app-detail-row"><span>Status</span><span>${escapeHtml(body.status || "unknown")}</span></div>
+          <div class="app-detail-row"><span>Kód důvodu</span><span>${escapeHtml(body.reasonCode || "-")}</span></div>
+          <div class="app-detail-row"><span>Konečný stav</span><span>${body.isFinal === true ? "Ano" : body.isFinal === false ? "Ne" : "Neurčeno"}</span></div>
+          <div class="app-detail-row"><span>Další kontrola</span><span>${escapeHtml(recheckLabel)}</span></div>
+          ${getCouponReceiptRecheckAfterSeconds(body.recheckAfterSeconds) ? `<div class="app-detail-row"><span>Nejdřívější kontrola</span><span>${getCouponReceiptRecheckAfterSeconds(body.recheckAfterSeconds)} s</span></div>` : ""}
+        </div>
+      </article>
+    </div>
+  `;
+}
+
+function renderCouponReceiptAvailabilityOverviewCardHtml(body) {
+  const counts = body.counts || {};
+  const reasons = counts.reasons || {};
+  const coupons = Array.isArray(body.coupons) ? body.coupons : [];
+
+  return `
+    <div class="app-card-list">
+      <article class="app-card">
+        <div class="app-card-head">
+          <strong>Dostupnost dokladů ke kupónům</strong>
+          <span>${escapeHtml(body.sourceStatus || "-")}</span>
+        </div>
+        <p>${escapeHtml(coupons.length > 0
+          ? `Prověřeno ${formatCount(coupons.length, "kupón", "kupóny", "kupónů")} v ${formatCount(Number(counts.uniqueOrders || 0), "objednávce", "objednávkách", "objednávkách")}.`
+          : "Aktuální klient nemá žádné kupóny.")}</p>
+        <div class="app-card-meta">
+          ${renderAppChip(`dostupný: ${Number(reasons.receiptAvailable || counts.available || 0)}`)}
+          ${renderAppChip(`čeká na platbu: ${Number(counts.waiting || 0)}`)}
+          ${renderAppChip(`nutný zásah: ${Number(counts.actionRequired || 0)}`)}
+          ${renderAppChip(`konečně nedostupný: ${Number(counts.finalUnavailable || 0)}`)}
+          ${Number(reasons.paymentNotStarted || 0) > 0 ? renderAppChip(`platba nezahájena: ${Number(reasons.paymentNotStarted)}`) : ""}
+          ${Number(reasons.paymentFailed || 0) > 0 ? renderAppChip(`platba selhala: ${Number(reasons.paymentFailed)}`) : ""}
+          ${Number(reasons.paymentStatusUnconfirmed || 0) > 0 ? renderAppChip(`platba nepotvrzena: ${Number(reasons.paymentStatusUnconfirmed)}`) : ""}
+          ${Number(reasons.paymentConfirmationInconsistent || 0) > 0 ? renderAppChip(`rozpor platby: ${Number(reasons.paymentConfirmationInconsistent)}`) : ""}
+          ${Number(reasons.awaitingBankTransfer || 0) > 0 ? renderAppChip(`bankovní převod: ${Number(reasons.awaitingBankTransfer)}`) : ""}
+          ${renderAppChip(`doklad nevytvořen: ${Number(reasons.receiptNotCreated || 0)}`)}
+          ${renderAppChip(`objednávka zrušena: ${Number(reasons.orderCancelled || 0)}`)}
+          ${renderAppChip(`nepodporovaný tok: ${Number(reasons.paymentTypeNotSupported || 0)}`)}
+          ${Number(reasons.orderNotAssignedToCurrentLogin || 0) > 0 ? renderAppChip(`jiný MOS login: ${Number(reasons.orderNotAssignedToCurrentLogin)}`) : ""}
+          ${Number(reasons.orderNotFound || 0) > 0 ? renderAppChip(`objednávka neexistuje: ${Number(reasons.orderNotFound)}`) : ""}
+          ${renderAppChip(`neznámý důvod: ${Number(reasons.unknown || counts.unknown || 0)}`)}
+          ${renderAppChip(`konečný stav: ${Number(counts.final || 0)}`)}
+          ${renderAppChip(`odložená kontrola: ${Number(counts.delayed || 0)}`)}
+          ${renderAppChip(`až po zásahu: ${Number(counts.afterUserAction || 0)}`)}
+          ${Number(counts.withoutDiagnostics || 0) > 0 ? renderAppChip(`bez nových polí: ${Number(counts.withoutDiagnostics)}`) : ""}
+          ${Number(counts.missingOrderId || 0) > 0 ? renderAppChip(`bez OrderId: ${Number(counts.missingOrderId)}`) : ""}
+          ${Number(counts.error || 0) > 0 ? renderAppChip(`chyba: ${Number(counts.error)}`) : ""}
+        </div>
+      </article>
+      ${coupons.length > 0
+        ? renderCouponReceiptGroupsHtml(coupons)
+        : ""}
+    </div>
+  `;
+}
+
+function renderCouponReceiptGroupsHtml(coupons) {
+  const groups = new Map();
+
+  for (const coupon of coupons) {
+    const group = getCouponReceiptGroup(coupon);
+    const existing = groups.get(group.key) || { ...group, coupons: [] };
+    existing.coupons.push(coupon);
+    groups.set(group.key, existing);
+  }
+
+  const order = [
+    "available",
+    "waiting",
+    "action-required",
+    "final-unavailable",
+    "verification-failed",
+    "undetermined"
+  ];
+
+  return order
+    .map(key => groups.get(key))
+    .filter(Boolean)
+    .map(group => `
+      <article class="app-card">
+        <div class="app-card-head">
+          <strong>${escapeHtml(group.label)}</strong>
+          <span>${escapeHtml(group.coupons.length)}</span>
+        </div>
+        <p>${escapeHtml(group.description)}</p>
+        ${renderPidCouponSubformHtml(group.coupons, formatCount(group.coupons.length, "Kupón", "Kupóny", "Kupónů"))}
+      </article>
+    `)
+    .join("");
 }
 
 function getCouponSelectionState(coupon) {
@@ -12861,6 +14273,22 @@ function renderSelectionItemsCardsHtml(step, fallbackItems = null) {
   const items = fallbackItems || state.activeSelection?.items || [];
   const selection = getSelectionDescriptor(step, items);
 
+  if (isTicketFulfillmentArray(items, step)) {
+    return renderTicketFulfillmentsCardsHtml(items, { selection });
+  }
+
+  if (isTicketDeviceArray(items, step)) {
+    return renderTicketDevicesCardsHtml(items, { selection });
+  }
+
+  if (isTicketBookingArray(items, step)) {
+    return renderTicketBookingsCardsHtml(items, { selection });
+  }
+
+  if (isFavoriteTicketArray(items, step)) {
+    return renderFavoriteTicketsCardsHtml(items, { selection });
+  }
+
   if (items.some(isNestedSelectionIdentifierItem)) {
     return renderNestedIdentifierSelectionItemsCardsHtml(items, selection);
   }
@@ -13460,7 +14888,9 @@ function getPaymentCardExpiration(card) {
 
 function isPaymentCardsStep(step) {
   const path = step?.request?.path || "";
-  return path.includes("/payment-cards") || path.includes("/parking/cards");
+  return path.includes("/payment-cards")
+    || path.includes("/parking/cards")
+    || path.includes("/accounts/me/saved-cards");
 }
 
 function isSavedCardPaymentResponse(value) {
@@ -13469,6 +14899,117 @@ function isSavedCardPaymentResponse(value) {
     && !Array.isArray(value)
     && value.parkingTicket
     && typeof value.parkingTicket === "object";
+}
+
+function isTicketPaymentResponse(value) {
+  return value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && typeof value.paymentId === "string"
+    && typeof value.paymentUrl === "string"
+    && /^https?:\/\//i.test(value.paymentUrl);
+}
+
+function isValidatedTicketResponse(value) {
+  return value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && isTicketFulfillmentResponse(value.fulfillment)
+    && Array.isArray(value.rviKeys);
+}
+
+function isTicketFulfillmentResponse(value) {
+  return value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && typeof value.fulfillmentId === "string"
+    && typeof value.bookingId === "string"
+    && value.productId !== undefined
+    && typeof value.status === "string";
+}
+
+function isTicketTransferResponse(value) {
+  return value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && typeof value.originalFulfillmentId === "string"
+    && typeof value.newFulfillmentId === "string"
+    && typeof value.transferredAt === "string";
+}
+
+function isTicketBookingResponse(value) {
+  return value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && typeof value.bookingId === "string"
+    && Array.isArray(value.bookedOffers)
+    && Array.isArray(value.fulfillments);
+}
+
+function isTicketFulfillmentArray(items, step = null) {
+  if (!Array.isArray(items)) {
+    return false;
+  }
+
+  if (items.length > 0) {
+    return items.every(isTicketFulfillmentResponse);
+  }
+
+  const path = step?.request?.path || "";
+  return path.startsWith("/v1/client/tickets")
+    && !path.includes("/devices")
+    && !path.includes("/purchase/payment");
+}
+
+function isTicketDeviceArray(items, step = null) {
+  if (!Array.isArray(items)) {
+    return false;
+  }
+
+  if (items.length > 0) {
+    return items.every(item => typeof item?.deviceId === "string" && typeof item?.deviceIdentifier === "string");
+  }
+
+  return (step?.request?.path || "").startsWith("/v1/client/tickets/devices");
+}
+
+function isTicketBookingArray(items, step = null) {
+  if (!Array.isArray(items)) {
+    return false;
+  }
+
+  if (items.length > 0) {
+    return items.every(isTicketBookingResponse);
+  }
+
+  return (step?.request?.path || "").includes("/v1/client/tickets/purchase/payment/bookings-search");
+}
+
+function isFavoriteTicketStep(step) {
+  return (step?.request?.path || "").startsWith("/v1/accounts/me/favorite-tickets");
+}
+
+function isFavoriteTicketResponse(value) {
+  return value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && typeof value.id === "string"
+    && value.productId !== undefined
+    && typeof value.createdAt === "string";
+}
+
+function isFavoriteTicketArray(items, step = null) {
+  return Array.isArray(items)
+    && isFavoriteTicketStep(step)
+    && items.every(isFavoriteTicketResponse);
+}
+
+function isTicketPaymentSettingsStep(step) {
+  return (step?.request?.path || "").startsWith("/v1/accounts/me/ticket-payment-settings");
+}
+
+function isTicketRecommendationSettingsStep(step) {
+  return (step?.request?.path || "").startsWith("/v1/accounts/me/ticket-recommendation-settings");
 }
 
 function isMosParkingOrderResponse(value) {
@@ -13507,6 +15048,25 @@ function isMosTokenCouponsOverviewResponse(value) {
     && !Array.isArray(value)
     && value.kind === "mosTokenCouponsOverview"
     && Array.isArray(value.tokens);
+}
+
+function isCouponReceiptAvailabilityOverviewResponse(value) {
+  return value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && value.kind === "couponReceiptAvailabilityOverview"
+    && Array.isArray(value.coupons);
+}
+
+function isCouponReceiptStatusResponse(value) {
+  return value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && "mosOrderId" in value
+    && "status" in value
+    && "reasonCode" in value
+    && typeof value.isFinal === "boolean"
+    && typeof value.recheckPolicy === "string";
 }
 
 function isCouponMoveTargetOverviewResponse(value) {
@@ -14447,6 +16007,10 @@ function deriveScenarioTags(item) {
 
   const tags = (item.tags || []).map(normalizeTag);
 
+  if (item.autoTags === false) {
+    return [...new Set(tags)];
+  }
+
   if (includesAny(text, ["diagnostic", "persistence", "module-info", "/_test/ticket-service/persistence"])) {
     tags.push("diagnostics");
   }
@@ -14697,15 +16261,53 @@ function buildFormSearchText(form) {
 }
 
 function getTagLabel(category) {
-  if (category === "fulfillment") {
-    return "Fulfillment";
+  switch (category) {
+    case "fulfillment":
+      return "Fulfillment";
+    case "pidlitacka":
+      return "PID Lítačka";
+    case "FE":
+      return "Frontend";
+    case "prezentace":
+      return "Prezentace";
+    case "emulátor":
+      return "Emulátor";
+    case "login":
+      return "Přihlášení";
+    case "setup":
+      return "Příprava";
+    case "client":
+      return "Klient";
+    default:
+      return getCategoryLabel(category);
   }
+}
 
-  return getCategoryLabel(category);
+function getWorkflowCategoryLabel(category) {
+  switch (category) {
+    case "presentation":
+      return "FE prezentace";
+    case "authentication":
+      return "Přihlášení";
+    case "client-setup":
+      return "Příprava klienta";
+    case "coupon-purchase":
+      return "Nákup kupónu";
+    case "payment-diagnostics":
+      return "Diagnostika plateb";
+    default:
+      return "Ostatní";
+  }
 }
 
 function getCategoryLabel(category) {
   switch (category) {
+    case "tickets":
+      return "Jízdenky";
+    case "favorites":
+      return "Oblíbené";
+    case "idempotence":
+      return "Idempotence";
     case "diagnostics":
       return "Diagnostika";
     case "catalog":

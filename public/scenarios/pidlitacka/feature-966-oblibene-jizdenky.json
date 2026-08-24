@@ -1,0 +1,199 @@
+{
+  "version": 1,
+  "projectId": "pidlitacka",
+  "packId": "pidlitacka-feature-966",
+  "name": "Task 966 - oblíbené jízdenky",
+  "description": "Srozumitelný funkční průchod přidáním a odebráním oblíbené jízdenky aktuálního uživatele.",
+  "scenarios": [
+    {
+      "id": "pidlitacka-ticket-966-favorite-lifecycle",
+      "title": "Přidat oblíbenou jízdenku, zopakovat a odebrat",
+      "description": "Ověří celý životní cyklus oblíbené jízdenky včetně idempotentního opakování a chování po odebrání.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "autoTags": false,
+      "tags": ["tickets", "favorites", "idempotence"],
+      "app": {
+        "section": "tickets",
+        "title": "Oblíbené jízdenky",
+        "subtitle": "Přidání a odebrání"
+      },
+      "instructions": [
+        "Scénář používá pouze vyhrazené testovací ProductId 966001 a na začátku i na konci po sobě uklidí.",
+        "Nezasahuje do ostatních oblíbených jízdenek přihlášeného uživatele.",
+        "V kroku se seznamem ručně vyberte testovací jízdenku tlačítkem Odebrat z oblíbených."
+      ],
+      "steps": [
+        {
+          "id": "ticket-966-prepare-favorite",
+          "title": "Připravit čistý test",
+          "description": "Idempotentně založí vyhrazenou testovací položku, aby šel bezpečně odstranit případný zbytek po přerušeném předchozím běhu.",
+          "request": {
+            "method": "POST",
+            "path": "/v1/accounts/me/favorite-tickets",
+            "body": { "productId": 966001 }
+          },
+          "expected": {
+            "statusIn": [200, 201],
+            "assertions": [
+              { "path": "$.id", "notEmpty": true },
+              { "path": "$.productId", "equals": 966001 },
+              { "path": "$.createdAt", "notEmpty": true }
+            ]
+          },
+          "extract": {
+            "ticket966PreparationFavoriteId": "$.id"
+          }
+        },
+        {
+          "id": "ticket-966-clean-previous-favorite",
+          "title": "Odstranit případný zbytek",
+          "description": "Smaže pouze vyhrazenou testovací položku připravenou v předchozím kroku.",
+          "requiresContext": ["ticket966PreparationFavoriteId"],
+          "request": {
+            "method": "DELETE",
+            "path": "/v1/accounts/me/favorite-tickets/{{context.ticket966PreparationFavoriteId}}"
+          },
+          "expected": { "status": 204 }
+        },
+        {
+          "id": "ticket-966-verify-clean-start",
+          "title": "Ověřit čistý začátek",
+          "description": "Potvrdí, že mezi oblíbenými není vyhrazený testovací produkt; ostatní položky účtu ponechá beze změny.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/favorite-tickets"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "^(?![\\s\\S]*\\\"productId\\\":966001)[\\s\\S]*$",
+                "message": "Testovací produkt 966001 zůstal po úvodním úklidu v oblíbených."
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-966-create-favorite",
+          "title": "Přidat jízdenku do oblíbených",
+          "description": "Testovaná funkčnost tasku 966: první přidání produktu musí vytvořit novou oblíbenou položku.",
+          "request": {
+            "method": "POST",
+            "path": "/v1/accounts/me/favorite-tickets",
+            "body": { "productId": 966001 }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.id", "notEmpty": true },
+              { "path": "$.productId", "equals": 966001 },
+              { "path": "$.createdAt", "notEmpty": true }
+            ]
+          },
+          "extract": {
+            "ticket966FavoriteId": "$.id",
+            "ticket966FavoriteCreatedAt": "$.createdAt"
+          }
+        },
+        {
+          "id": "ticket-966-repeat-favorite",
+          "title": "Přidání bezpečně zopakovat",
+          "description": "Stejný požadavek nesmí vytvořit duplicitu; backend vrátí původní položku beze změny.",
+          "requiresContext": ["ticket966FavoriteId", "ticket966FavoriteCreatedAt"],
+          "request": {
+            "method": "POST",
+            "path": "/v1/accounts/me/favorite-tickets",
+            "body": { "productId": 966001 }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.id", "equals": "{{context.ticket966FavoriteId}}" },
+              { "path": "$.productId", "equals": 966001 },
+              { "path": "$.createdAt", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "ticket-966-select-favorite",
+          "title": "Najít a vybrat oblíbenou jízdenku",
+          "description": "Načte seznam a prokáže, že obsahuje právě vytvořenou položku. V mobilním náhledu ji vyberte k odebrání.",
+          "requiresContext": ["ticket966FavoriteId", "ticket966FavoriteCreatedAt"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/favorite-tickets"
+          },
+          "selection": {
+            "sourcePath": "$",
+            "buttonLabel": "Odebrat z oblíbených",
+            "selectedButtonLabel": "Vybráno k odebrání",
+            "store": {
+              "ticket966SelectedFavoriteId": "$.id"
+            },
+            "emptyTitle": "Žádná oblíbená jízdenka",
+            "emptyText": "Testovací jízdenka se po přidání v seznamu neobjevila."
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "containsItem": {
+                  "id": "{{context.ticket966FavoriteId}}",
+                  "productId": 966001,
+                  "createdAt": "{{context.ticket966FavoriteCreatedAt}}"
+                },
+                "message": "Seznam neobsahuje právě vytvořenou oblíbenou jízdenku."
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-966-delete-favorite",
+          "title": "Odebrat vybranou jízdenku",
+          "description": "Odebere položku, kterou tester vybral přímo v mobilním náhledu.",
+          "requiresContext": ["ticket966SelectedFavoriteId"],
+          "request": {
+            "method": "DELETE",
+            "path": "/v1/accounts/me/favorite-tickets/{{context.ticket966SelectedFavoriteId}}"
+          },
+          "expected": { "status": 204 }
+        },
+        {
+          "id": "ticket-966-delete-again",
+          "title": "Ověřit, že položka už neexistuje",
+          "description": "Druhé odebrání stejného ID musí skončit očekávaným 404 a nesmí zasáhnout jinou položku.",
+          "requiresContext": ["ticket966SelectedFavoriteId"],
+          "request": {
+            "method": "DELETE",
+            "path": "/v1/accounts/me/favorite-tickets/{{context.ticket966SelectedFavoriteId}}"
+          },
+          "expected": {
+            "status": 404,
+            "outcome": "expectedError"
+          }
+        },
+        {
+          "id": "ticket-966-verify-clean-finish",
+          "title": "Potvrdit závěrečný úklid",
+          "description": "Na závěr ověří, že vyhrazený testovací produkt už v oblíbených není.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/favorite-tickets"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "^(?![\\s\\S]*\\\"productId\\\":966001)[\\s\\S]*$",
+                "message": "Testovací produkt 966001 zůstal po scénáři v oblíbených."
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

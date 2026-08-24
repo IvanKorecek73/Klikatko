@@ -1,0 +1,432 @@
+{
+  "version": 1,
+  "name": "PidLitacka - uložení karty při nákupu kupónu",
+  "description": "Cílený regresní scénář pro ověření, že se karta po úspěšném nákupu kupónu uloží k účtu a je dostupná v nové aplikaci.",
+  "scenarios": [
+    {
+      "id": "client-coupon-purchase-save-card",
+      "title": "Kupóny - uložit kartu při nákupu",
+      "description": "Na účtu bez uložených karet koupí placený kupón s příznakem saveCard=true a po dokončení platby ověří novou aktivní kartu v seznamu účtu.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "prewarmReturnUrl": false,
+      "tags": [
+        "coupons",
+        "purchase",
+        "payment-card",
+        "saved-cards",
+        "regression",
+        "manual"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Uložení platební karty"
+      },
+      "instructions": [
+        "Použijte pouze testovací účet bez uložených platebních karet. První krok záměrně vyžaduje prázdný seznam, aby výsledek nemohla zamaskovat starší karta.",
+        "Scénář vytvoří skutečnou objednávku kupónu v Core MOS a otevře testovací platební bránu. Vyberte tarif s cenou vyšší než nula.",
+        "Při inicializaci platby posílá Klikátko paymentDetails.saveCard=true. Hodnotu neměňte; je hlavním předmětem testu.",
+        "Na platební bráně dokončete úspěšnou testovací platbu a nechte prohlížeč vrátit se přes backendový gateway-return callback.",
+        "Po návratu opakujte kontrolu stavu, dokud backend nevrátí paid. Teprve potom se ověřuje seznam uložených karet.",
+        "Úspěšný výsledek vyžaduje novou aktivní kartu v GET /v1/accounts/me/saved-cards. Právě tento endpoint poskytuje seznam karet nové aplikaci."
+      ],
+      "steps": [
+        {
+          "id": "coupon-save-card-before",
+          "title": "Ověřit prázdný seznam uložených karet",
+          "description": "Načte výchozí seznam karet aktuálního účtu. Pro jednoznačný regresní test musí být prázdný.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/saved-cards"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "equals": [],
+                "message": "Účet už obsahuje uloženou kartu. Pro jednoznačný test použijte čistý testovací účet nebo existující testovací karty nejprve bezpečně odstraňte."
+              }
+            ]
+          }
+        },
+        {
+          "id": "coupon-save-card-options",
+          "title": "Vybrat identifikátor pro kupón",
+          "description": "Načte možnosti nákupu a nabídne identifikátory, na které lze kupón koupit.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons/purchase/options",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.eligible",
+                "equals": true
+              },
+              {
+                "path": "$.blockers",
+                "equals": []
+              },
+              {
+                "path": "$.identifiers",
+                "containsItem": {
+                  "purchasable": true
+                },
+                "message": "Klient nemá žádný identifikátor vhodný pro nákup kupónu."
+              }
+            ]
+          },
+          "selection": {
+            "sourcePath": "$.identifiers",
+            "filter": {
+              "purchasable": true
+            },
+            "buttonLabel": "Koupit kupón",
+            "selectedButtonLabel": "Identifikátor vybrán",
+            "emptyTitle": "Není dostupný identifikátor",
+            "emptyText": "Aktuální klient nemá identifikátor, na který lze koupit kupón.",
+            "store": {
+              "pidCouponSaveCardIdentifierId": "$.identifier.identifierId",
+              "pidCouponSaveCardDefaultStartDate": "$.defaultStartDate",
+              "pidCouponSaveCardMaxStartDate": {
+                "bodyPath": "$.maxStartDate"
+              }
+            }
+          }
+        },
+        {
+          "id": "coupon-save-card-offer",
+          "title": "Vybrat placený tarif",
+          "description": "Načte nabídku kupónů pro vybraný identifikátor. Zvolte položku s cenou vyšší než nula.",
+          "requiresContext": [
+            "pidCouponSaveCardIdentifierId"
+          ],
+          "fields": [
+            {
+              "name": "identifierId",
+              "label": "Identifier ID",
+              "type": "number",
+              "value": "{{context.pidCouponSaveCardIdentifierId}}"
+            },
+            {
+              "name": "startDate",
+              "label": "Začátek platnosti",
+              "type": "date",
+              "value": "{{context.pidCouponSaveCardDefaultStartDate}}",
+              "min": "{{today}}",
+              "max": "{{context.pidCouponSaveCardMaxStartDate}}"
+            },
+            {
+              "name": "zoneNames",
+              "label": "Zóny",
+              "type": "tag-list",
+              "value": "{{context.pidCouponSaveCardZoneNames}}",
+              "fallbackValue": [
+                "P",
+                "0"
+              ],
+              "options": [
+                { "value": "P", "text": "P" },
+                { "value": "0", "text": "0" },
+                { "value": "B", "text": "B" },
+                { "value": "1", "text": "1" },
+                { "value": "2", "text": "2" },
+                { "value": "3", "text": "3" },
+                { "value": "4", "text": "4" },
+                { "value": "5", "text": "5" },
+                { "value": "6", "text": "6" },
+                { "value": "7", "text": "7" },
+                { "value": "8", "text": "8" },
+                { "value": "9", "text": "9" }
+              ],
+              "emptyText": "Přidejte alespoň jednu zónu; pro test se standardně předvyplní P a 0."
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons/purchase/offer?identifierId={{form.identifierId}}&startDate={{form.startDate}}&{{query.form.zoneNames:zones}}"
+          },
+          "remember": {
+            "pidCouponSaveCardIdentifierId": "{{form.identifierId}}",
+            "pidCouponSaveCardStartDate": "{{form.startDate}}",
+            "pidCouponSaveCardZoneNames": "{{form.zoneNames}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.tariffGroups[0].items",
+                "lengthAtLeast": 1
+              }
+            ]
+          },
+          "selection": {
+            "sourcePath": "$.tariffGroups[0].items",
+            "buttonLabel": "Použít placený tarif",
+            "selectedButtonLabel": "Tarif vybrán",
+            "emptyTitle": "Není dostupný tarif",
+            "emptyText": "Pro zvolenou kombinaci nebyla nalezena tarifní nabídka.",
+            "store": {
+              "pidCouponSaveCardTariffId": "$.tariffId",
+              "pidCouponSaveCardTariffName": "$.tariffProfileName",
+              "pidCouponSaveCardPrice": "$.price",
+              "pidCouponSaveCardZoneNames": "$.zoneLabels"
+            }
+          }
+        },
+        {
+          "id": "coupon-save-card-create-order",
+          "title": "Vytvořit objednávku kupónu",
+          "description": "Založí novou placenou objednávku pro test uložení karty.",
+          "requiresContext": [
+            "pidCouponSaveCardIdentifierId",
+            "pidCouponSaveCardTariffId"
+          ],
+          "fields": [
+            {
+              "name": "identifierId",
+              "label": "Identifier ID",
+              "type": "number",
+              "value": "{{context.pidCouponSaveCardIdentifierId}}"
+            },
+            {
+              "name": "tariffId",
+              "label": "Tariff ID",
+              "type": "number",
+              "value": "{{context.pidCouponSaveCardTariffId}}"
+            },
+            {
+              "name": "startDate",
+              "label": "Začátek platnosti",
+              "type": "date",
+              "value": "{{context.pidCouponSaveCardStartDate}}"
+            },
+            {
+              "name": "zoneNames",
+              "label": "Zóny",
+              "type": "tag-list",
+              "value": "{{context.pidCouponSaveCardZoneNames}}"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/coupons/purchase/orders",
+            "body": {
+              "identifierId": "{{form.identifierId}}",
+              "tariffId": "{{form.tariffId}}",
+              "zoneNames": "{{form.zoneNames}}",
+              "startDate": "{{form.startDate}}"
+            }
+          },
+          "extract": {
+            "pidCouponSaveCardOrderId": "$.orderId"
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.orderId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.totalPrice",
+                "atLeast": 0.01,
+                "message": "Pro test uložení karty vyberte placený tarif s cenou vyšší než nula."
+              }
+            ]
+          }
+        },
+        {
+          "id": "coupon-save-card-receipt-details",
+          "title": "Doplnit testovací fakturační údaje",
+          "description": "Doplní údaje vyžadované Core MOS před kartovou platbou placeného kupónu.",
+          "requiresContext": [
+            "pidCouponSaveCardOrderId"
+          ],
+          "fields": [
+            { "name": "name", "label": "Jméno", "value": "Jan Testovací", "workflowAutoStop": false },
+            { "name": "street", "label": "Ulice", "value": "Testovací", "workflowAutoStop": false },
+            { "name": "number", "label": "Číslo", "value": "1", "workflowAutoStop": false },
+            { "name": "city", "label": "Město", "value": "Praha", "workflowAutoStop": false },
+            { "name": "zip", "label": "PSČ", "value": "11000", "workflowAutoStop": false },
+            { "name": "country", "label": "Země", "value": "CZ", "workflowAutoStop": false }
+          ],
+          "request": {
+            "method": "PUT",
+            "path": "/v1/client/coupons/purchase/orders/{{context.pidCouponSaveCardOrderId}}/receipt-details",
+            "body": {
+              "name": "{{form.name}}",
+              "street": "{{form.street}}",
+              "number": "{{form.number}}",
+              "city": "{{form.city}}",
+              "zip": "{{form.zip}}",
+              "country": "{{form.country}}"
+            }
+          },
+          "expected": {
+            "status": 204
+          }
+        },
+        {
+          "id": "coupon-save-card-initiate",
+          "title": "Inicializovat platbu s uložením karty",
+          "description": "Inicializuje platbu kupónu s explicitním paymentDetails.saveCard=true. Backend má požádat Core MOS o vytvoření tokenu karty.",
+          "requiresContext": [
+            "pidCouponSaveCardOrderId"
+          ],
+          "fields": [
+            {
+              "name": "returnUrlFromPaymentGateway",
+              "label": "FE návratový target",
+              "value": "http://localhost:5096/analysis/html/GwResponsePage.html?flow=coupon-save-card&target=unchanged#coupon-save-card",
+              "workflowAutoStop": false
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/coupons/purchase/payment/card/initiate",
+            "body": {
+              "orderId": "{{context.pidCouponSaveCardOrderId}}",
+              "paymentDetails": {
+                "paymentMethod": "PaymentCard",
+                "returnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}",
+                "automaticPaymentResultProcessing": false,
+                "saveCard": true
+              }
+            }
+          },
+          "remember": {
+            "pidCouponSaveCardFrontendReturnUrl": "{{form.returnUrlFromPaymentGateway}}"
+          },
+          "extract": {
+            "pidCouponSaveCardGatewayReference": "$.paymentGatewayReference",
+            "pidCouponSaveCardGatewayUrl": "$.paymentGatewayRedirectUrl"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.paymentGatewayRedirectUrl",
+                "notEmpty": true
+              },
+              {
+                "path": "$.order.orderId",
+                "equals": "{{context.pidCouponSaveCardOrderId}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "coupon-save-card-payment-status",
+          "title": "Dokončit platbu a ověřit stav paid",
+          "description": "Po úspěšném návratu z brány načítá stav objednávky. Krok opakujte, dokud není platba potvrzená.",
+          "requiresContext": [
+            "pidCouponSaveCardOrderId"
+          ],
+          "workflowStop": {
+            "message": "Dokončete úspěšnou platbu kartou na platební bráně.",
+            "instructions": [
+              "V předchozím výsledku otevřete paymentGatewayRedirectUrl v novém panelu.",
+              "Na bráně použijte testovací kartu a dokončete úspěšnou platbu.",
+              "Na platební bráně dokončete platbu; požadavek na uložení karty už Klikátko poslalo jako saveCard=true.",
+              "Po návratu přes gateway-return se vraťte do původního panelu Klikátka a spusťte tento krok.",
+              "Pokud backend vrátí pending, chvíli počkejte a použijte Zopakovat krok."
+            ]
+          },
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons/purchase/orders/{{context.pidCouponSaveCardOrderId}}/payment-status"
+          },
+          "extract": {
+            "pidCouponSaveCardPaymentStatus": "$.status"
+          },
+          "expected": {
+            "status": 200,
+            "warnings": [
+              {
+                "appMessage": "Platba je stále ve zpracování. Počkejte chvíli a krok zopakujte.",
+                "message": "Stav pending je očekávaný mezistav; seznam karet ověřujte až po paid.",
+                "blockAdvance": true,
+                "when": [
+                  {
+                    "path": "$.status",
+                    "equals": "pending"
+                  }
+                ]
+              }
+            ],
+            "assertions": [
+              {
+                "path": "$.orderId",
+                "equals": "{{context.pidCouponSaveCardOrderId}}"
+              },
+              {
+                "path": "$.status",
+                "equals": "paid",
+                "message": "Platba kupónu musí skončit stavem paid, jinak nelze uložení karty vyhodnotit."
+              }
+            ]
+          }
+        },
+        {
+          "id": "coupon-save-card-order-detail",
+          "title": "Ověřit dokončený nákup kupónu",
+          "description": "Potvrdí, že objednávka po platbě přešla do stavu CouponReady.",
+          "requiresContext": [
+            "pidCouponSaveCardOrderId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons/purchase/orders/{{context.pidCouponSaveCardOrderId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.orderId",
+                "equals": "{{context.pidCouponSaveCardOrderId}}"
+              },
+              {
+                "path": "$.status",
+                "equals": "CouponReady"
+              }
+            ]
+          }
+        },
+        {
+          "id": "coupon-save-card-after",
+          "title": "Ověřit nově uloženou kartu",
+          "description": "Znovu načte karty účtu. Protože byl výchozí seznam prázdný, jediná vrácená aktivní karta musí pocházet z právě dokončené platby kupónu.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/saved-cards"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "lengthAtLeast": 1,
+                "message": "Po úspěšném nákupu se v účtu neobjevila žádná uložená karta."
+              },
+              {
+                "path": "$",
+                "containsItem": {
+                  "status": "Active"
+                },
+                "message": "Seznam neobsahuje žádnou aktivní uloženou kartu."
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

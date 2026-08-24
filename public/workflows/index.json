@@ -26,12 +26,665 @@
       }
     }
   ],
+  "emulatorSubscenarios": [
+    {
+      "id": "pidlitacka-login-saved-profile",
+      "name": "PID Lítačka – přihlášení uloženého profilu",
+      "label": "Přepnout účet v emulátoru",
+      "description": "Z hlavní obrazovky otevře nastavení, odhlásí aktuální účet, vyplní přihlašovací formulář hodnotami uloženého profilu a ověří návrat na vyhledávání.",
+      "standalone": true,
+      "confirm": "Klikátko odhlásí aktuální účet a odešle do INT aplikace e-mail a heslo vybraného uloženého testovacího profilu. Pokračovat?",
+      "actions": [
+        {
+          "type": "ifNode",
+          "contentDescription": "Nastavení aplikace a účtu",
+          "clickable": true,
+          "actions": [
+            {
+              "type": "tapNode",
+              "contentDescription": "Nastavení aplikace a účtu",
+              "clickable": true,
+              "waitAfterMs": 700
+            }
+          ]
+        },
+        {
+          "type": "ifNode",
+          "contentDescription": "Nastavení",
+          "actions": [
+            {
+              "type": "swipe",
+              "x1": 540,
+              "y1": 1850,
+              "x2": 540,
+              "y2": 900,
+              "durationMs": 850,
+              "waitAfterMs": 500
+            },
+            {
+              "type": "tapNode",
+              "contentDescription": "Odhlásit se",
+              "clickable": true,
+              "waitAfterMs": 600
+            },
+            {
+              "type": "tapNode",
+              "contentDescription": "Odhlásit se",
+              "clickable": true,
+              "waitAfterMs": 1600
+            }
+          ]
+        },
+        {
+          "type": "assertNode",
+          "contentDescription": "Přihlaste se",
+          "exact": false
+        },
+        {
+          "type": "inputText",
+          "className": "android.widget.EditText",
+          "occurrence": 0,
+          "value": "{{email}}",
+          "sensitive": true,
+          "waitAfterMs": 400
+        },
+        {
+          "type": "tapNode",
+          "contentDescription": "Pokračovat",
+          "clickable": true,
+          "waitAfterMs": 1000
+        },
+        {
+          "type": "assertNode",
+          "contentDescription": "Heslo"
+        },
+        {
+          "type": "inputText",
+          "className": "android.widget.EditText",
+          "occurrence": 0,
+          "value": "{{password}}",
+          "sensitive": true,
+          "waitAfterMs": 400
+        },
+        {
+          "type": "tapNode",
+          "contentDescription": "Přihlásit se",
+          "clickable": true,
+          "waitAfterMs": 2500
+        },
+        {
+          "type": "assertNode",
+          "contentDescription": "Vyhledávání"
+        }
+      ]
+    },
+    {
+      "id": "gdpay-fill-test-card",
+      "name": "GDPay – vyplnění testovací karty",
+      "label": "Vyplnit testovací kartu v bráně",
+      "description": "Interní sekvence pro platební fázi nákupu. Vyplní tři viditelná textová pole testovacími údaji; samostatně se v prezentaci nenabízí.",
+      "standalone": false,
+      "confirm": "Klikátko odešle do právě otevřené INT platební brány testovací číslo karty, platnost a CVC. Samotné potvrzení platby zůstane ruční. Pokračovat?",
+      "variables": {
+        "cardNumber": "4000007000010006",
+        "expiry": "1130",
+        "cvc": "111"
+      },
+      "actions": [
+        {
+          "type": "inputText",
+          "className": "android.widget.EditText",
+          "occurrence": 0,
+          "value": "{{cardNumber}}",
+          "sensitive": true,
+          "waitAfterMs": 350
+        },
+        {
+          "type": "inputText",
+          "className": "android.widget.EditText",
+          "occurrence": 1,
+          "value": "{{expiry}}",
+          "sensitive": true,
+          "waitAfterMs": 350
+        },
+        {
+          "type": "inputText",
+          "className": "android.widget.EditText",
+          "occurrence": 2,
+          "value": "{{cvc}}",
+          "sensitive": true,
+          "waitAfterMs": 350
+        }
+      ]
+    }
+  ],
   "workflows": [
+    {
+      "id": "pidlitacka-fe-moderated-presentation",
+      "name": "PID Lítačka FE – sdílené prezentační kroky",
+      "hidden": true,
+      "category": "presentation",
+      "description": "Ruční režie prezentace v emulátoru. Každý krok se zastaví, popíše další akci a čeká na potvrzení prezentujícího; neposílá žádná backendová volání.",
+      "mode": "presentation",
+      "tags": [
+        "pidlitacka",
+        "FE",
+        "prezentace",
+        "emulátor"
+      ],
+      "items": [
+        {
+          "id": "delay-find-connection",
+          "type": "presentation",
+          "section": "Zaokrouhlování zpoždění",
+          "title": "Najít právě zpožděný spoj",
+          "message": "V emulátoru otevřeme spojení nebo odjezdy a najdeme spoj s nenulovým zpožděním.",
+          "instructions": [
+            "Použijte aktuální provozní data; konkrétní spoj nelze připravit dopředu.",
+            "Nechte detail se zpožděním chvíli viditelný, aby publikum stihlo hodnotu přečíst."
+          ],
+          "expected": [
+            "Zpoždění je zobrazené jako srozumitelná celočíselná hodnota."
+          ],
+          "notes": [
+            "Tuto část může prezentovat kolegyně; další část lze spustit tlačítkem Pokračovat odtud."
+          ]
+        },
+        {
+          "id": "delay-compare-map",
+          "type": "presentation",
+          "section": "Zaokrouhlování zpoždění",
+          "title": "Porovnat hodnotu s mapou PID",
+          "message": "Vedle emulátoru ukážeme stejný spoj na mapa.pid.cz a vysvětlíme upravené zaokrouhlování.",
+          "instructions": [
+            "Otevřete https://mapa.pid.cz/ a vyhledejte stejný spoj.",
+            "Pokud se provozní data mezitím změnila, ukažte princip na jiném právě zpožděném spoji."
+          ],
+          "expected": [
+            "Hodnota v aplikaci odpovídá očekávanému zaokrouhlení zdrojového zpoždění."
+          ]
+        },
+        {
+          "id": "invalid-identifiers-login",
+          "type": "presentation",
+          "section": "Neplatné identifikátory",
+          "title": "Přihlásit připravený účet",
+          "message": "Přihlásíme účet pridalova.eliska+p03@operatorict.cz a přejdeme na identifikátory.",
+          "instructions": [
+            "Účet má připravené neplatné identifikátory pro demonstraci rozbaleného stavu.",
+            "Po přihlášení otevřete profil a seznam identifikátorů."
+          ],
+          "expected": [
+            "Seznam identifikátorů se načte pro správný účet."
+          ],
+          "notes": [
+            "Tuto část může prezentovat kolegyně."
+          ],
+          "emulator": {
+            "subscenarioId": "pidlitacka-login-saved-profile",
+            "profileEmail": "pridalova.eliska+p03@operatorict.cz",
+            "label": "Přihlásit účet p03 v emulátoru"
+          }
+        },
+        {
+          "id": "invalid-identifiers-show",
+          "type": "presentation",
+          "section": "Neplatné identifikátory",
+          "title": "Ukázat neplatné identifikátory rovnou rozbalené",
+          "message": "Otevřeme seznam a upozorníme, že neplatné identifikátory jsou viditelné bez dalšího rozbalování.",
+          "instructions": [
+            "Nesbalujte sekci předem; nejdřív ukažte její výchozí stav.",
+            "Vysvětlete, že uživatel nemusí neplatné položky aktivně hledat."
+          ],
+          "expected": [
+            "Neplatné identifikátory jsou po otevření obrazovky rovnou zobrazené."
+          ]
+        },
+        {
+          "id": "payment-login-safe-account",
+          "type": "presentation",
+          "section": "Nastavení placení jízdného",
+          "title": "Přihlásit bezpečný demonstrační účet",
+          "message": "Přihlásíme účet wijessibrouma-5506@yopmail.com, abychom neměnili data účtu kolegyně.",
+          "instructions": [
+            "Před prezentací ověřte, že účet nemá uloženou kartu a doporučování je ve výchozím stavu.",
+            "Po přihlášení otevřete profil a nastavení placení jízdného."
+          ],
+          "expected": [
+            "Jako výchozí metoda je zvolená platební karta a seznam uložených karet je prázdný."
+          ],
+          "emulator": {
+            "subscenarioId": "pidlitacka-login-saved-profile",
+            "profileEmail": "wijessibrouma-5506@yopmail.com",
+            "label": "Přihlásit bezpečný účet v emulátoru"
+          }
+        },
+        {
+          "id": "payment-open-settings",
+          "type": "presentation",
+          "section": "Nastavení placení jízdného",
+          "title": "Ukázat výchozí nastavení platby",
+          "message": "Ukážeme obrazovku nastavení a vysvětlíme rozdíl mezi kartou a mobilní peněženkou.",
+          "instructions": [
+            "Nechte nejdřív viditelný výchozí stav Platební karta.",
+            "Upozorněte, že uložení karty se nabídne při platbě kupónu."
+          ],
+          "expected": [
+            "Platební karta je aktivní metoda; žádná konkrétní karta zatím není uložená."
+          ],
+          "emulator": {
+            "label": "Ověřit výchozí stav v emulátoru",
+            "actions": [
+              {
+                "type": "assertNode",
+                "contentDescription": "Nastavení jízdného"
+              },
+              {
+                "type": "assertNode",
+                "contentDescription": "Výchozí způsob platby\nNová karta"
+              },
+              {
+                "type": "assertNode",
+                "contentDescription": "Uložené platební karty"
+              }
+            ]
+          }
+        },
+        {
+          "id": "coupon-start-purchase",
+          "type": "presentation",
+          "section": "Nákup kupónu",
+          "title": "Zahájit nákup připraveného kupónu",
+          "message": "Přejdeme do Jízdného, vybereme kupón vhodný pro demonstrační účet a projdeme rekapitulaci.",
+          "instructions": [
+            "Vyberte pásma a období tak, aby nekolidovala s již platným kupónem účtu.",
+            "Před pokračováním ukažte cenu, platnost a identifikátor."
+          ],
+          "expected": [
+            "Rekapitulace obsahuje zvolený kupón a umožní pokračovat k platbě kartou."
+          ],
+          "notes": [
+            "Pokud účet stále obsahuje kupón z nácviku, zvolte jiné nekolidující období nebo tarif."
+          ],
+          "emulator": {
+            "label": "Otevřít nákup kupónu v emulátoru",
+            "actions": [
+              {
+                "type": "back",
+                "waitAfterMs": 600
+              },
+              {
+                "type": "tapNode",
+                "contentDescription": "Moje kupóny",
+                "exact": false,
+                "clickable": true,
+                "holdMs": 420,
+                "waitAfterMs": 700
+              },
+              {
+                "type": "tapNode",
+                "contentDescription": "Koupit kupón",
+                "clickable": true,
+                "holdMs": 420,
+                "waitAfterMs": 900
+              },
+              {
+                "type": "assertNode",
+                "contentDescription": "Nákup kupónu"
+              }
+            ]
+          }
+        },
+        {
+          "id": "coupon-pay-and-save-card",
+          "type": "presentation",
+          "section": "Nákup kupónu",
+          "title": "Zaplatit kartou a uložit ji",
+          "message": "Na testovací bráně zaplatíme kartou 4000007000010006, platnost 11/30, CVC 111 a potvrdíme její uložení.",
+          "instructions": [
+            "Na obrazovce platby zapněte volbu pro uložení karty.",
+            "Dokončete testovací platbu a vraťte se do aplikace.",
+            "Po návratu nespěchejte; nejdřív ukažte potvrzení nákupu."
+          ],
+          "expected": [
+            "Platba je úspěšná, kupón je vidět v aplikaci a karta končící 0006 je uložená."
+          ],
+          "emulator": {
+            "subscenarioId": "gdpay-fill-test-card",
+            "label": "Vyplnit testovací kartu v bráně"
+          }
+        },
+        {
+          "id": "payment-show-saved-card",
+          "type": "presentation",
+          "section": "Nastavení placení jízdného",
+          "title": "Ověřit nově uloženou kartu",
+          "message": "Vrátíme se do nastavení placení a ukážeme uloženou kartu končící 0006.",
+          "instructions": [
+            "Otevřete nastavení placení jízdného.",
+            "Nechte maskovanou kartu chvíli viditelnou."
+          ],
+          "expected": [
+            "V seznamu je právě jedna uložená karta s maskovaným číslem končícím 0006."
+          ]
+        },
+        {
+          "id": "payment-switch-wallet",
+          "type": "presentation",
+          "section": "Nastavení placení jízdného",
+          "title": "Přepnout na Google Pay nebo Apple Pay",
+          "message": "Změníme preferovanou metodu na peněženku dostupnou v emulátoru a změnu uložíme.",
+          "instructions": [
+            "Na Android emulátoru zvolte Google Pay; na iOS Apple Pay.",
+            "Po uložení se vraťte na obrazovku a ukažte zachovaný výběr."
+          ],
+          "expected": [
+            "Mobilní peněženka je nová preferovaná metoda placení."
+          ]
+        },
+        {
+          "id": "recommendation-open",
+          "type": "presentation",
+          "section": "Doporučování jízdenek",
+          "title": "Otevřít nastavení doporučení",
+          "message": "Přejdeme do nastavení doporučování jízdného a ukážeme aktuální volbu.",
+          "instructions": [
+            "Před změnou pojmenujte, co současná úroveň doporučení ovlivňuje.",
+            "Otevřete nabídku dostupných variant."
+          ],
+          "expected": [
+            "Jsou vidět dostupné úrovně doporučování jízdenek a kupónů."
+          ],
+          "emulator": {
+            "label": "Otevřít doporučování v emulátoru",
+            "actions": [
+              {
+                "type": "tapNode",
+                "contentDescription": "Doporučování jízdenek",
+                "exact": false,
+                "clickable": true,
+                "holdMs": 420,
+                "waitAfterMs": 800
+              }
+            ]
+          }
+        },
+        {
+          "id": "recommendation-change",
+          "type": "presentation",
+          "section": "Doporučování jízdenek",
+          "title": "Změnit a ověřit doporučení",
+          "message": "Vybereme jinou úroveň doporučení, uložíme ji a po návratu ověříme, že zůstala nastavená.",
+          "instructions": [
+            "Zvolte variantu, která je pro publikum nejsnáze vysvětlitelná.",
+            "Po uložení obrazovku opusťte a znovu otevřete."
+          ],
+          "expected": [
+            "Nová hodnota se po opětovném otevření nastavení zachovala."
+          ]
+        },
+        {
+          "id": "coupon-detail-login",
+          "type": "presentation",
+          "section": "Detail kupónu a QR kód",
+          "title": "Přihlásit účet s kupóny na jiném identifikátoru",
+          "message": "Přihlásíme pridalova.eliska+PT@operatorict.cz a otevřeme Jízdné.",
+          "instructions": [
+            "Účet má kupóny i ISIC; kupóny mají být před prezentací na identifikátoru Galaxy A32.",
+            "Po přihlášení přejděte na seznam kupónů."
+          ],
+          "expected": [
+            "Aplikace informuje, že kupóny jsou na jiném identifikátoru."
+          ],
+          "emulator": {
+            "subscenarioId": "pidlitacka-login-saved-profile",
+            "profileEmail": "pridalova.eliska+PT@operatorict.cz",
+            "label": "Přihlásit účet PT v emulátoru"
+          }
+        },
+        {
+          "id": "coupon-detail-other-identifier",
+          "type": "presentation",
+          "section": "Detail kupónu a QR kód",
+          "title": "Ukázat detail na původním identifikátoru",
+          "message": "Nejdřív otevřeme detail kupónu svázaného s původním identifikátorem Galaxy A32.",
+          "instructions": [
+            "Ukažte identifikátor, pásma, platnost a další údaje detailu.",
+            "Vysvětlete, proč zatím není kupón k dispozici na tomto zařízení."
+          ],
+          "expected": [
+            "Detail jasně ukazuje původní identifikátor a stav kupónu."
+          ]
+        },
+        {
+          "id": "coupon-detail-transfer-device",
+          "type": "presentation",
+          "section": "Detail kupónu a QR kód",
+          "title": "Převést kupóny na toto zařízení",
+          "message": "Spustíme převod kupónů na aktuální emulátor a potvrdíme varování aplikace.",
+          "instructions": [
+            "Před potvrzením nechte publikum přečíst důsledek převodu.",
+            "Potvrďte převod a vyčkejte na nové načtení seznamu."
+          ],
+          "expected": [
+            "Kupóny se po dokončení zobrazí jako dostupné na aktuálním zařízení."
+          ],
+          "notes": [
+            "Tento krok mění stav účtu; po prezentaci proveďte závěrečný reset."
+          ]
+        },
+        {
+          "id": "coupon-detail-show-qr",
+          "type": "presentation",
+          "section": "Detail kupónu a QR kód",
+          "title": "Ukázat detail s QR kódem",
+          "message": "Otevřeme převedený kupón a zobrazíme jeho QR kód.",
+          "instructions": [
+            "Nechte nejdřív viditelný celý detail kupónu.",
+            "Potom otevřete QR kód a ponechte ho na obrazovce pro závěrečný efekt."
+          ],
+          "expected": [
+            "Detail je svázaný s aktuálním zařízením a QR kód se korektně zobrazí."
+          ],
+          "notes": [
+            "QR lze v budoucím scénáři zobrazit i mimo emulátor, pokud se přidá samostatná prezentační plocha; tento workflow ji zatím neimplementuje."
+          ]
+        },
+        {
+          "id": "presentation-reset",
+          "type": "presentation",
+          "section": "Úklid po prezentaci",
+          "title": "Vrátit demonstrační účty do výchozího stavu",
+          "message": "Po prezentaci obnovíme data tak, aby šel stejný postup bezpečně zopakovat.",
+          "instructions": [
+            "U bezpečného účtu odstraňte kartu končící 0006, vraťte Platební kartu a doporučení TARIFFS_AND_COUPONS.",
+            "U účtu PT vraťte kupóny na původní identifikátor Galaxy A32 (2018271).",
+            "Ověřte oba stavy před ukončením prostředí."
+          ],
+          "expected": [
+            "Další nácvik nebo ostrá prezentace může začít ze stejného výchozího stavu."
+          ]
+        }
+      ],
+      "report": {
+        "title": "PID Lítačka FE – průchod prezentací"
+      }
+    },
+    {
+      "id": "pidlitacka-fe-delay-presentation",
+      "name": "PID Lítačka FE – zaokrouhlování zpoždění",
+      "category": "presentation",
+      "description": "Samostatná moderovaná ukázka zaokrouhlení zpoždění a porovnání s aktuálními daty mapy PID.",
+      "sourceWorkflowId": "pidlitacka-fe-moderated-presentation",
+      "itemIds": [
+        "delay-find-connection",
+        "delay-compare-map"
+      ],
+      "report": {
+        "title": "PID Lítačka FE – zaokrouhlování zpoždění"
+      }
+    },
+    {
+      "id": "pidlitacka-fe-invalid-identifiers-presentation",
+      "name": "PID Lítačka FE – neplatné identifikátory",
+      "category": "presentation",
+      "description": "Samostatná moderovaná ukázka přihlášení připraveného účtu a rovnou rozbalených neplatných identifikátorů.",
+      "sourceWorkflowId": "pidlitacka-fe-moderated-presentation",
+      "itemIds": [
+        "invalid-identifiers-login",
+        "invalid-identifiers-show"
+      ],
+      "report": {
+        "title": "PID Lítačka FE – neplatné identifikátory"
+      }
+    },
+    {
+      "id": "pidlitacka-fe-fare-payment-presentation",
+      "name": "PID Lítačka FE – placení jízdného a nákup kupónu",
+      "category": "presentation",
+      "description": "Samostatná moderovaná ukázka výchozího nastavení platby, nákupu kupónu, uložení testovací karty a přepnutí na mobilní peněženku.",
+      "sourceWorkflowId": "pidlitacka-fe-moderated-presentation",
+      "itemIds": [
+        "payment-login-safe-account",
+        "payment-open-settings",
+        "coupon-start-purchase",
+        "coupon-pay-and-save-card",
+        "payment-show-saved-card",
+        "payment-switch-wallet"
+      ],
+      "report": {
+        "title": "PID Lítačka FE – placení jízdného a nákup kupónu"
+      }
+    },
+    {
+      "id": "pidlitacka-fe-ticket-recommendation-presentation",
+      "name": "PID Lítačka FE – doporučování jízdenek",
+      "category": "presentation",
+      "description": "Samostatná moderovaná ukázka otevření, změny a opětovného ověření nastavení doporučování jízdenek.",
+      "sourceWorkflowId": "pidlitacka-fe-moderated-presentation",
+      "itemIds": [
+        "recommendation-open",
+        "recommendation-change"
+      ],
+      "report": {
+        "title": "PID Lítačka FE – doporučování jízdenek"
+      }
+    },
+    {
+      "id": "pidlitacka-fe-coupon-detail-presentation",
+      "name": "PID Lítačka FE – detail kupónu a QR kód",
+      "category": "presentation",
+      "description": "Samostatná moderovaná ukázka kupónu na jiném identifikátoru, převodu na emulátor a zobrazení QR kódu.",
+      "sourceWorkflowId": "pidlitacka-fe-moderated-presentation",
+      "itemIds": [
+        "coupon-detail-login",
+        "coupon-detail-other-identifier",
+        "coupon-detail-transfer-device",
+        "coupon-detail-show-qr"
+      ],
+      "report": {
+        "title": "PID Lítačka FE – detail kupónu a QR kód"
+      }
+    },
+    {
+      "id": "pidlitacka-fe-presentation-reset",
+      "name": "PID Lítačka FE – úklid po prezentaci",
+      "category": "presentation",
+      "description": "Samostatný kontrolní postup pro vrácení demonstračních účtů do stavu připraveného na další nácvik nebo prezentaci.",
+      "sourceWorkflowId": "pidlitacka-fe-moderated-presentation",
+      "itemIds": [
+        "presentation-reset"
+      ],
+      "report": {
+        "title": "PID Lítačka FE – úklid po prezentaci"
+      }
+    },
+    {
+      "id": "pidlitacka-fe-login-subscenarios",
+      "name": "PID Lítačka FE – přepnutí testovacího účtu",
+      "category": "authentication",
+      "description": "Samostatné použití znovupoužitelného přihlašovacího sub-scénáře. Vybere Trasy, odhlásí aktuální účet, vyplní uložený profil a ověří přihlášení.",
+      "mode": "presentation",
+      "tags": [
+        "pidlitacka",
+        "FE",
+        "login",
+        "emulátor"
+      ],
+      "items": [
+        {
+          "id": "login-p03",
+          "type": "presentation",
+          "section": "Přihlášení testovacího účtu",
+          "title": "Přepnout na účet p03",
+          "message": "Emulátor přepneme na účet s připravenými neplatnými identifikátory.",
+          "instructions": [
+            "Aplikace musí být na některé hlavní obrazovce s dostupnou spodní navigací.",
+            "Klikátko zobrazí potvrzení před odhlášením a vyplněním uložených přihlašovacích údajů."
+          ],
+          "expected": [
+            "Po přihlášení se zobrazí hlavní obrazovka Vyhledávání."
+          ],
+          "emulator": {
+            "subscenarioId": "pidlitacka-login-saved-profile",
+            "profileEmail": "pridalova.eliska+p03@operatorict.cz",
+            "label": "Přihlásit účet p03"
+          }
+        },
+        {
+          "id": "login-safe-payment-account",
+          "type": "presentation",
+          "section": "Přihlášení testovacího účtu",
+          "title": "Přepnout na bezpečný platební účet",
+          "message": "Emulátor přepneme na účet používaný pro nákup, platby a doporučování.",
+          "instructions": [
+            "Aplikace musí být na některé hlavní obrazovce s dostupnou spodní navigací.",
+            "Heslo se načte z uloženého profilu Klikátka až při spuštění."
+          ],
+          "expected": [
+            "Po přihlášení se zobrazí hlavní obrazovka Vyhledávání."
+          ],
+          "emulator": {
+            "subscenarioId": "pidlitacka-login-saved-profile",
+            "profileEmail": "wijessibrouma-5506@yopmail.com",
+            "label": "Přihlásit bezpečný účet"
+          }
+        },
+        {
+          "id": "login-pt",
+          "type": "presentation",
+          "section": "Přihlášení testovacího účtu",
+          "title": "Přepnout na účet PT",
+          "message": "Emulátor přepneme na účet s kupóny a ISIC pro detail a QR kód.",
+          "instructions": [
+            "Aplikace musí být na některé hlavní obrazovce s dostupnou spodní navigací.",
+            "Po přihlášení lze pokračovat přímo scénářem detailu kupónu."
+          ],
+          "expected": [
+            "Po přihlášení se zobrazí hlavní obrazovka Vyhledávání."
+          ],
+          "emulator": {
+            "subscenarioId": "pidlitacka-login-saved-profile",
+            "profileEmail": "pridalova.eliska+PT@operatorict.cz",
+            "label": "Přihlásit účet PT"
+          }
+        }
+      ],
+      "report": {
+        "title": "PID Lítačka FE – přepnutí testovacího účtu"
+      }
+    },
     {
       "id": "pidlitacka-client-with-phone-and-card",
       "name": "PidLitacka - klient s identifikátory a testovacím kupónem",
+      "category": "client-setup",
       "description": "Runbook pro přípravu testovacího klienta pro přesun kupónu: založení a aktivace uživatele, založení klientských dat, tokenizace telefonu, tokenizace platební karty, kontrola identifikátorů a nákup testovacího kupónu přes pobočkový Core MOS SOAP tok.",
-      "tags": ["pidlitacka", "client", "identifiers", "setup"],
+      "tags": [
+        "pidlitacka",
+        "client",
+        "identifiers",
+        "setup"
+      ],
       "items": [
         {
           "projectId": "pidlitacka",
@@ -71,7 +724,10 @@
                 "Po návratu z brány pokračujte ve workflow; další krok ověří stav registrace.",
                 "Pokud je potřeba URL zkopírovat, najdete ji také v logu a workflow kontextu."
               ],
-              "contextKeys": ["bankCardGatewayRedirectUrl", "bankCardRegistrationId"]
+              "contextKeys": [
+                "bankCardGatewayRedirectUrl",
+                "bankCardRegistrationId"
+              ]
             }
           ]
         },
@@ -117,7 +773,10 @@
                 "Výchozí hodnota 3 znamená karta v kanceláři, hodnota 4 hotovost.",
                 "Až bude typ platby správně nastavený, pokračujte ve workflow."
               ],
-              "contextKeys": ["mosCouponOrderId", "mosCouponPrice"]
+              "contextKeys": [
+                "mosCouponOrderId",
+                "mosCouponPrice"
+              ]
             }
           ]
         }
@@ -141,6 +800,7 @@
     {
       "id": "pidlitacka-client-with-card-coupon",
       "name": "PidLitacka - klient s kupónem placeným kartou v mobilu",
+      "category": "coupon-purchase",
       "description": "Jako pidlitacka-client-with-phone-and-card, ale kupón se platí kartou v mobilu přes BE PidLitacka (ne přes pobočku). Od založení a aktivace uživatele, přes klientská data, tokenizaci telefonu a karty, kontrolu identifikátorů a zjištění placené zóny (GetTokenTariffs) až po kartovou platbu s ručním průchodem branou. Čistá data každý běh = scénáře nejsou falešně negativní.",
       "tags": [
         "pidlitacka",
@@ -211,7 +871,10 @@
                 "Po návratu z brány pokračujte ve workflow; další krok ověří stav registrace.",
                 "Pokud je potřeba URL zkopírovat, najdete ji také v logu a workflow kontextu."
               ],
-              "contextKeys": ["bankCardGatewayRedirectUrl", "bankCardRegistrationId"]
+              "contextKeys": [
+                "bankCardGatewayRedirectUrl",
+                "bankCardRegistrationId"
+              ]
             }
           ]
         },
@@ -316,6 +979,182 @@
           "mosCouponOrderId",
           "pidCouponReceiptMosOrderId"
         ]
+      }
+    },
+    {
+      "id": "coupon-payment-diagnostic-success",
+      "name": "Diagnostika kupónu 1/4 - úspěšná platba",
+      "category": "payment-diagnostics",
+      "description": "Čerstvá objednávka, úspěšná testovací platba, callback, stav MOS objednávky a raw i časový stav kupónu.",
+      "tags": ["pidlitacka", "coupons", "diagnostics", "payment-success"],
+      "items": [
+        {
+          "projectId": "pidlitacka",
+          "packId": "pidlitacka-coupon-payment-diagnostics",
+          "scenarioId": "client-coupon-payment-diagnostic-run",
+          "title": "Úspěšně zaplatit novou objednávku",
+          "stopAfter": [
+            {
+              "stepId": "coupon-payment-diagnostic-initiate",
+              "message": "Teď na bráně platbu úspěšně dokončete.",
+              "preserveResult": true,
+              "instructions": [
+                "Otevřete pidCouponDiagnosticGatewayUrl v novém panelu.",
+                "Použijte úspěšnou testovací kartu a platbu dokončete.",
+                "Po návratu přes BE na GwResponsePage se vraťte do Klikátka a pokračujte.",
+                "Očekávání: raw status kupónu bude Valid; validityStatus může být BeforeValid, pokud ValidFrom teprve nastane."
+              ],
+              "contextKeys": ["pidCouponDiagnosticOrderId", "pidCouponDiagnosticGatewayReference", "pidCouponDiagnosticGatewayUrl"]
+            },
+            {
+              "stepId": "coupon-payment-diagnostic-coupons-after-action",
+              "message": "Úspěšný průchod je zachycen. Zkontrolujte log před pokračováním.",
+              "preserveResult": true,
+              "instructions": [
+                "V BE NDJSON musí existovat gateway-return.received a gateway-result.core-mos-response.",
+                "Porovnejte raw status, validityStatus, ValidFrom/ValidTo a stav MOS objednávky.",
+                "Po uložení poznámek pokračujte; storno zaplacené objednávky se automaticky přeskočí."
+              ],
+              "contextKeys": ["pidCouponDiagnosticOrderId", "pidCouponDiagnosticPaymentStatus", "pidCouponDiagnosticOrderStatus"]
+            }
+          ]
+        }
+      ],
+      "report": {
+        "title": "Diagnostika úspěšné platby kupónu",
+        "contextKeys": ["pidCouponDiagnosticOrderId", "pidCouponDiagnosticGatewayReference", "pidCouponDiagnosticPaymentStatus", "pidCouponDiagnosticOrderStatus", "pidCouponDiagnosticValidFrom", "pidCouponDiagnosticValidTill"]
+      }
+    },
+    {
+      "id": "coupon-payment-diagnostic-user-decline",
+      "name": "Diagnostika kupónu 2/4 - odmítnout a vrátit se",
+      "category": "payment-diagnostics",
+      "description": "Čerstvá objednávka a explicitní uživatelské odmítnutí platby s návratem z brány do aplikace.",
+      "tags": ["pidlitacka", "coupons", "diagnostics", "user-decline"],
+      "items": [
+        {
+          "projectId": "pidlitacka",
+          "packId": "pidlitacka-coupon-payment-diagnostics",
+          "scenarioId": "client-coupon-payment-diagnostic-run",
+          "title": "Odmítnout platbu a vrátit se",
+          "stopAfter": [
+            {
+              "stepId": "coupon-payment-diagnostic-initiate",
+              "message": "Teď na bráně klikněte na odmítnutí platby a návrat do aplikace.",
+              "preserveResult": true,
+              "instructions": [
+                "Otevřete pidCouponDiagnosticGatewayUrl v novém panelu.",
+                "Nepoužívejte chybnou kartu; zvolte přímo uživatelskou akci Odmítnout/Zrušit platbu a návrat.",
+                "Nechte bránu odeslat návratový POST na BE a dokončit redirect na GwResponsePage.",
+                "Vraťte se do Klikátka a pokračujte. Stav není předem určen; zaznamenáváme skutečný POST a výsledek MOS."
+              ],
+              "contextKeys": ["pidCouponDiagnosticOrderId", "pidCouponDiagnosticGatewayReference", "pidCouponDiagnosticGatewayUrl"]
+            },
+            {
+              "stepId": "coupon-payment-diagnostic-coupons-after-action",
+              "message": "Odmítnutí je zachyceno. Před stornem uchovejte diagnostiku.",
+              "preserveResult": true,
+              "instructions": [
+                "Porovnejte raw POST odmítnutí s úspěšným POSTem a zaznamenejte resultCode/paymentStatus.",
+                "Zapište lokální stav, MOS order status a raw status kupónu odděleně od validityStatus.",
+                "Teprve po uložení logu a případných MOS dotazech pokračujte; další krok vyzkouší storno."
+              ],
+              "contextKeys": ["pidCouponDiagnosticOrderId", "pidCouponDiagnosticPaymentStatus", "pidCouponDiagnosticOrderStatus"]
+            }
+          ]
+        }
+      ],
+      "report": {
+        "title": "Diagnostika uživatelského odmítnutí platby",
+        "contextKeys": ["pidCouponDiagnosticOrderId", "pidCouponDiagnosticGatewayReference", "pidCouponDiagnosticPaymentStatus", "pidCouponDiagnosticOrderStatus", "pidCouponDiagnosticValidFrom", "pidCouponDiagnosticValidTill"]
+      }
+    },
+    {
+      "id": "coupon-payment-diagnostic-card-decline",
+      "name": "Diagnostika kupónu 3/4 - zamítnutá karta",
+      "category": "payment-diagnostics",
+      "description": "Čerstvá objednávka a neúspěšná autorizace pomocí testovací karty určené k zamítnutí.",
+      "tags": ["pidlitacka", "coupons", "diagnostics", "card-decline"],
+      "items": [
+        {
+          "projectId": "pidlitacka",
+          "packId": "pidlitacka-coupon-payment-diagnostics",
+          "scenarioId": "client-coupon-payment-diagnostic-run",
+          "title": "Zaplatit kartou, která má být zamítnuta",
+          "stopAfter": [
+            {
+              "stepId": "coupon-payment-diagnostic-initiate",
+              "message": "Teď použijte testovací kartu, se kterou platba neprojde.",
+              "preserveResult": true,
+              "instructions": [
+                "Otevřete pidCouponDiagnosticGatewayUrl v novém panelu.",
+                "Použijte známou testovací kartu pro zamítnutou/neúspěšnou platbu.",
+                "Dokončete flow brány až k návratu nebo finální chybové stránce; pokud nabídne návrat, použijte jej.",
+                "Vraťte se do Klikátka a pokračujte. Tento scénář odlišujeme od ručního kliknutí na Odmítnout."
+              ],
+              "contextKeys": ["pidCouponDiagnosticOrderId", "pidCouponDiagnosticGatewayReference", "pidCouponDiagnosticGatewayUrl"]
+            },
+            {
+              "stepId": "coupon-payment-diagnostic-coupons-after-action",
+              "message": "Zamítnutá karta je zachycena. Před stornem uchovejte diagnostiku.",
+              "preserveResult": true,
+              "instructions": [
+                "Ověřte, zda vůbec dorazil gateway-return POST a jak se liší od explicitního odmítnutí.",
+                "Zapište stav lokální objednávky, MOS objednávky, raw kupónu a validityStatus.",
+                "Po uložení poznámek pokračujte; další krok vyzkouší storno."
+              ],
+              "contextKeys": ["pidCouponDiagnosticOrderId", "pidCouponDiagnosticPaymentStatus", "pidCouponDiagnosticOrderStatus"]
+            }
+          ]
+        }
+      ],
+      "report": {
+        "title": "Diagnostika zamítnuté testovací karty",
+        "contextKeys": ["pidCouponDiagnosticOrderId", "pidCouponDiagnosticGatewayReference", "pidCouponDiagnosticPaymentStatus", "pidCouponDiagnosticOrderStatus", "pidCouponDiagnosticValidFrom", "pidCouponDiagnosticValidTill"]
+      }
+    },
+    {
+      "id": "coupon-payment-diagnostic-close-gateway",
+      "name": "Diagnostika kupónu 4/4 - zavřít bránu",
+      "category": "payment-diagnostics",
+      "description": "Čerstvá objednávka a zavření panelu platební brány bez jakékoli dokončovací nebo návratové akce.",
+      "tags": ["pidlitacka", "coupons", "diagnostics", "abandoned-gateway"],
+      "items": [
+        {
+          "projectId": "pidlitacka",
+          "packId": "pidlitacka-coupon-payment-diagnostics",
+          "scenarioId": "client-coupon-payment-diagnostic-run",
+          "title": "Zavřít bránu bez akce",
+          "stopAfter": [
+            {
+              "stepId": "coupon-payment-diagnostic-initiate",
+              "message": "Teď bránu otevřete a zavřete bez jakékoli akce.",
+              "preserveResult": true,
+              "instructions": [
+                "Otevřete pidCouponDiagnosticGatewayUrl v novém panelu a počkejte na zobrazení brány.",
+                "Nevyplňujte kartu, neklikejte na Odmítnout ani na návrat; panel prostě zavřete.",
+                "Počkejte alespoň 30 sekund, aby bylo možné odlišit opožděný callback od jeho úplné absence.",
+                "Vraťte se do Klikátka a pokračujte. Očekáváme spíše absenci gateway-return POSTu, ale rozhodne log."
+              ],
+              "contextKeys": ["pidCouponDiagnosticOrderId", "pidCouponDiagnosticGatewayReference", "pidCouponDiagnosticGatewayUrl"]
+            },
+            {
+              "stepId": "coupon-payment-diagnostic-coupons-after-action",
+              "message": "Opuštěná brána je zachycena. Před stornem ověřte absenci callbacku.",
+              "preserveResult": true,
+              "instructions": [
+                "V BE NDJSON vyhledejte local orderId. Absence gateway-return.received je v tomto scénáři významný výsledek.",
+                "Zapište stav před prvním lazy GET i stav po něm; callbacková diagnostika a Klikátko je rozlišují časem.",
+                "Po uložení logu a případných MOS dotazech pokračujte; další krok vyzkouší storno."
+              ],
+              "contextKeys": ["pidCouponDiagnosticOrderId", "pidCouponDiagnosticPaymentStatus", "pidCouponDiagnosticOrderStatus"]
+            }
+          ]
+        }
+      ],
+      "report": {
+        "title": "Diagnostika opuštěné platební brány",
+        "contextKeys": ["pidCouponDiagnosticOrderId", "pidCouponDiagnosticGatewayReference", "pidCouponDiagnosticPaymentStatus", "pidCouponDiagnosticOrderStatus", "pidCouponDiagnosticValidFrom", "pidCouponDiagnosticValidTill"]
       }
     }
   ]

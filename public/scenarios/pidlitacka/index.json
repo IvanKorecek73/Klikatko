@@ -27,6 +27,54 @@
       "file": "coupons.json"
     },
     {
+      "id": "pidlitacka-tickets",
+      "name": "PidLitacka - Jízdenky",
+      "description": "Jednoduché ruční scénáře pro všechny dokončené metody jízdenek dostupné přes BE PidLitacka.",
+      "file": "tickets.json"
+    },
+    {
+      "id": "pidlitacka-coupon-payment-diagnostics",
+      "name": "PidLitacka - diagnostika plateb kupónů",
+      "description": "Dočasné řízené průchody platební bránou a porovnání stavů objednávky a kupónu.",
+      "file": "coupon-payment-diagnostics.json"
+    },
+    {
+      "id": "pidlitacka-coupon-save-card",
+      "name": "PidLitacka - uložení karty při nákupu kupónu",
+      "description": "Cílený regresní scénář pro uložení platební karty po úspěšném nákupu kupónu.",
+      "file": "coupon-save-card.json"
+    },
+    {
+      "id": "pidlitacka-feature-960",
+      "name": "PidLitacka - task 960: aktivace jízdenky",
+      "description": "Autonomní lokální E2E scénáře aktivace zakoupených jízdenek přes BE PidLitacka a Ticket Service.",
+      "file": "feature-960-aktivace-jizdenky.json"
+    },
+    {
+      "id": "pidlitacka-feature-966",
+      "name": "PidLitacka - task 966: oblíbené jízdenky",
+      "description": "Funkční scénář přidání, idempotentního opakování, výběru a odebrání oblíbené jízdenky přes BE PidLitacka.",
+      "file": "feature-966-oblibene-jizdenky.json"
+    },
+    {
+      "id": "pidlitacka-feature-967",
+      "name": "PidLitacka - task 967: poslat jízdenku jinému uživateli",
+      "description": "Lokální E2E nákup přes Tickets, převod přes BE PidLitacka a ověření zásobníku příjemce.",
+      "file": "feature-967-prevod-jizdenky.json"
+    },
+    {
+      "id": "pidlitacka-task-1067-product-subtype",
+      "name": "PidLitacka - task 1067: podtyp zakoupené jízdenky",
+      "description": "Lokální E2E ověření kategorie a ikony produktu v seznamu, aktivaci a detailu fulfillmentu.",
+      "file": "task-1067-product-subtype.json"
+    },
+    {
+      "id": "pidlitacka-task-1045-hsm",
+      "name": "PidLitacka - task 1045: MOS XML HSM",
+      "description": "Nasazovací kontroly RVI klíčů a podpisu ETD přes veřejné API BE PidLitacka.",
+      "file": "task-1045-mos-xml-hsm.json"
+    },
+    {
       "id": "pidlitacka-parking-basic",
       "name": "PidLitacka - Parkování",
       "description": "První ruční pack pro základní parkovací scénáře nad veřejným API parkování.",

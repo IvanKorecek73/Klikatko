@@ -1,0 +1,651 @@
+{
+  "version": 1,
+  "name": "PidLitacka - task 967: poslat jízdenku jinému uživateli",
+  "description": "Lokální E2E průchod: přímý nákup přes Tickets, převod přes BE PidLitacka a kontrola zásobníku příjemce.",
+  "scenarios": [
+    {
+      "id": "pidlitacka-ticket-967-purchase-transfer-verify",
+      "title": "Task 967 - koupit, poslat a ověřit jízdenku",
+      "description": "Přihlášený odesílatel koupí jízdenku přímo přes Tickets, převede ji přes BE PidLitacka vybranému účtu a Klikátko ji ověří po přihlášení příjemce.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "prewarmReturnUrl": true,
+      "tags": ["tickets", "task-967", "purchase", "transfer", "two-users", "local-only"],
+      "app": {
+        "section": "tickets",
+        "title": "Poslat jízdenku",
+        "subtitle": "Nákup, převod a kontrola příjemce"
+      },
+      "instructions": [
+        "Scénář je pouze pro LOCAL prostředí. Po založení platby otevřete vrácené paymentUrl a dokončete testovací platbu v PRE GDPay; návratový POST zachytí lokální GwResponsePage a musí se server-side předat do Tickets return bridge. Polling a výdej pak používají vývojové endpointy Tickets. Proti INT ani PROD se scénář nespouští.",
+        "Před startem se přihlaste jako odesílatel. Jako příjemce vyberte jiný uložený registrovaný účet, jehož e-mail existuje v lokální databázi PidLitacka.",
+        "Nákup vede přímo přes veřejné API Tickets. Tento blok se po dokončení nákupu v BE PidLitacka nahradí jeho veřejným endpointem; transfer i závěrečná kontrola už nyní vedou přes BE PidLitacka.",
+        "Výchozí URL odpovídají soukromému Aspire stacku (PID BE 5065, Tickets 28180). Při samostatném dotnet run použijte obvyklé porty 7261/5132; starší lokální orchestrace Tickets může používat port 5087."
+      ],
+      "steps": [
+        {
+          "id": "ticket-967-select-recipient",
+          "title": "Vybrat příjemce a lokální služby",
+          "description": "Nabídne všechny uložené registrované login profily kromě právě přihlášeného odesílatele.",
+          "fields": [
+            {
+              "name": "ticket967RecipientEmail",
+              "label": "Příjemce",
+              "type": "select",
+              "optionsSource": "pidlitacka-auth-profiles",
+              "excludeCurrentSession": true,
+              "value": "",
+              "help": "Účet musí existovat v lokální databázi PidLitacka a mít v Klikátku uložené platné heslo."
+            },
+            {
+              "name": "ticket967TicketsBaseUrl",
+              "label": "Lokální Tickets URL",
+              "type": "url",
+              "value": "http://localhost:28180"
+            },
+            {
+              "name": "ticket967PidLitackaBaseUrl",
+              "label": "Lokální PidLitacka BE URL",
+              "type": "url",
+              "value": "http://localhost:5065"
+            }
+          ],
+          "customAction": "requireTemplateValue",
+          "requireValue": {
+            "template": "{{form.ticket967RecipientEmail}}",
+            "label": "Příjemce",
+            "contextKey": "ticket967RecipientEmail",
+            "okMessage": "Příjemce je vybraný; nákup poběží pod aktuálně přihlášeným odesílatelem.",
+            "missingMessage": "Vyberte jiný uložený účet jako příjemce."
+          }
+        },
+        {
+          "id": "ticket-967-create-offer",
+          "title": "Vybrat jízdenku v Tickets",
+          "description": "Přímo v Tickets vytvoří nabídku jedné 30minutové jízdenky pro aktuálně přihlášeného odesílatele.",
+          "requiresContext": ["ticket967RecipientEmail"],
+          "fields": [
+            {
+              "name": "ticket967ProductId",
+              "label": "Produkt",
+              "type": "select",
+              "value": "101",
+              "valueType": "number",
+              "options": [
+                { "value": "101", "text": "Jednotlivá jízdenka 30 minut" },
+                { "value": "102", "text": "Jednotlivá jízdenka 90 minut" }
+              ]
+            },
+            {
+              "name": "ticket967Zones",
+              "label": "Zóny",
+              "type": "tag-list",
+              "value": ["P", "0"],
+              "options": [
+                { "value": "P", "text": "P - Praha" },
+                { "value": "0", "text": "0 - Pásmo 0" },
+                { "value": "B", "text": "B - Vnější pásmo B" }
+              ]
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/api/v1/offers",
+            "proxyTargetBaseUrl": "{{form.ticket967TicketsBaseUrl}}",
+            "body": {
+              "productId": "{{form.ticket967ProductId}}",
+              "amount": 1,
+              "zones": "{{form.ticket967Zones}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.offers[0].offerId", "notEmpty": true }
+            ]
+          },
+          "extract": {
+            "ticket967OfferId": "$.offers[0].offerId",
+            "ticket967ProductId": "$.offers[0].productId"
+          }
+        },
+        {
+          "id": "ticket-967-create-booking",
+          "title": "Vytvořit rezervaci v Tickets",
+          "description": "Z nabídky vytvoří nezávisle na BE PidLitacka rezervaci bez automatické aktivace.",
+          "requiresContext": ["ticket967OfferId"],
+          "fields": [
+            { "name": "ticket967BookingKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/api/v1/bookings",
+            "proxyTargetBaseUrl": "{{form.ticket967TicketsBaseUrl}}",
+            "headers": { "Idempotency-Key": "{{form.ticket967BookingKey}}" },
+            "body": {
+              "offerId": "{{context.ticket967OfferId}}",
+              "amount": 1,
+              "activateAfterPayment": false
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.bookingId", "notEmpty": true },
+              { "path": "$.status", "equals": "PREBOOKED" }
+            ]
+          },
+          "extract": { "ticket967BookingId": "$.bookingId" }
+        },
+        {
+          "id": "ticket-967-create-payment",
+          "title": "Založit testovací platbu v Tickets",
+          "description": "Vytvoří payment attempt a vrátí paymentUrl. Lokální Tickets musí mít nakonfigurovaný GDPay.ApiKey; před dalším krokem dokončete testovací platbu na vrácené URL.",
+          "requiresContext": ["ticket967BookingId"],
+          "fields": [
+            { "name": "ticket967PaymentKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/api/v1/bookings/{{context.ticket967BookingId}}/payments",
+            "proxyTargetBaseUrl": "{{form.ticket967TicketsBaseUrl}}",
+            "headers": { "Idempotency-Key": "{{form.ticket967PaymentKey}}" },
+            "body": {
+              "method": "card",
+              "returnUrl": "http://localhost:5096/analysis/html/GwResponsePage.html?flow=ticket-967"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.paymentId", "notEmpty": true },
+              { "path": "$.status", "equals": "IN_PROGRESS" }
+            ]
+          },
+          "extract": {
+            "ticket967PaymentId": "$.paymentId",
+            "ticket967PaymentUrl": "$.paymentUrl"
+          }
+        },
+        {
+          "id": "ticket-967-confirm-payment",
+          "title": "Načíst výsledek testovací platby",
+          "description": "Po dokončení paymentUrl vývojový polling ověří stav server-to-server proti GDPay. Tento krok nesmí být použit mimo lokální Tickets.",
+          "requiresContext": ["ticket967PaymentId"],
+          "request": {
+            "method": "POST",
+            "path": "/api/v1/dev/payments/poll",
+            "proxyTargetBaseUrl": "{{form.ticket967TicketsBaseUrl}}"
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "ticket-967-dispatch-payment",
+          "title": "Ověřit potvrzení rezervace",
+          "description": "Ověří, že server-side kontrola GDPay změnila rezervaci na CONFIRMED nebo že ji běžící worker už posunul do navazujícího stavu FULFILLED. Pokud je stále PREBOOKED, dokončete platbu a zopakujte předchozí polling.",
+          "requiresContext": ["ticket967BookingId"],
+          "request": {
+            "method": "GET",
+            "path": "/api/v1/bookings/{{context.ticket967BookingId}}",
+            "proxyTargetBaseUrl": "{{form.ticket967TicketsBaseUrl}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "sourcePath": "$.status",
+                "regex": "^(CONFIRMED|FULFILLED)$",
+                "label": "status rezervace je CONFIRMED nebo FULFILLED",
+                "message": "Po zaplacení musí být rezervace CONFIRMED nebo již FULFILLED."
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-967-dispatch-fulfillment",
+          "title": "Vydat zakoupenou jízdenku",
+          "description": "Vývojový endpoint idempotentně vydá fulfillment potvrzené rezervace; s běžícím workerem může být jízdenka již vydaná.",
+          "request": {
+            "method": "POST",
+            "path": "/api/v1/dev/fulfillments/issue",
+            "proxyTargetBaseUrl": "{{form.ticket967TicketsBaseUrl}}"
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "ticket-967-read-booking",
+          "title": "Načíst zakoupenou jízdenku z Tickets",
+          "description": "Ověří splněnou rezervaci a uloží ID vydaného fulfillmentu pro transfer.",
+          "requiresContext": ["ticket967BookingId"],
+          "request": {
+            "method": "GET",
+            "path": "/api/v1/bookings/{{context.ticket967BookingId}}",
+            "proxyTargetBaseUrl": "{{form.ticket967TicketsBaseUrl}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "FULFILLED" },
+              { "path": "$.fulfillments", "lengthAtLeast": 1 },
+              { "path": "$.fulfillments[0].fulfillmentId", "notEmpty": true }
+            ]
+          },
+          "extract": {
+            "ticket967OriginalFulfillmentId": "$.fulfillments[0].fulfillmentId"
+          }
+        },
+        {
+          "id": "ticket-967-verify-sender-inventory",
+          "title": "Ověřit jízdenku u odesílatele přes BE PidLitacka",
+          "description": "Před převodem prokáže, že přímo zakoupený fulfillment vidí odesílatel přes veřejné API BE PidLitacka.",
+          "requiresContext": ["ticket967OriginalFulfillmentId"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=AVAILABLE",
+            "proxyTargetBaseUrl": "{{form.ticket967PidLitackaBaseUrl}}",
+            "proxyIgnoreTlsCertificateErrors": true
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.ticket967OriginalFulfillmentId}}",
+                  "status": "AVAILABLE"
+                },
+                "message": "Přímo zakoupená jízdenka se neobjevila v zásobníku odesílatele přes BE PidLitacka."
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-967-transfer",
+          "title": "Poslat jízdenku vybranému uživateli",
+          "description": "Testovaná funkčnost tasku 967: BE PidLitacka dohledá příjemce podle e-mailu a požádá Tickets o převod.",
+          "requiresContext": ["ticket967OriginalFulfillmentId", "ticket967RecipientEmail"],
+          "fields": [
+            { "name": "ticket967TransferKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/{{context.ticket967OriginalFulfillmentId}}/transfer",
+            "proxyTargetBaseUrl": "{{form.ticket967PidLitackaBaseUrl}}",
+            "proxyIgnoreTlsCertificateErrors": true,
+            "headers": { "Idempotency-Key": "{{form.ticket967TransferKey}}" },
+            "body": { "recipientEmail": "{{context.ticket967RecipientEmail}}" }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.originalFulfillmentId", "equals": "{{context.ticket967OriginalFulfillmentId}}" },
+              { "path": "$.newFulfillmentId", "notEmpty": true },
+              { "path": "$.transferredAt", "notEmpty": true }
+            ]
+          },
+          "extract": {
+            "ticket967TransferredFulfillmentId": "$.newFulfillmentId"
+          }
+        },
+        {
+          "id": "ticket-967-login-recipient",
+          "title": "Přihlásit vybraného příjemce",
+          "description": "Klikátko bezpečně přepne aktivní session na uložený login profil zvoleného příjemce.",
+          "requiresContext": ["ticket967RecipientEmail", "ticket967TransferredFulfillmentId"],
+          "customAction": "loginPidLitackaProfile",
+          "profileLogin": {
+            "email": "{{context.ticket967RecipientEmail}}",
+            "identityContextKey": "ticket967LoggedInRecipientIdentityId"
+          },
+          "request": {
+            "proxyTargetBaseUrl": "{{form.ticket967PidLitackaBaseUrl}}",
+            "proxyIgnoreTlsCertificateErrors": true
+          }
+        },
+        {
+          "id": "ticket-967-verify-recipient-inventory",
+          "title": "Ověřit jízdenku v zásobníku příjemce",
+          "description": "Po přihlášení příjemce načte jeho AVAILABLE jízdenky přes BE PidLitacka a vyhledá nově vydaný fulfillment.",
+          "requiresContext": ["ticket967TransferredFulfillmentId", "ticket967LoggedInRecipientIdentityId"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=AVAILABLE",
+            "proxyTargetBaseUrl": "{{form.ticket967PidLitackaBaseUrl}}",
+            "proxyIgnoreTlsCertificateErrors": true
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.ticket967TransferredFulfillmentId}}",
+                  "status": "AVAILABLE"
+                },
+                "message": "Převedená jízdenka se v zásobníku přihlášeného příjemce nenašla."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-ticket-967-resume-fulfilled-booking",
+      "title": "Task 967 - pokračovat s již vydanou jízdenkou",
+      "description": "Naváže na lokální rezervaci, kterou GDPay a Tickets už potvrdily a vydaly. Přeskočí nákup a pokračuje ověřením, převodem a kontrolou příjemce.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["tickets", "task-967", "resume", "transfer", "two-users", "local-only"],
+      "app": {
+        "section": "tickets",
+        "title": "Poslat vydanou jízdenku",
+        "subtitle": "Navázání po dokončené platbě"
+      },
+      "steps": [
+        {
+          "id": "ticket-967-resume-booking",
+          "title": "Načíst již vydanou jízdenku",
+          "description": "Načte existující FULFILLED rezervaci odesílatele a uloží fulfillment pro převod.",
+          "fields": [
+            { "name": "ticket967ResumeBookingId", "label": "Booking ID", "value": "" },
+            {
+              "name": "ticket967RecipientEmail",
+              "label": "Příjemce",
+              "type": "select",
+              "optionsSource": "pidlitacka-auth-profiles",
+              "excludeCurrentSession": true,
+              "value": ""
+            },
+            { "name": "ticket967TicketsBaseUrl", "label": "Lokální Tickets URL", "type": "url", "value": "http://localhost:28180" },
+            { "name": "ticket967PidLitackaBaseUrl", "label": "Lokální PidLitacka BE URL", "type": "url", "value": "http://localhost:5065" }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/api/v1/bookings/{{form.ticket967ResumeBookingId}}",
+            "proxyTargetBaseUrl": "{{form.ticket967TicketsBaseUrl}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "FULFILLED" },
+              { "path": "$.fulfillments", "lengthAtLeast": 1 },
+              { "path": "$.fulfillments[0].fulfillmentId", "notEmpty": true }
+            ]
+          },
+          "remember": { "ticket967RecipientEmail": "{{form.ticket967RecipientEmail}}" },
+          "extract": { "ticket967OriginalFulfillmentId": "$.fulfillments[0].fulfillmentId" }
+        },
+        {
+          "id": "ticket-967-resume-verify-sender",
+          "title": "Ověřit jízdenku u odesílatele",
+          "requiresContext": ["ticket967OriginalFulfillmentId"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=AVAILABLE",
+            "proxyTargetBaseUrl": "{{form.ticket967PidLitackaBaseUrl}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.ticket967OriginalFulfillmentId}}",
+                  "status": "AVAILABLE"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-967-resume-transfer",
+          "title": "Poslat jízdenku vybranému uživateli",
+          "requiresContext": ["ticket967OriginalFulfillmentId", "ticket967RecipientEmail"],
+          "fields": [
+            { "name": "ticket967ResumeTransferKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/{{context.ticket967OriginalFulfillmentId}}/transfer",
+            "proxyTargetBaseUrl": "{{form.ticket967PidLitackaBaseUrl}}",
+            "headers": { "Idempotency-Key": "{{form.ticket967ResumeTransferKey}}" },
+            "body": { "recipientEmail": "{{context.ticket967RecipientEmail}}" }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.originalFulfillmentId", "equals": "{{context.ticket967OriginalFulfillmentId}}" },
+              { "path": "$.newFulfillmentId", "notEmpty": true },
+              { "path": "$.transferredAt", "notEmpty": true }
+            ]
+          },
+          "extract": {
+            "ticket967TransferredFulfillmentId": "$.newFulfillmentId"
+          }
+        },
+        {
+          "id": "ticket-967-resume-login-recipient",
+          "title": "Přihlásit vybraného příjemce",
+          "requiresContext": ["ticket967RecipientEmail", "ticket967TransferredFulfillmentId"],
+          "customAction": "loginPidLitackaProfile",
+          "profileLogin": {
+            "email": "{{context.ticket967RecipientEmail}}",
+            "identityContextKey": "ticket967LoggedInRecipientIdentityId"
+          },
+          "request": { "proxyTargetBaseUrl": "{{form.ticket967PidLitackaBaseUrl}}" }
+        },
+        {
+          "id": "ticket-967-resume-verify-recipient",
+          "title": "Ověřit jízdenku v zásobníku příjemce",
+          "requiresContext": ["ticket967TransferredFulfillmentId", "ticket967LoggedInRecipientIdentityId"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=AVAILABLE",
+            "proxyTargetBaseUrl": "{{form.ticket967PidLitackaBaseUrl}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.ticket967TransferredFulfillmentId}}",
+                  "status": "AVAILABLE"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-ticket-967-transfer-existing-ticket",
+      "title": "Task 967 - poslat existující dostupnou jízdenku",
+      "description": "Bez nákupu: vybere odesílatele, jednu z jeho dostupných jízdenek a příjemce; po převodu ověří novou jízdenku v zásobníku příjemce.",
+      "requiresAuth": false,
+      "smoke": false,
+      "manualInputRequired": true,
+      "autoTags": false,
+      "tags": ["tickets", "task-967", "transfer", "two-users"],
+      "app": {
+        "section": "tickets",
+        "title": "Rychle poslat jízdenku",
+        "subtitle": "Bez nákupu, s kontrolou příjemce"
+      },
+      "instructions": [
+        "Odesílatele i příjemce lze vybrat z uložených účtů nebo zadat ručně; u ručně zadaného účtu doplňte heslo.",
+        "Ručně zadané heslo se použije jen v tomto běhu scénáře a neukládá se do localStorage.",
+        "Odesílatel musí mít alespoň jednu neaktivovanou jízdenku ve stavu AVAILABLE. Scénář nic nenakupuje."
+      ],
+      "steps": [
+        {
+          "id": "ticket-967-quick-login-sender",
+          "title": "Vybrat a přihlásit odesílatele",
+          "description": "Vyberte uložený účet nebo ručně zadejte účet, z jehož zásobníku se má jízdenka poslat.",
+          "fields": [
+            {
+              "name": "ticket967QuickSenderEmail",
+              "label": "Odesílatel – uložený nebo ručně zadaný e-mail",
+              "type": "select",
+              "optionsSource": "pidlitacka-auth-profiles",
+              "allowCustomValue": true,
+              "customInputType": "email",
+              "value": "",
+              "placeholder": "Vyberte účet nebo napište e-mail",
+              "help": "Uložené účty se nabízejí při psaní; lze zadat i jiný e-mail."
+            },
+            {
+              "name": "ticket967QuickSenderPassword",
+              "label": "Heslo ručně zadaného odesílatele",
+              "type": "password",
+              "value": "",
+              "placeholder": "Nevyplňujte pro uložený účet",
+              "help": "Povinné jen tehdy, když e-mail není mezi uloženými účty. Heslo se nikam neukládá."
+            }
+          ],
+          "customAction": "loginPidLitackaProfile",
+          "profileLogin": {
+            "email": "{{form.ticket967QuickSenderEmail}}",
+            "password": "{{form.ticket967QuickSenderPassword}}",
+            "identityContextKey": "ticket967QuickSenderIdentityId",
+            "roleLabel": "odesílatel",
+            "successDetail": "Další krok načte dostupné jízdenky vybraného odesílatele."
+          }
+        },
+        {
+          "id": "ticket-967-quick-select-ticket",
+          "title": "Vybrat dostupnou jízdenku odesílatele",
+          "description": "Načte zásobník přihlášeného odesílatele a nabídne pouze jízdenky ve stavu AVAILABLE.",
+          "requiresAuth": true,
+          "requiresContext": ["ticket967QuickSenderIdentityId"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=AVAILABLE"
+          },
+          "selection": {
+            "sourcePath": "$.items",
+            "buttonLabel": "Poslat tuto jízdenku",
+            "selectedButtonLabel": "Jízdenka vybrána",
+            "store": {
+              "ticket967QuickOriginalFulfillmentId": "$.fulfillmentId"
+            },
+            "emptyTitle": "Odesílatel nemá dostupnou jízdenku",
+            "emptyText": "Vybraný účet nemá žádnou jízdenku ve stavu AVAILABLE. Zvolte jiného odesílatele nebo použijte scénář s nákupem."
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.items", "lengthAtLeast": 0 }
+            ]
+          }
+        },
+        {
+          "id": "ticket-967-quick-transfer",
+          "title": "Vybrat příjemce a jízdenku poslat",
+          "description": "Nabídne ostatní uložené účty, umožní zadat jiný e-mail a převede vybranou jízdenku příjemci.",
+          "requiresAuth": true,
+          "requiresContext": ["ticket967QuickOriginalFulfillmentId"],
+          "fields": [
+            {
+              "name": "ticket967QuickRecipientEmail",
+              "label": "Příjemce – uložený nebo ručně zadaný e-mail",
+              "type": "select",
+              "optionsSource": "pidlitacka-auth-profiles",
+              "excludeCurrentSession": true,
+              "allowCustomValue": true,
+              "customInputType": "email",
+              "value": "",
+              "placeholder": "Vyberte účet nebo napište e-mail",
+              "help": "Odesílatel je z nabídky automaticky vynechaný; jiný e-mail lze napsat ručně."
+            },
+            {
+              "name": "ticket967QuickRecipientPassword",
+              "label": "Heslo ručně zadaného příjemce",
+              "type": "password",
+              "value": "",
+              "placeholder": "Nevyplňujte pro uložený účet",
+              "help": "Povinné jen pro ručně zadaný účet, aby šlo na konci ověřit jeho jízdenku. Heslo se nikam neukládá."
+            },
+            {
+              "name": "ticket967QuickTransferKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/{{context.ticket967QuickOriginalFulfillmentId}}/transfer",
+            "headers": {
+              "Idempotency-Key": "{{form.ticket967QuickTransferKey}}"
+            },
+            "body": {
+              "recipientEmail": "{{form.ticket967QuickRecipientEmail}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.originalFulfillmentId", "equals": "{{context.ticket967QuickOriginalFulfillmentId}}" },
+              { "path": "$.newFulfillmentId", "notEmpty": true },
+              { "path": "$.transferredAt", "notEmpty": true }
+            ]
+          },
+          "remember": {
+            "ticket967QuickRecipientEmail": "{{form.ticket967QuickRecipientEmail}}"
+          },
+          "rememberSecret": {
+            "ticket967QuickRecipientPassword": "{{form.ticket967QuickRecipientPassword}}"
+          },
+          "extract": {
+            "ticket967QuickTransferredFulfillmentId": "$.newFulfillmentId"
+          }
+        },
+        {
+          "id": "ticket-967-quick-login-recipient",
+          "title": "Přihlásit vybraného příjemce",
+          "description": "Klikátko přepne aktivní session na uložený nebo ručně zadaný účet příjemce.",
+          "requiresContext": ["ticket967QuickRecipientEmail", "ticket967QuickTransferredFulfillmentId"],
+          "customAction": "loginPidLitackaProfile",
+          "profileLogin": {
+            "email": "{{context.ticket967QuickRecipientEmail}}",
+            "password": "{{secret.ticket967QuickRecipientPassword}}",
+            "identityContextKey": "ticket967QuickRecipientIdentityId",
+            "roleLabel": "příjemce",
+            "successDetail": "Závěrečný krok ověří převedenou jízdenku v zásobníku příjemce."
+          }
+        },
+        {
+          "id": "ticket-967-quick-verify-recipient",
+          "title": "Ověřit jízdenku u příjemce",
+          "description": "Načte AVAILABLE jízdenky přihlášeného příjemce a ověří nově vytvořený fulfillment z výsledku převodu.",
+          "requiresAuth": true,
+          "requiresContext": ["ticket967QuickTransferredFulfillmentId", "ticket967QuickRecipientIdentityId"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=AVAILABLE"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.ticket967QuickTransferredFulfillmentId}}",
+                  "status": "AVAILABLE"
+                },
+                "message": "Převedená jízdenka se v zásobníku vybraného příjemce nenašla."
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

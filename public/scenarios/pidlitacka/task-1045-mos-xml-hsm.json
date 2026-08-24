@@ -1,0 +1,158 @@
+{
+  "version": 1,
+  "name": "PidLitacka - task 1045: MOS XML HSM",
+  "description": "Nasazovací kontroly RVI klíčů a podpisu ETD přes veřejné API BE PidLitacka.",
+  "scenarios": [
+    {
+      "id": "pidlitacka-hsm-1045-time-keys",
+      "title": "HSM - načíst RVI time keys",
+      "description": "Read-only kontrola formátu RVI klíčů vrácených BE. Odpověď může pocházet z Redis cache.",
+      "requiresAuth": true,
+      "smoke": true,
+      "manualInputRequired": false,
+      "tags": [
+        "HSM",
+        "task-1045",
+        "RVI",
+        "validation",
+        "read-only"
+      ],
+      "app": {
+        "section": "validation",
+        "title": "HSM",
+        "subtitle": "RVI time keys"
+      },
+      "instructions": [
+        "Přihlaste se jako registrovaný klient s platným BE JWT.",
+        "Scénář požádá o interval 300 sekund. Výsledkem musí být dva osmimístné uppercase hex klíče.",
+        "Tento krok ověřuje veřejné API a výsledný formát. Při naplněné Redis cache nemusí dojít k volání HSM."
+      ],
+      "steps": [
+        {
+          "id": "hsm-1045-get-time-keys",
+          "title": "Načíst dva RVI klíče",
+          "description": "Zavolá GET /v1/client/validation/time-keys pro aktuální a následující pětiminutový bucket.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/validation/time-keys?duration=300"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "lengthEquals": 2,
+                "message": "BE nevrátil přesně dva RVI klíče pro interval 300 sekund."
+              },
+              {
+                "regex": "^\\[\"[0-9A-F]{8}\",\"[0-9A-F]{8}\"\\]$",
+                "label": "dva osmimístné uppercase hex RVI klíče",
+                "message": "RVI klíče nemají očekávaný osmimístný uppercase hex formát."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-hsm-1045-sign-validation-identifier",
+      "title": "HSM - podepsat validační identifikátor",
+      "description": "E2E kontrola Tokenizeru, podpisu ETD a RVI klíčů přes vybraný HSM provider.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": false,
+      "tags": [
+        "HSM",
+        "task-1045",
+        "signECDSA",
+        "ETD",
+        "RVI",
+        "validation"
+      ],
+      "app": {
+        "section": "validation",
+        "title": "HSM",
+        "subtitle": "Podpis ETD"
+      },
+      "instructions": [
+        "Přihlaste se jako aktivní MOS zákazník s platným BE JWT a MOS session.",
+        "Klikátko pro každý běh vygeneruje nové deviceId a přes veřejné API vytvoří validační identifikátor.",
+        "Úspěšný krok potvrzuje skutečné volání podpisu HSM; podpis se na rozdíl od RVI klíčů necachuje.",
+        "Scénář vytváří identifikátor v Tokenizeru, proto není součástí automatického smoke běhu.",
+        "Kryptografickou platnost podpisu veřejným klíčem nadále ověřuje opt-in live test backendu."
+      ],
+      "steps": [
+        {
+          "id": "hsm-1045-create-validation-identifier",
+          "title": "Vytvořit a podepsat validační identifikátor",
+          "description": "Zavolá POST /v1/client/validation/identifiers a ověří podepsané ETD i hodinové okno RVI klíčů.",
+          "fields": [
+            {
+              "name": "deviceId",
+              "label": "Testovací device ID",
+              "value": "{{uuid}}",
+              "hidden": true
+            },
+            {
+              "name": "deviceModel",
+              "label": "Model zařízení",
+              "value": "Klikatko HSM 1045",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/validation/identifiers",
+            "body": {
+              "deviceId": "{{form.deviceId}}",
+              "deviceModel": "{{form.deviceModel}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.identifier.accountId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.identifier.deviceId",
+                "equals": "{{form.deviceId}}",
+                "message": "Vrácený validační identifikátor patří jinému deviceId."
+              },
+              {
+                "path": "$.identifier.token",
+                "notEmpty": true
+              },
+              {
+                "path": "$.identifier.etd",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.identifier.etd",
+                "regex": "SG:[0-9A-V]+\\*$",
+                "label": "ETD zakončené Base32Hex podpisem SG",
+                "message": "ETD neobsahuje očekávaný neprázdný Base32Hex podpis SG."
+              },
+              {
+                "path": "$.identifier.timeKeysTimestamp",
+                "atLeast": 1
+              },
+              {
+                "path": "$.identifier.timeKeys",
+                "lengthEquals": 13,
+                "message": "BE nevrátil očekávaných 13 RVI klíčů pro hodinové validační okno."
+              },
+              {
+                "sourcePath": "$.identifier.timeKeys",
+                "regex": "^\\[\"[0-9A-F]{8}\"(?:,\"[0-9A-F]{8}\"){12}\\]$",
+                "label": "třináct osmimístných uppercase hex RVI klíčů",
+                "message": "RVI klíče validačního identifikátoru nemají očekávaný formát."
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

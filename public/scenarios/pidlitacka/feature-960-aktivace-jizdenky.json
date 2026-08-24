@@ -1,0 +1,748 @@
+{
+  "version": 1,
+  "name": "PidLitacka - task 960: aktivace jízdenky",
+  "description": "Autonomní lokální E2E scénáře aktivace zakoupených jízdenek přes BE PidLitacka a Ticket Service.",
+  "scenarios": [
+    {
+      "id": "pidlitacka-ticket-960-activate-fixed-now",
+      "title": "Task 960 - aktivovat pevnou jízdenku nyní",
+      "description": "Aktivuje AVAILABLE pražskou jízdenku, bezpečně zopakuje shodný požadavek a ověří aktivní sekci.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": false,
+      "tags": ["tickets", "task-960", "activation", "fixed-zones", "idempotency", "local-fixture"],
+      "app": {
+        "section": "tickets",
+        "title": "Jízdné",
+        "subtitle": "Aktivace nyní bez volby pásem"
+      },
+      "instructions": [
+        "Scénář je určen pouze pro LOCAL prostředí a potřebnou AVAILABLE jízdenku si připraví automaticky pro přihlášené identityId.",
+        "Lokální fixture bridge je omezený na izolovanou databázi Tickets a nahrazuje pouze chybějící nákup z tasku 957.",
+        "Vlastní aktivace vždy vede přes Klikátko → BE PidLitacka → Ticket Service.",
+        "Opakovaný PATCH používá stejný Idempotency-Key a musí vrátit tutéž aktivaci, nikoli provést reaktivaci."
+      ],
+      "steps": [
+        {
+          "id": "ticket-960-fixed-create-fixture",
+          "title": "Automaticky připravit koupenou jízdenku",
+          "description": "V izolované lokální databázi vytvoří pro přihlášeného uživatele jednu pevnou jízdenku ve stavu AVAILABLE.",
+          "request": {
+            "method": "POST",
+            "path": "/__harness/fixtures/task-960",
+            "headers": { "X-Klikatko-Local-Fixture": "task-960" },
+            "body": {
+              "userId": "{{session.identityId}}",
+              "variant": "fixed",
+              "count": 1
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.count", "equals": 1 },
+              { "path": "$.items[0].status", "equals": "AVAILABLE" },
+              { "path": "$.items[0].productId", "equals": 960001 }
+            ]
+          },
+          "extract": { "ticket960FixedFulfillmentId": "$.items[0].fulfillmentId" }
+        },
+        {
+          "id": "ticket-960-fixed-register-device",
+          "title": "Připravit zařízení pro aktivaci",
+          "description": "Zaregistruje aktuální instalaci v Ticket Service a uloží jeho deviceId.",
+          "fields": [
+            { "name": "deviceIdentifier", "label": "Identifikátor instalace", "value": "{{auth.deviceId}}", "hidden": true },
+            { "name": "deviceModel", "label": "Model zařízení", "value": "{{auth.model}}", "hidden": true },
+            { "name": "platform", "label": "Platforma", "value": "{{auth.platform}}", "hidden": true },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "headers": { "Idempotency-Key": "{{form.idempotencyKey}}" },
+            "body": {
+              "deviceIdentifier": "{{form.deviceIdentifier}}",
+              "deviceModel": "{{form.deviceModel}}",
+              "platform": "{{form.platform}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.deviceId", "notEmpty": true },
+              { "path": "$.deviceIdentifier", "equals": "{{form.deviceIdentifier}}" }
+            ]
+          },
+          "extract": { "ticket960FixedDeviceId": "$.deviceId" }
+        },
+        {
+          "id": "ticket-960-fixed-select-available",
+          "title": "Ověřit koupenou jízdenku v zásobníku",
+          "description": "Načte pouze AVAILABLE fulfillmenty a ověří právě připravenou pevnou jízdenku.",
+          "requiresContext": ["ticket960FixedFulfillmentId"],
+          "request": { "method": "GET", "path": "/v1/client/tickets?limit=100&offset=0&status=AVAILABLE" },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.ticket960FixedFulfillmentId}}",
+                  "productId": 960001,
+                  "status": "AVAILABLE"
+                },
+                "message": "Automaticky připravená pevná jízdenka se nevrátila v AVAILABLE zásobníku."
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-960-fixed-activate-now",
+          "title": "Aktivovat jízdenku nyní",
+          "description": "Neposílá pásma ani validSince; výsledný stav, ochranu a platnost přebírá z Tickets.",
+          "requiresContext": ["ticket960FixedDeviceId", "ticket960FixedFulfillmentId"],
+          "fields": [
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.ticket960FixedFulfillmentId}}",
+            "headers": { "Idempotency-Key": "{{form.idempotencyKey}}" },
+            "body": {
+              "zones": null,
+              "validSince": null,
+              "deviceId": "{{context.ticket960FixedDeviceId}}"
+            }
+          },
+          "remember": { "ticket960FixedActivationKey": "{{form.idempotencyKey}}" },
+          "extract": {
+            "ticket960FixedStatus": "$.status",
+            "ticket960FixedEtd": "$.etd"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.fulfillmentId", "equals": "{{context.ticket960FixedFulfillmentId}}" },
+              { "sourcePath": "$.status", "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$", "message": "Tickets nevrátil aktivovaný stav." },
+              { "path": "$.deviceId", "equals": "{{context.ticket960FixedDeviceId}}" },
+              { "path": "$.validSince", "notEmpty": true },
+              { "path": "$.validUntil", "notEmpty": true },
+              { "path": "$.activationProtection", "atLeast": 0 },
+              { "path": "$.etd", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "ticket-960-fixed-retry",
+          "title": "Ověřit bezpečné opakování aktivace",
+          "description": "Zopakuje stejné tělo se stejným klíčem a ověří nezměněný podepsaný ETD; ten obsahuje hranice platnosti i podpis aktivace.",
+          "requiresContext": [
+            "ticket960FixedDeviceId",
+            "ticket960FixedFulfillmentId",
+            "ticket960FixedActivationKey",
+            "ticket960FixedStatus",
+            "ticket960FixedEtd"
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.ticket960FixedFulfillmentId}}",
+            "headers": { "Idempotency-Key": "{{context.ticket960FixedActivationKey}}" },
+            "body": {
+              "zones": null,
+              "validSince": null,
+              "deviceId": "{{context.ticket960FixedDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.fulfillmentId", "equals": "{{context.ticket960FixedFulfillmentId}}" },
+              { "path": "$.status", "equals": "{{context.ticket960FixedStatus}}" },
+              { "path": "$.validSince", "notEmpty": true },
+              { "path": "$.validUntil", "notEmpty": true },
+              {
+                "path": "$.etd",
+                "equals": "{{context.ticket960FixedEtd}}",
+                "message": "Opakovaný požadavek vrátil jiný podepsaný ETD a mohl provést novou aktivaci."
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-960-fixed-list-active",
+          "title": "Ověřit jízdenku v aktivní sekci",
+          "description": "Načte stavy pro aktivní a naplánovanou sekci; FE nad nimi ještě filtruje validUntil > nyní.",
+          "requiresContext": ["ticket960FixedFulfillmentId", "ticket960FixedStatus"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=FULFILLED%2CIN_PROTECTION_DELAY"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.ticket960FixedFulfillmentId}}",
+                  "status": "{{context.ticket960FixedStatus}}"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-ticket-960-activate-zonal-now",
+      "title": "Task 960 - aktivovat jízdenku s volbou pásem",
+      "description": "Aktivuje AVAILABLE jízdenku vyžadující souvislý blok tří pásem a ověří vrácená pásma.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": false,
+      "tags": ["tickets", "task-960", "activation", "zones", "local-fixture"],
+      "app": {
+        "section": "tickets",
+        "title": "Jízdné",
+        "subtitle": "Aktivace s volbou pásem"
+      },
+      "instructions": [
+        "Scénář je určen pouze pro LOCAL prostředí a zonální AVAILABLE jízdenku připraví automaticky pro přihlášené identityId.",
+        "Předvyplněný blok 0, B, 1 tvoří tři souvislá pásma. Při změně zachovejte přesně tři souvislá pásma v pořadí P, 0, B, 1 až 13.",
+        "Tarifní validitu pásem autoritativně kontroluje Ticket Service; BE je pouze předává."
+      ],
+      "steps": [
+        {
+          "id": "ticket-960-zonal-create-fixture",
+          "title": "Automaticky připravit zonální jízdenku",
+          "description": "V izolované lokální databázi vytvoří pro přihlášeného uživatele jízdenku ve stavu AVAILABLE vyžadující tři pásma.",
+          "request": {
+            "method": "POST",
+            "path": "/__harness/fixtures/task-960",
+            "headers": { "X-Klikatko-Local-Fixture": "task-960" },
+            "body": {
+              "userId": "{{session.identityId}}",
+              "variant": "zonal",
+              "count": 1
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.count", "equals": 1 },
+              { "path": "$.items[0].status", "equals": "AVAILABLE" },
+              { "path": "$.items[0].productId", "equals": 960002 }
+            ]
+          },
+          "extract": { "ticket960ZonalFulfillmentId": "$.items[0].fulfillmentId" }
+        },
+        {
+          "id": "ticket-960-zonal-register-device",
+          "title": "Připravit zařízení pro aktivaci",
+          "description": "Zaregistruje aktuální instalaci v Ticket Service.",
+          "fields": [
+            { "name": "deviceIdentifier", "label": "Identifikátor instalace", "value": "{{auth.deviceId}}", "hidden": true },
+            { "name": "deviceModel", "label": "Model zařízení", "value": "{{auth.model}}", "hidden": true },
+            { "name": "platform", "label": "Platforma", "value": "{{auth.platform}}", "hidden": true },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "headers": { "Idempotency-Key": "{{form.idempotencyKey}}" },
+            "body": {
+              "deviceIdentifier": "{{form.deviceIdentifier}}",
+              "deviceModel": "{{form.deviceModel}}",
+              "platform": "{{form.platform}}"
+            }
+          },
+          "expected": { "status": 201, "assertions": [{ "path": "$.deviceId", "notEmpty": true }] },
+          "extract": { "ticket960ZonalDeviceId": "$.deviceId" }
+        },
+        {
+          "id": "ticket-960-zonal-select-available",
+          "title": "Ověřit zonální jízdenku v zásobníku",
+          "description": "Načte AVAILABLE zásobník a ověří právě připravenou zonální jízdenku.",
+          "requiresContext": ["ticket960ZonalFulfillmentId"],
+          "request": { "method": "GET", "path": "/v1/client/tickets?limit=100&offset=0&status=AVAILABLE" },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.ticket960ZonalFulfillmentId}}",
+                  "productId": 960002,
+                  "status": "AVAILABLE"
+                },
+                "message": "Automaticky připravená zonální jízdenka se nevrátila v AVAILABLE zásobníku."
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-960-zonal-activate-now",
+          "title": "Zvolit pásma a aktivovat nyní",
+          "description": "Odešle zvolený souvislý blok pásem a aktivaci nyní.",
+          "requiresContext": ["ticket960ZonalDeviceId", "ticket960ZonalFulfillmentId"],
+          "fields": [
+            {
+              "name": "zones",
+              "label": "Souvislý blok tří pásem",
+              "type": "tag-list",
+              "value": ["0", "B", "1"],
+              "options": [
+                { "value": "P", "text": "P" }, { "value": "0", "text": "0" },
+                { "value": "B", "text": "B" }, { "value": "1", "text": "1" },
+                { "value": "2", "text": "2" }, { "value": "3", "text": "3" },
+                { "value": "4", "text": "4" }, { "value": "5", "text": "5" },
+                { "value": "6", "text": "6" }, { "value": "7", "text": "7" },
+                { "value": "8", "text": "8" }, { "value": "9", "text": "9" },
+                { "value": "10", "text": "10" }, { "value": "11", "text": "11" },
+                { "value": "12", "text": "12" }, { "value": "13", "text": "13" }
+              ],
+              "emptyText": "Vyberte přesně tři souvislá pásma."
+            },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.ticket960ZonalFulfillmentId}}",
+            "headers": { "Idempotency-Key": "{{form.idempotencyKey}}" },
+            "body": {
+              "zones": "{{form.zones}}",
+              "validSince": null,
+              "deviceId": "{{context.ticket960ZonalDeviceId}}"
+            }
+          },
+          "extract": { "ticket960ZonalStatus": "$.status" },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.fulfillmentId", "equals": "{{context.ticket960ZonalFulfillmentId}}" },
+              { "sourcePath": "$.status", "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$" },
+              { "sourcePath": "$.etd", "regex": "\\*VZ:0,B,1\\*", "message": "Podepsané ETD nepotvrdilo předání výchozího bloku pásem 0, B, 1." },
+              { "path": "$.validSince", "notEmpty": true },
+              { "path": "$.validUntil", "notEmpty": true },
+              { "path": "$.etd", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "ticket-960-zonal-list-active",
+          "title": "Ověřit zonální jízdenku v aktivní sekci",
+          "description": "Ověří nově aktivovaný fulfillment ve filtru aktivní a naplánované sekce.",
+          "requiresContext": ["ticket960ZonalFulfillmentId", "ticket960ZonalStatus"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=FULFILLED%2CIN_PROTECTION_DELAY"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.ticket960ZonalFulfillmentId}}",
+                  "status": "{{context.ticket960ZonalStatus}}"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-ticket-960-schedule-fixed",
+      "title": "Task 960 - naplánovat aktivaci do budoucna",
+      "description": "Aktivuje pevnou AVAILABLE jízdenku s automaticky navrženým budoucím validSince.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": false,
+      "tags": ["tickets", "task-960", "activation", "scheduled", "local-fixture"],
+      "app": {
+        "section": "tickets",
+        "title": "Jízdné",
+        "subtitle": "Aktivace v budoucnu"
+      },
+      "instructions": [
+        "Scénář je určen pouze pro LOCAL prostředí a pevnou AVAILABLE jízdenku připraví automaticky.",
+        "Fixture bridge předvyplní validSince pět minut do budoucnosti; před spuštěním aktivačního kroku jej lze ručně změnit.",
+        "Naplánovaný fulfillment může být FULFILLED; FE z validSince odvozuje odpočet do začátku."
+      ],
+      "steps": [
+        {
+          "id": "ticket-960-scheduled-create-fixture",
+          "title": "Automaticky připravit jízdenku k naplánování",
+          "description": "Vytvoří jednu pevnou AVAILABLE jízdenku a navrhne validSince pět minut do budoucnosti.",
+          "request": {
+            "method": "POST",
+            "path": "/__harness/fixtures/task-960",
+            "headers": { "X-Klikatko-Local-Fixture": "task-960" },
+            "body": {
+              "userId": "{{session.identityId}}",
+              "variant": "fixed",
+              "count": 1
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.items[0].status", "equals": "AVAILABLE" },
+              { "path": "$.suggestedValidSince", "notEmpty": true }
+            ]
+          },
+          "extract": {
+            "ticket960ScheduledFulfillmentId": "$.items[0].fulfillmentId",
+            "ticket960ScheduledSuggestedValidSince": "$.suggestedValidSince"
+          }
+        },
+        {
+          "id": "ticket-960-scheduled-register-device",
+          "title": "Připravit zařízení pro aktivaci",
+          "description": "Zaregistruje aktuální instalaci v Ticket Service.",
+          "fields": [
+            { "name": "deviceIdentifier", "label": "Identifikátor instalace", "value": "{{auth.deviceId}}", "hidden": true },
+            { "name": "deviceModel", "label": "Model zařízení", "value": "{{auth.model}}", "hidden": true },
+            { "name": "platform", "label": "Platforma", "value": "{{auth.platform}}", "hidden": true },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "headers": { "Idempotency-Key": "{{form.idempotencyKey}}" },
+            "body": {
+              "deviceIdentifier": "{{form.deviceIdentifier}}",
+              "deviceModel": "{{form.deviceModel}}",
+              "platform": "{{form.platform}}"
+            }
+          },
+          "expected": { "status": 201, "assertions": [{ "path": "$.deviceId", "notEmpty": true }] },
+          "extract": { "ticket960ScheduledDeviceId": "$.deviceId" }
+        },
+        {
+          "id": "ticket-960-scheduled-select",
+          "title": "Ověřit jízdenku k naplánování",
+          "description": "Ověří právě připravenou jízdenku v AVAILABLE zásobníku.",
+          "requiresContext": ["ticket960ScheduledFulfillmentId"],
+          "request": { "method": "GET", "path": "/v1/client/tickets?limit=100&offset=0&status=AVAILABLE" },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.ticket960ScheduledFulfillmentId}}",
+                  "productId": 960001,
+                  "status": "AVAILABLE"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-960-scheduled-activate",
+          "title": "Nastavit budoucí čas aktivace",
+          "description": "Odešle budoucí validSince; výsledné hranice platnosti přebírá z Tickets.",
+          "requiresContext": [
+            "ticket960ScheduledDeviceId",
+            "ticket960ScheduledFulfillmentId",
+            "ticket960ScheduledSuggestedValidSince"
+          ],
+          "fields": [
+            {
+              "name": "validSince",
+              "label": "Začátek platnosti v ISO 8601/RFC 3339",
+              "type": "text",
+              "value": "{{context.ticket960ScheduledSuggestedValidSince}}",
+              "placeholder": "YYYY-MM-DDTHH:mm:ss+02:00",
+              "help": "Zadejte budoucí okamžik v rámci plánovacího okna Ticket Service."
+            },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.ticket960ScheduledFulfillmentId}}",
+            "headers": { "Idempotency-Key": "{{form.idempotencyKey}}" },
+            "body": {
+              "zones": null,
+              "validSince": "{{form.validSince}}",
+              "deviceId": "{{context.ticket960ScheduledDeviceId}}"
+            }
+          },
+          "extract": {
+            "ticket960ScheduledStatus": "$.status",
+            "ticket960ScheduledValidSince": "$.validSince"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.fulfillmentId", "equals": "{{context.ticket960ScheduledFulfillmentId}}" },
+              { "sourcePath": "$.status", "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$" },
+              { "path": "$.validSince", "notEmpty": true },
+              { "path": "$.validUntil", "notEmpty": true },
+              { "path": "$.etd", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "ticket-960-scheduled-list-active",
+          "title": "Ověřit naplánovanou jízdenku",
+          "description": "Ověří fulfillment a validSince ve filtru aktivní a naplánované sekce.",
+          "requiresContext": ["ticket960ScheduledFulfillmentId", "ticket960ScheduledStatus", "ticket960ScheduledValidSince"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=FULFILLED%2CIN_PROTECTION_DELAY"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.ticket960ScheduledFulfillmentId}}",
+                  "status": "{{context.ticket960ScheduledStatus}}",
+                  "validSince": "{{context.ticket960ScheduledValidSince}}"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-ticket-960-activate-two",
+      "title": "Task 960 - aktivovat dvě AVAILABLE jízdenky",
+      "description": "Aktivuje dva AVAILABLE fulfillmenty samostatnými PATCH požadavky a samostatnými idempotency klíči.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": false,
+      "tags": ["tickets", "task-960", "activation", "multiple", "activate-all", "local-fixture"],
+      "app": {
+        "section": "tickets",
+        "title": "Jízdné",
+        "subtitle": "Více jízdenek"
+      },
+      "instructions": [
+        "Scénář je určen pouze pro LOCAL prostředí a obě AVAILABLE jízdenky připraví automaticky pro přihlášené identityId.",
+        "Neexistuje batch endpoint ani společná transakce: každý AVAILABLE fulfillment se aktivuje vlastním PATCH a vlastním Idempotency-Key.",
+        "Oba identifikátory pocházejí z nově vytvořených AVAILABLE fulfillmentů. Do toku se proto nedostane aktivovaná či naplánovaná jízdenka a nespustí se její reaktivace."
+      ],
+      "steps": [
+        {
+          "id": "ticket-960-two-create-fixtures",
+          "title": "Automaticky připravit dvě koupené jízdenky",
+          "description": "V izolované lokální databázi vytvoří pro přihlášeného uživatele dva různé AVAILABLE fulfillmenty.",
+          "request": {
+            "method": "POST",
+            "path": "/__harness/fixtures/task-960",
+            "headers": { "X-Klikatko-Local-Fixture": "task-960" },
+            "body": {
+              "userId": "{{session.identityId}}",
+              "variant": "fixed",
+              "count": 2
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.count", "equals": 2 },
+              { "path": "$.items[0].status", "equals": "AVAILABLE" },
+              { "path": "$.items[1].status", "equals": "AVAILABLE" }
+            ]
+          },
+          "extract": {
+            "ticket960TwoFirstId": "$.items[0].fulfillmentId",
+            "ticket960TwoSecondId": "$.items[1].fulfillmentId"
+          }
+        },
+        {
+          "id": "ticket-960-two-register-device",
+          "title": "Připravit zařízení pro aktivaci",
+          "description": "Zaregistruje aktuální instalaci v Ticket Service.",
+          "fields": [
+            { "name": "deviceIdentifier", "label": "Identifikátor instalace", "value": "{{auth.deviceId}}", "hidden": true },
+            { "name": "deviceModel", "label": "Model zařízení", "value": "{{auth.model}}", "hidden": true },
+            { "name": "platform", "label": "Platforma", "value": "{{auth.platform}}", "hidden": true },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "headers": { "Idempotency-Key": "{{form.idempotencyKey}}" },
+            "body": {
+              "deviceIdentifier": "{{form.deviceIdentifier}}",
+              "deviceModel": "{{form.deviceModel}}",
+              "platform": "{{form.platform}}"
+            }
+          },
+          "expected": { "status": 201, "assertions": [{ "path": "$.deviceId", "notEmpty": true }] },
+          "extract": { "ticket960TwoDeviceId": "$.deviceId" }
+        },
+        {
+          "id": "ticket-960-two-select-first",
+          "title": "Ověřit obě jízdenky v AVAILABLE zásobníku",
+          "description": "Načte pouze AVAILABLE zásobník a ověří oba právě připravené fulfillmenty.",
+          "requiresContext": ["ticket960TwoFirstId", "ticket960TwoSecondId"],
+          "request": { "method": "GET", "path": "/v1/client/tickets?limit=100&offset=0&status=AVAILABLE" },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.ticket960TwoFirstId}}",
+                  "productId": 960001,
+                  "status": "AVAILABLE"
+                }
+              },
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.ticket960TwoSecondId}}",
+                  "productId": 960001,
+                  "status": "AVAILABLE"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-960-two-activate-first",
+          "title": "Aktivovat první jízdenku",
+          "description": "Aktivuje první fulfillment vlastním klíčem.",
+          "requiresContext": ["ticket960TwoDeviceId", "ticket960TwoFirstId"],
+          "fields": [{ "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.ticket960TwoFirstId}}",
+            "headers": { "Idempotency-Key": "{{form.idempotencyKey}}" },
+            "body": { "zones": null, "validSince": "{{now}}", "deviceId": "{{context.ticket960TwoDeviceId}}" }
+          },
+          "extract": {
+            "ticket960TwoFirstStatus": "$.status",
+            "ticket960TwoCommonValidSince": "$.validSince"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.fulfillmentId", "equals": "{{context.ticket960TwoFirstId}}" },
+              { "sourcePath": "$.status", "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$" },
+              { "path": "$.validSince", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "ticket-960-two-activate-second",
+          "title": "Aktivovat druhou jízdenku",
+          "description": "Aktivuje druhý fulfillment novým klíčem.",
+          "requiresContext": ["ticket960TwoDeviceId", "ticket960TwoSecondId", "ticket960TwoCommonValidSince"],
+          "fields": [{ "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.ticket960TwoSecondId}}",
+            "headers": { "Idempotency-Key": "{{form.idempotencyKey}}" },
+            "body": {
+              "zones": null,
+              "validSince": "{{context.ticket960TwoCommonValidSince}}",
+              "deviceId": "{{context.ticket960TwoDeviceId}}"
+            }
+          },
+          "extract": { "ticket960TwoSecondStatus": "$.status" },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.fulfillmentId", "equals": "{{context.ticket960TwoSecondId}}" },
+              { "sourcePath": "$.status", "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$" },
+              {
+                "path": "$.validSince",
+                "equals": "{{context.ticket960TwoCommonValidSince}}",
+                "message": "Druhá jízdenka nemá společný čas aktivace prvního kusu."
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-960-two-list-active",
+          "title": "Ověřit oba aktivované kusy",
+          "description": "Ověří přítomnost obou samostatně aktivovaných fulfillmentů.",
+          "requiresContext": ["ticket960TwoFirstId", "ticket960TwoFirstStatus", "ticket960TwoSecondId", "ticket960TwoSecondStatus", "ticket960TwoCommonValidSince"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=FULFILLED%2CIN_PROTECTION_DELAY"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.ticket960TwoFirstId}}",
+                  "status": "{{context.ticket960TwoFirstStatus}}",
+                  "validSince": "{{context.ticket960TwoCommonValidSince}}"
+                }
+              },
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.ticket960TwoSecondId}}",
+                  "status": "{{context.ticket960TwoSecondStatus}}",
+                  "validSince": "{{context.ticket960TwoCommonValidSince}}"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-ticket-960-missing-idempotency-key",
+      "title": "Task 960 - odmítnout aktivaci bez Idempotency-Key",
+      "description": "Opakovatelně ověří lokální validační kontrakt BE bez potřeby zakoupené jízdenky.",
+      "requiresAuth": true,
+      "smoke": true,
+      "manualInputRequired": false,
+      "tags": ["tickets", "task-960", "activation", "validation", "idempotency", "repeatable"],
+      "app": {
+        "section": "tickets",
+        "title": "Jízdné",
+        "subtitle": "Validace Idempotency-Key"
+      },
+      "instructions": [
+        "Scénář nepotřebuje nákup ani fixture. Používá náhodné syntakticky platné identifikátory.",
+        "BE musí požadavek odmítnout HTTP 400 ještě před voláním Ticket Service."
+      ],
+      "steps": [
+        {
+          "id": "ticket-960-missing-key-rejected",
+          "title": "Odeslat aktivaci bez Idempotency-Key",
+          "description": "Odešle PATCH bez povinné hlavičky a očekává ProblemDetails z BE PidLitacka.",
+          "fields": [
+            { "name": "fulfillmentId", "label": "Fulfillment ID", "value": "{{uuid}}", "hidden": true },
+            { "name": "deviceId", "label": "Ticket Service device ID", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{form.fulfillmentId}}",
+            "body": { "zones": null, "validSince": null, "deviceId": "{{form.deviceId}}" }
+          },
+          "expected": {
+            "status": 400,
+            "outcome": "expectedError",
+            "assertions": [
+              { "path": "$.status", "equals": 400 },
+              { "path": "$.title", "equals": "Validation Error" },
+              { "path": "$.type", "equals": "https://tools.ietf.org/html/rfc9110#section-15.5.1" },
+              { "path": "$.traceId", "notEmpty": true },
+              { "path": "$.errors.IdempotencyKey", "lengthEquals": 1 },
+              {
+                "path": "$.errors.IdempotencyKey[0]",
+                "equals": "Idempotency-Key header must contain a valid UUID."
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

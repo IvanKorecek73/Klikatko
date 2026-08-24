@@ -1,0 +1,314 @@
+{
+  "version": 1,
+  "name": "PidLitacka - diagnostika plateb kupónů",
+  "description": "Dočasný ruční scénář pro porovnání výsledků kartové platby a stavů kupónu v BE a Core MOS.",
+  "scenarios": [
+    {
+      "id": "client-coupon-payment-diagnostic-run",
+      "title": "Kupóny - jeden diagnostický průchod bránou",
+      "description": "Vytvoří čerstvou objednávku, zaznamená stav před platbou, inicializuje bránu a po ruční akci načte stav objednávky i raw a časový stav kupónů.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "prewarmReturnUrl": false,
+      "tags": ["coupons", "payment-card", "diagnostics", "manual"],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Diagnostika platby"
+      },
+      "instructions": [
+        "Spouštějte scénář pouze proti lokálnímu BE napojenému na MOS PRE a pouze s testovacím klientem.",
+        "Před spuštěním zapněte dočasnou BE diagnostiku a ověřte, že zapisuje mimo repozitář.",
+        "Pro každý výsledek platební brány spusťte nové samostatné workflow; jedna objednávka nesmí být použita pro více výsledků.",
+        "Raw status kupónu a časový validityStatus jsou nezávislé hodnoty. Ve výsledku GET /v1/client/coupons kontrolujte obě.",
+        "Po kontrolním načtení workflow zastaví před úklidem. Nejdříve uchovejte log a případné MOS dotazy, až potom pokračujte zrušením nezaplacené objednávky."
+      ],
+      "steps": [
+        {
+          "id": "coupon-payment-diagnostic-options",
+          "title": "Vybrat identifikátor",
+          "description": "Načte možnosti nákupu a uloží identifikátor, pro který lze kupón koupit.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons/purchase/options",
+            "headers": { "X-Device-Id": "{{context.pidCurrentDeviceId}}" }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.eligible", "equals": true },
+              { "path": "$.identifiers", "containsItem": { "purchasable": true } }
+            ]
+          },
+          "selection": {
+            "sourcePath": "$.identifiers",
+            "filter": { "purchasable": true },
+            "buttonLabel": "Použít identifikátor",
+            "selectedButtonLabel": "Identifikátor vybrán",
+            "emptyTitle": "Není dostupný identifikátor",
+            "emptyText": "Aktuální klient nemá identifikátor vhodný pro nákup kupónu.",
+            "store": {
+              "pidCouponDiagnosticIdentifierId": "$.identifier.identifierId",
+              "pidCouponDiagnosticDefaultStartDate": "$.defaultStartDate",
+              "pidCouponDiagnosticMaxStartDate": { "bodyPath": "$.maxStartDate" }
+            }
+          }
+        },
+        {
+          "id": "coupon-payment-diagnostic-offer",
+          "title": "Vybrat placený tarif",
+          "description": "Načte nabídku pro zvolené datum a zóny. Vyberte položku s cenou vyšší než nula.",
+          "requiresContext": ["pidCouponDiagnosticIdentifierId"],
+          "fields": [
+            {
+              "name": "identifierId",
+              "label": "Identifier ID",
+              "type": "number",
+              "value": "{{context.pidCouponDiagnosticIdentifierId}}"
+            },
+            {
+              "name": "startDate",
+              "label": "Začátek platnosti",
+              "type": "date",
+              "value": "{{context.pidCouponDiagnosticDefaultStartDate}}",
+              "min": "{{today}}",
+              "max": "{{context.pidCouponDiagnosticMaxStartDate}}"
+            },
+            {
+              "name": "zoneNames",
+              "label": "Zóny",
+              "type": "tag-list",
+              "value": "{{context.pidCouponDiagnosticZoneNames}}",
+              "fallbackValue": ["P", "0"],
+              "options": [
+                { "value": "P", "text": "P" },
+                { "value": "0", "text": "0" },
+                { "value": "B", "text": "B" },
+                { "value": "1", "text": "1" },
+                { "value": "2", "text": "2" },
+                { "value": "3", "text": "3" },
+                { "value": "4", "text": "4" },
+                { "value": "5", "text": "5" },
+                { "value": "6", "text": "6" },
+                { "value": "7", "text": "7" },
+                { "value": "8", "text": "8" },
+                { "value": "9", "text": "9" }
+              ],
+              "emptyText": "Přidejte alespoň jednu zónu tlačítkem Přidat; pro diagnostiku se standardně předvyplní P a 0."
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons/purchase/offer?identifierId={{form.identifierId}}&startDate={{form.startDate}}&{{query.form.zoneNames:zones}}"
+          },
+          "remember": {
+            "pidCouponDiagnosticIdentifierId": "{{form.identifierId}}",
+            "pidCouponDiagnosticStartDate": "{{form.startDate}}",
+            "pidCouponDiagnosticZoneNames": "{{form.zoneNames}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [{ "path": "$.tariffGroups[0].items", "lengthAtLeast": 1 }]
+          },
+          "selection": {
+            "sourcePath": "$.tariffGroups[0].items",
+            "buttonLabel": "Použít placený tarif",
+            "selectedButtonLabel": "Tarif vybrán",
+            "emptyTitle": "Není dostupný tarif",
+            "emptyText": "Pro zvolenou kombinaci nebyla nalezena tarifní nabídka.",
+            "store": {
+              "pidCouponDiagnosticTariffId": "$.tariffId",
+              "pidCouponDiagnosticTariffName": "$.tariffProfileName",
+              "pidCouponDiagnosticPrice": "$.price",
+              "pidCouponDiagnosticZoneNames": "$.zoneLabels"
+            }
+          }
+        },
+        {
+          "id": "coupon-payment-diagnostic-create-order",
+          "title": "Vytvořit novou objednávku",
+          "description": "Založí samostatnou objednávku pro právě testovaný výsledek brány.",
+          "requiresContext": ["pidCouponDiagnosticIdentifierId", "pidCouponDiagnosticTariffId"],
+          "fields": [
+            {
+              "name": "identifierId",
+              "label": "Identifier ID",
+              "type": "number",
+              "value": "{{context.pidCouponDiagnosticIdentifierId}}"
+            },
+            {
+              "name": "tariffId",
+              "label": "Tariff ID",
+              "type": "number",
+              "value": "{{context.pidCouponDiagnosticTariffId}}"
+            },
+            {
+              "name": "startDate",
+              "label": "Začátek platnosti",
+              "type": "date",
+              "value": "{{context.pidCouponDiagnosticStartDate}}"
+            },
+            {
+              "name": "zoneNames",
+              "label": "Zóny",
+              "type": "tag-list",
+              "value": "{{context.pidCouponDiagnosticZoneNames}}"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/coupons/purchase/orders",
+            "body": {
+              "identifierId": "{{form.identifierId}}",
+              "tariffId": "{{form.tariffId}}",
+              "zoneNames": "{{form.zoneNames}}",
+              "startDate": "{{form.startDate}}"
+            }
+          },
+          "extract": { "pidCouponDiagnosticOrderId": "$.orderId" },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.orderId", "notEmpty": true },
+              { "path": "$.totalPrice", "atLeast": 0.01 }
+            ]
+          }
+        },
+        {
+          "id": "coupon-payment-diagnostic-receipt-details",
+          "title": "Doplnit testovací fakturační údaje",
+          "description": "Doplní údaje vyžadované Core MOS před kartovou platbou placeného kupónu.",
+          "requiresContext": ["pidCouponDiagnosticOrderId"],
+          "fields": [
+            { "name": "name", "label": "Jméno", "value": "Jan Testovací", "workflowAutoStop": false },
+            { "name": "street", "label": "Ulice", "value": "Testovací", "workflowAutoStop": false },
+            { "name": "number", "label": "Číslo", "value": "1", "workflowAutoStop": false },
+            { "name": "city", "label": "Město", "value": "Praha", "workflowAutoStop": false },
+            { "name": "zip", "label": "PSČ", "value": "11000", "workflowAutoStop": false },
+            { "name": "country", "label": "Země", "value": "CZ", "workflowAutoStop": false }
+          ],
+          "request": {
+            "method": "PUT",
+            "path": "/v1/client/coupons/purchase/orders/{{context.pidCouponDiagnosticOrderId}}/receipt-details",
+            "body": {
+              "name": "{{form.name}}",
+              "street": "{{form.street}}",
+              "number": "{{form.number}}",
+              "city": "{{form.city}}",
+              "zip": "{{form.zip}}",
+              "country": "{{form.country}}"
+            }
+          },
+          "expected": { "status": 204 }
+        },
+        {
+          "id": "coupon-payment-diagnostic-coupons-before",
+          "title": "Zachytit kupóny před otevřením brány",
+          "description": "Načte seznam kupónů před platbou. V logu uchová raw status, validityStatus, ValidFrom, ValidTo a MOS OrderId.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons",
+            "headers": { "X-Device-Id": "{{context.pidCurrentDeviceId}}" }
+          },
+          "expected": { "status": 200 }
+        },
+        {
+          "id": "coupon-payment-diagnostic-initiate",
+          "title": "Inicializovat kartovou platbu",
+          "description": "Inicializuje platební bránu. Workflow se po tomto kroku zastaví a zobrazí přesnou požadovanou akci.",
+          "requiresContext": ["pidCouponDiagnosticOrderId"],
+          "fields": [
+            {
+              "name": "returnUrlFromPaymentGateway",
+              "label": "FE návratový target",
+              "value": "http://localhost:5096/analysis/html/GwResponsePage.html?flow=coupon-payment-diagnostics&target=unchanged#coupon-payment-diagnostics",
+              "workflowAutoStop": false
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/coupons/purchase/payment/card/initiate",
+            "body": {
+              "orderId": "{{context.pidCouponDiagnosticOrderId}}",
+              "paymentDetails": {
+                "paymentMethod": "PaymentCard",
+                "returnUrlFromPaymentGateway": "{{form.returnUrlFromPaymentGateway}}",
+                "automaticPaymentResultProcessing": false
+              }
+            }
+          },
+          "extract": {
+            "pidCouponDiagnosticGatewayReference": "$.paymentGatewayReference",
+            "pidCouponDiagnosticGatewayUrl": "$.paymentGatewayRedirectUrl"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [{ "path": "$.paymentGatewayRedirectUrl", "notEmpty": true }]
+          }
+        },
+        {
+          "id": "coupon-payment-diagnostic-coupons-after-action",
+          "title": "Zachytit kupóny před lazy reconciliation",
+          "description": "Načte všechny kupóny po akci na bráně, ale před payment-status/order GET. Tento krok nemění lokální stav objednávky a zachytí raw status, validityStatus a ValidFrom/ValidTo před stornem.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons",
+            "headers": { "X-Device-Id": "{{context.pidCurrentDeviceId}}" }
+          },
+          "expected": { "status": 200 }
+        },
+        {
+          "id": "coupon-payment-diagnostic-cancel-unpaid",
+          "title": "Pokusit se ukončit objednávku před pollingem",
+          "description": "Zkusí zrušit MOS objednávku ještě před lazy reconciliation. U skutečně zaplacené lokální objednávky je DELETE idempotentní a nic nezruší.",
+          "requiresContext": ["pidCouponDiagnosticOrderId"],
+          "request": {
+            "method": "DELETE",
+            "path": "/v1/client/coupons/purchase/orders/{{context.pidCouponDiagnosticOrderId}}"
+          },
+          "expected": { "status": 204 }
+        },
+        {
+          "id": "coupon-payment-diagnostic-status-after-action",
+          "title": "Načíst stav po pokusu o ukončení",
+          "description": "Teprve po diagnostickém DELETE provede lazy reconciliation. Paid, pending i cancelled jsou pozorování, nikoliv předem daný výsledek.",
+          "requiresContext": ["pidCouponDiagnosticOrderId"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons/purchase/orders/{{context.pidCouponDiagnosticOrderId}}/payment-status"
+          },
+          "extract": { "pidCouponDiagnosticPaymentStatus": "$.status" },
+          "expected": { "status": 200 }
+        },
+        {
+          "id": "coupon-payment-diagnostic-order-after-action",
+          "title": "Načíst objednávku po pokusu o ukončení",
+          "description": "Načte lokální objednávku po diagnostickém DELETE a současně provede běžné lazy dorovnání proti MOS.",
+          "requiresContext": ["pidCouponDiagnosticOrderId"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons/purchase/orders/{{context.pidCouponDiagnosticOrderId}}"
+          },
+          "extract": {
+            "pidCouponDiagnosticOrderStatus": "$.status",
+            "pidCouponDiagnosticValidFrom": "$.validFrom",
+            "pidCouponDiagnosticValidTill": "$.validTill"
+          },
+          "expected": { "status": 200 }
+        },
+        {
+          "id": "coupon-payment-diagnostic-coupons-after-cleanup",
+          "title": "Ověřit kupóny po úklidu",
+          "description": "Po pokusu o storno znovu načte raw a časové stavy kupónů.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons",
+            "headers": { "X-Device-Id": "{{context.pidCurrentDeviceId}}" }
+          },
+          "expected": { "status": 200 }
+        }
+      ]
+    }
+  ]
+}

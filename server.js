@@ -4,6 +4,8 @@ const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
 const { handleRedisBridgeRequest } = require("./tools/redis-bridge/src/server");
+const { handleTask960FixtureRequest } = require("./tools/task-960-fixture-bridge");
+const { handleEmulatorBridgeRequest } = require("./tools/emulator-bridge");
 
 const host = process.env.HARNESS_HOST || "127.0.0.1";
 const port = Number(process.env.PORT || 5096);
@@ -31,6 +33,12 @@ const server = http.createServer((request, response) => {
     return;
   }
 
+  if (request.url === "/api/__harness/fixtures/task-960"
+    || request.url.startsWith("/api/__harness/fixtures/task-960?")) {
+    handleTask960FixtureRequest(request, response, { targetBaseUrl });
+    return;
+  }
+
   if (request.url.startsWith("/api/")) {
     proxyApi(request, response);
     return;
@@ -41,6 +49,11 @@ const server = http.createServer((request, response) => {
       pathPrefix: "/__redis",
       redisConfigResolver: resolveRedisConnectionString
     });
+    return;
+  }
+
+  if (request.url.startsWith("/__emulator/")) {
+    handleEmulatorBridgeRequest(request, response);
     return;
   }
 

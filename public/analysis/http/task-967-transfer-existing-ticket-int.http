@@ -1,0 +1,209 @@
+# Task 967: poslat existujici dostupnou jizdenku jinemu uzivateli
+#
+# Cil: PidLitacka BE INT
+# Klient: JetBrains/Rider HTTP Client
+#
+# Pouziti:
+# 1. Spoustejte requesty postupne shora dolu.
+# 2. Krok 2 automaticky vezme prvni AVAILABLE fulfillmentId a ulozi ho pro krok 3.
+# 3. Pokud chcete poslat jinou jizdenku, zkopirujte jeji fulfillmentId z response kroku 2
+#    a v URL kroku 3 nahraďte {{selectedFulfillmentId}} timto ID.
+# 4. Puvodni ID z exportovaneho logu zde zamerne neni: tato jizdenka uz byla prevedena.
+#
+# Soubor obsahuje pouze testovaci ucty a testovaci hesla. Nepouzivat proti PROD.
+
+@baseUrl = https://pidl2-backend.int.pidlitacka.cz
+
+@senderEmail = zeugojedeibra-6351@yopmail.com
+@senderPassword = abc123abc123
+@senderDeviceId = 96700000-0000-4000-8000-000000000001
+
+@recipientEmail = wijessibrouma-5506@yopmail.com
+@recipientPassword = abc123abc123
+@recipientDeviceId = 96700000-0000-4000-8000-000000000002
+
+###############################################################################
+# 1. Prihlasit odesilatele
+#
+# Ocekavani: HTTP 200. Response handler automaticky ulozi accessToken.
+###############################################################################
+
+# @name loginSender
+POST {{baseUrl}}/v1/auth/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "{{senderEmail}}",
+  "password": "{{senderPassword}}",
+  "deviceId": "{{senderDeviceId}}",
+  "deviceName": "Task 967 HTTP sender",
+  "deviceMetadata": {
+    "platform": "HTTP Client",
+    "osVersion": "test",
+    "appVersion": "2.0.0",
+    "model": "Rider"
+  },
+  "deviceLanguage": "cs",
+  "deviceMessagingToken": ""
+}
+
+> {%
+client.test("Odesilatel je prihlaseny", function () {
+  client.assert(response.status === 200, "Ocekavano HTTP 200, vraceno " + response.status);
+  client.assert(Boolean(response.body.accessToken), "Response neobsahuje accessToken");
+  client.assert(response.body.email === "zeugojedeibra-6351@yopmail.com", "Prihlasil se jiny odesilatel");
+});
+
+if (response.status === 200 && response.body.accessToken) {
+  client.global.set("senderAccessToken", response.body.accessToken);
+}
+%}
+
+###
+
+###############################################################################
+# 2. Nacist dostupne jizdenky odesilatele
+#
+# Ocekavani: HTTP 200 a alespon jedna polozka ve stavu AVAILABLE.
+# Prvni fulfillmentId se automaticky ulozi jako selectedFulfillmentId.
+###############################################################################
+
+# @name listSenderTickets
+GET {{baseUrl}}/v1/client/tickets?limit=100&offset=0&status=AVAILABLE
+Authorization: Bearer {{senderAccessToken}}
+Accept: application/json
+
+> {%
+client.test("Odesilatel ma dostupnou jizdenku", function () {
+  client.assert(response.status === 200, "Ocekavano HTTP 200, vraceno " + response.status);
+  client.assert(Array.isArray(response.body.items), "Response neobsahuje pole items");
+  client.assert(response.body.items.length > 0, "Odesilatel nema zadnou AVAILABLE jizdenku");
+});
+
+if (response.status === 200 && Array.isArray(response.body.items) && response.body.items.length > 0) {
+  const selected = response.body.items[0];
+  client.global.set("selectedFulfillmentId", selected.fulfillmentId);
+  client.log("Vybrana jizdenka: " + selected.fulfillmentId);
+}
+%}
+
+###
+
+###############################################################################
+# 3. Prevest vybranou jizdenku prijemci
+#
+# {{selectedFulfillmentId}} bylo automaticky naplneno krokem 2.
+# Pro rucni vyber nahraďte promennou v URL konkretnim fulfillmentId z kroku 2.
+# {{$uuid}} vytvori novy Idempotency-Key. Pri rucnim opakovani stejneho
+# nedokonceneho requestu pouzijte znovu puvodni hodnotu klice z konzole klienta.
+#
+# Ocekavani: HTTP 200. newFulfillmentId se automaticky ulozi pro krok 5.
+###############################################################################
+
+# @name transferTicket
+POST {{baseUrl}}/v1/client/tickets/{{selectedFulfillmentId}}/transfer
+Authorization: Bearer {{senderAccessToken}}
+Idempotency-Key: {{$uuid}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "recipientEmail": "{{recipientEmail}}"
+}
+
+> {%
+client.test("Jizdenka byla prevedena", function () {
+  client.assert(response.status === 200, "Ocekavano HTTP 200, vraceno " + response.status);
+  client.assert(Boolean(response.body.originalFulfillmentId), "Chybi originalFulfillmentId");
+  client.assert(Boolean(response.body.newFulfillmentId), "Chybi newFulfillmentId");
+  client.assert(Boolean(response.body.transferredAt), "Chybi transferredAt");
+  client.assert(
+    response.body.originalFulfillmentId === client.global.get("selectedFulfillmentId"),
+    "Backend vratil jine originalFulfillmentId"
+  );
+});
+
+if (response.status === 200 && response.body.newFulfillmentId) {
+  client.global.set("transferredFulfillmentId", response.body.newFulfillmentId);
+  client.log("Nova jizdenka prijemce: " + response.body.newFulfillmentId);
+}
+%}
+
+###
+
+###############################################################################
+# 4. Prihlasit prijemce
+#
+# Ocekavani: HTTP 200. Response handler automaticky ulozi accessToken prijemce.
+# MOS SessionID ani pristup do Redis nejsou pro tento scenar potreba.
+###############################################################################
+
+# @name loginRecipient
+POST {{baseUrl}}/v1/auth/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "{{recipientEmail}}",
+  "password": "{{recipientPassword}}",
+  "deviceId": "{{recipientDeviceId}}",
+  "deviceName": "Task 967 HTTP recipient",
+  "deviceMetadata": {
+    "platform": "HTTP Client",
+    "osVersion": "test",
+    "appVersion": "2.0.0",
+    "model": "Rider"
+  },
+  "deviceLanguage": "cs",
+  "deviceMessagingToken": ""
+}
+
+> {%
+client.test("Prijemce je prihlaseny", function () {
+  client.assert(response.status === 200, "Ocekavano HTTP 200, vraceno " + response.status);
+  client.assert(Boolean(response.body.accessToken), "Response neobsahuje accessToken");
+  client.assert(response.body.email === "wijessibrouma-5506@yopmail.com", "Prihlasil se jiny prijemce");
+});
+
+if (response.status === 200 && response.body.accessToken) {
+  client.global.set("recipientAccessToken", response.body.accessToken);
+}
+%}
+
+###
+
+###############################################################################
+# 5. Overit prevedenou jizdenku u prijemce
+#
+# Ocekavani: HTTP 200 a items obsahuje transferredFulfillmentId ve stavu AVAILABLE.
+# Test dole overi ID automaticky podle response kroku 3.
+###############################################################################
+
+# @name listRecipientTickets
+GET {{baseUrl}}/v1/client/tickets?limit=100&offset=0&status=AVAILABLE
+Authorization: Bearer {{recipientAccessToken}}
+Accept: application/json
+
+> {%
+client.test("Prijemce obdrzel prevedenou jizdenku", function () {
+  client.assert(response.status === 200, "Ocekavano HTTP 200, vraceno " + response.status);
+  client.assert(Array.isArray(response.body.items), "Response neobsahuje pole items");
+
+  const expectedId = client.global.get("transferredFulfillmentId");
+  client.assert(Boolean(expectedId), "Chybi newFulfillmentId z kroku 3");
+
+  const receivedTicket = response.body.items.find(function (item) {
+    return item.fulfillmentId === expectedId && item.status === "AVAILABLE";
+  });
+
+  client.assert(Boolean(receivedTicket), "Prevedena AVAILABLE jizdenka nebyla u prijemce nalezena");
+});
+%}
+
+###############################################################################
+# Hotovo
+#
+# Pokud vsechny testy prosly, puvodni fulfillment odesilatele byl spotrebovan
+# a prijemce ma novy fulfillment ve stavu AVAILABLE.
+###############################################################################

@@ -359,7 +359,10 @@
           "description": "Vrátí seznam nosičů a identifikátorů dostupných pro aktuálního klienta.",
           "request": {
             "method": "GET",
-            "path": "/v1/client/identifiers"
+            "path": "/v1/client/identifiers",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 200,
@@ -504,7 +507,10 @@
           "description": "Načte identifikátory klienta a umožní vybrat jeden existující identifikátor.",
           "request": {
             "method": "GET",
-            "path": "/v1/client/identifiers"
+            "path": "/v1/client/identifiers",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 200,
@@ -826,7 +832,10 @@
           "description": "Znovu načte seznam identifikátorů klienta po registraci telefonu.",
           "request": {
             "method": "GET",
-            "path": "/v1/client/identifiers"
+            "path": "/v1/client/identifiers",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 200,
@@ -1145,7 +1154,10 @@
           "description": "Znovu načte seznam identifikátorů klienta, aby bylo vidět, zda se tokenizovaná karta po kompletaci propsala do dostupných identifikátorů.",
           "request": {
             "method": "GET",
-            "path": "/v1/client/identifiers"
+            "path": "/v1/client/identifiers",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 200,
@@ -1561,7 +1573,10 @@
           "description": "Znovu načte seznam identifikátorů klienta, aby bylo vidět, zda se tokenizovaná InKarta po kompletaci propsala do dostupných identifikátorů.",
           "request": {
             "method": "GET",
-            "path": "/v1/client/identifiers"
+            "path": "/v1/client/identifiers",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 200,
@@ -1895,7 +1910,10 @@
           "description": "Znovu načte seznam identifikátorů klienta, aby bylo vidět, zda se tokenizovaná OpusCard po kompletaci propsala do dostupných identifikátorů.",
           "request": {
             "method": "GET",
-            "path": "/v1/client/identifiers"
+            "path": "/v1/client/identifiers",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 200,
@@ -2231,7 +2249,10 @@
           "description": "Znovu načte seznam identifikátorů klienta, aby bylo vidět, zda se tokenizovaná Lítačka po kompletaci propsala do dostupných identifikátorů.",
           "request": {
             "method": "GET",
-            "path": "/v1/client/identifiers"
+            "path": "/v1/client/identifiers",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 200,

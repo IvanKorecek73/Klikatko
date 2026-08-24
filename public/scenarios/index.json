@@ -105,6 +105,58 @@
               }
             },
             {
+              "id": "pidlitacka-presentation-p03",
+              "label": "pridalova.eliska+p03@operatorict.cz",
+              "note": "Připravený demonstrační účet pro neplatné identifikátory.",
+              "values": {
+                "email": "pridalova.eliska+p03@operatorict.cz",
+                "password": "Test1234!",
+                "deviceId": "c6d8b054-9725-4eb9-9d4b-7d386ce27c03",
+                "deviceName": "Presentation Android p03",
+                "platform": "Android",
+                "osVersion": "14",
+                "appVersion": "2.0.0",
+                "model": "Pixel 8",
+                "deviceLanguage": "cs",
+                "deviceMessagingToken": ""
+              }
+            },
+            {
+              "id": "pidlitacka-presentation-safe-payment",
+              "label": "wijessibrouma-5506@yopmail.com",
+              "note": "Bezpečný demonstrační účet pro nákup, platby a doporučování.",
+              "values": {
+                "email": "wijessibrouma-5506@yopmail.com",
+                "password": "abc123abc123",
+                "deviceId": "eb62700c-5b5f-4851-b800-393174ac5506",
+                "deviceName": "Presentation Android 5506",
+                "platform": "Android",
+                "osVersion": "14",
+                "appVersion": "2.0.0",
+                "model": "Pixel 8",
+                "deviceLanguage": "cs",
+                "deviceMessagingToken": ""
+              }
+            },
+            {
+              "id": "pidlitacka-presentation-pt",
+              "label": "pridalova.eliska+PT@operatorict.cz",
+              "note": "Připravený demonstrační účet pro detail kupónu a ISIC.",
+              "values": {
+                "email": "pridalova.eliska+PT@operatorict.cz",
+                "password": "Test1234!",
+                "deviceId": "0ae8f596-8857-4e47-a18c-7694a15d97f0",
+                "deviceName": "Presentation Android PT",
+                "platform": "Android",
+                "osVersion": "14",
+                "appVersion": "2.0.0",
+                "model": "Pixel 8",
+                "deviceLanguage": "cs",
+                "deviceMessagingToken": "",
+                "regId": ""
+              }
+            },
+            {
               "id": "pidlitacka-anonymous",
               "label": "Anonymní uživatel",
               "authRequest": "anonymous",
@@ -276,6 +328,11 @@
           "id": "pidlitacka-local",
           "name": "LOCAL",
           "targetBaseUrl": "https://localhost:7261"
+        },
+        {
+          "id": "pidlitacka-local-aspire",
+          "name": "LOCAL ASPIRE",
+          "targetBaseUrl": "http://localhost:5065"
         },
         {
           "id": "pidlitacka-integration",

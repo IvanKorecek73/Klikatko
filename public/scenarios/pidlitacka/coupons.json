@@ -10,7 +10,12 @@
       "requiresAuth": true,
       "smoke": true,
       "manualInputRequired": false,
-      "tags": ["profile", "coupons", "client-read", "all-coupons"],
+      "tags": [
+        "profile",
+        "coupons",
+        "client-read",
+        "all-coupons"
+      ],
       "app": {
         "section": "profile",
         "title": "Kupóny",
@@ -28,21 +33,54 @@
           "description": "Zavolá GET /v1/client/coupons a zobrazí kupóny aktuálního klienta spolu s identifikátory, ke kterým jsou přiřazeny.",
           "request": {
             "method": "GET",
-            "path": "/v1/client/coupons"
+            "path": "/v1/client/coupons",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.status", "notEmpty": true },
-              { "path": "$.identifiers", "lengthAtLeast": 0 },
-              { "path": "$.coupons", "lengthAtLeast": 0 },
-              { "path": "$.steps", "lengthAtLeast": 3 },
-              { "path": "$.steps[0].name", "equals": "CustomerResolution" },
-              { "path": "$.steps[0].status", "equals": "Completed" },
-              { "path": "$.steps[1].name", "equals": "IdentifierResolution" },
-              { "path": "$.steps[1].status", "equals": "Completed" },
-              { "path": "$.steps[2].name", "equals": "GetCoupons" },
-              { "path": "$.steps[2].status", "equals": "Completed" }
+              {
+                "path": "$.status",
+                "notEmpty": true
+              },
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 0
+              },
+              {
+                "path": "$.coupons",
+                "lengthAtLeast": 0
+              },
+              {
+                "path": "$.steps",
+                "lengthAtLeast": 3
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "IdentifierResolution"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[2].name",
+                "equals": "GetCoupons"
+              },
+              {
+                "path": "$.steps[2].status",
+                "equals": "Completed"
+              }
             ]
           },
           "selection": {
@@ -61,13 +99,123 @@
       ]
     },
     {
-      "id": "client-coupons-receipt-download",
-      "title": "Kupóny - stáhnout daňový doklad",
-      "description": "Read-only scénář pro endpoint GET /v1/client/coupons/receipt/{mosOrderId}. Nejprve načte kupóny klienta, uloží MOS OrderId vybraného kupónu a potom ověří, že backend vrátí PDF doklad jako application/pdf.",
+      "id": "client-coupons-isic-value",
+      "title": "Kupóny - ověřit ISIC existujícího klienta",
+      "description": "Pro přihlášeného klienta s ISIC a nakoupenými kupóny načte GET /v1/client/coupons a ověří správnou hodnotu registeredNumberIsic.",
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["profile", "coupons", "receipt", "pdf", "client-read"],
+      "tags": [
+        "profile",
+        "coupons",
+        "isic",
+        "read",
+        "validation"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Ověření ISIC"
+      },
+      "instructions": [
+        "Přihlaste v sekci Uživatel existujícího klienta, který má evidované ISIC a nakoupené kupóny.",
+        "Zadejte očekávané číslo ISIC. Scénář jej přesně porovná s top-level polem registeredNumberIsic v odpovědi GET /v1/client/coupons."
+      ],
+      "steps": [
+        {
+          "id": "client-coupons-isic-verify-value",
+          "title": "Vypsat kupóny a ověřit ISIC",
+          "description": "Načte kupóny přihlášeného klienta a porovná vrácené registeredNumberIsic se zadanou očekávanou hodnotou.",
+          "fields": [
+            {
+              "name": "expectedRegisteredNumberIsic",
+              "label": "Očekávané ISIC",
+              "type": "text",
+              "value": "",
+              "placeholder": "např. S123456789012",
+              "help": "Zadejte ISIC evidované u právě přihlášeného klienta."
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.registeredNumberIsic",
+                "equals": "{{form.expectedRegisteredNumberIsic}}",
+                "message": "registeredNumberIsic neodpovídá očekávanému ISIC přihlášeného klienta."
+              },
+              {
+                "path": "$.coupons",
+                "lengthAtLeast": 1,
+                "message": "Přihlášený klient nemá ve výpisu žádný kupón."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-coupons-receipt-availability-overview",
+      "title": "Kupóny - přehled dostupnosti dokladů",
+      "description": "Read-only diagnostický přehled. Načte všechny kupóny aktuálně přihlášeného klienta a pro každé unikátní MOS OrderId zjistí dostupnost daňového dokladu, přesný business důvod, konečnost stavu a doporučený způsob další kontroly.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": false,
+      "tags": [
+        "profile",
+        "coupons",
+        "receipt",
+        "diagnostics",
+        "client-read",
+        "all-coupons"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Dostupnost dokladů"
+      },
+      "instructions": [
+        "Přihlaste se v záložce Uživatel jako klient s validní BE JWT a MOS session.",
+        "Scénář nejprve zavolá GET /v1/client/coupons a potom pro každé unikátní OrderId jednou zavolá GET /v1/client/coupons/receipt/{mosOrderId}/status.",
+        "Výsledek ukáže u každého kupónu status, reasonCode, isFinal, recheckPolicy a případný recheckAfterSeconds a seskupí kupóny podle společného diagnostického významu.",
+        "Scénář rozlišuje nezahájenou, neúspěšnou, nepotvrzenou a nekonzistentní platbu, čekání na bankovní převod, zaplacenou objednávku bez dokladu, jiný MOS login i neexistující objednávku.",
+        "Pending neznamená, že se doklad generuje. Rozhodující je reasonCode; automatické opakování má smysl jen pro recheckPolicy=delayed.",
+        "Scénář nic nemění. Kvůli většímu počtu dotazů není zařazen do smoke sady."
+      ],
+      "steps": [
+        {
+          "id": "client-coupons-receipt-availability-overview-load",
+          "title": "Načíst kupóny a dostupnost dokladů",
+          "description": "Načte všechny kupóny klienta, deduplikuje jejich MOS OrderId a sestaví souhrnný přehled statusů, důvodů, konečnosti a možnosti pozdějšího opakování.",
+          "customAction": "couponReceiptAvailabilityOverview"
+        }
+      ]
+    },
+    {
+      "id": "client-coupons-receipt-download",
+      "title": "Kupóny - ověřit a stáhnout daňový doklad",
+      "description": "Read-only scénář pro endpointy dostupnosti a stažení dokladu. Nejprve načte kupóny klienta, uloží MOS OrderId vybraného kupónu, vyhodnotí stav dokladu podle diagnostiky backendu a po jeho zpřístupnění ověří PDF odpověď.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "profile",
+        "coupons",
+        "receipt",
+        "pdf",
+        "client-read"
+      ],
       "app": {
         "section": "profile",
         "title": "Kupóny",
@@ -76,9 +224,11 @@
       "instructions": [
         "Přihlaste se v záložce Uživatel jako klient s validním BE JWT a MOS session.",
         "V prvním kroku vyberte kupón, který má vyplněné MOS OrderId. Kupóny bez OrderId nelze použít pro stažení dokladu.",
-        "Druhý krok volá GET /v1/client/coupons/receipt/{mosOrderId}. Správný pozitivní výsledek je HTTP 200, content-type application/pdf a tlačítko pro otevření PDF.",
-        "Po nákupním workflow lze druhý krok spustit i přímo s hodnotou mosCouponOrderId z kontextu.",
-        "Pokud backend vrátí 404, MOS pro danou objednávku doklad nemá dostupný; pro pozitivní test vyberte jiný kupón nebo připravte testovací objednávku s dokladem."
+        "Druhý krok volá GET /v1/client/coupons/receipt/{mosOrderId}/status a zobrazí status, reasonCode, isFinal, recheckPolicy a případný recheckAfterSeconds. Ke stažení pustí scénář pouze receipt-available.",
+        "Konečné nedostupné stavy mají isFinal=true a recheckPolicy=none. Payment-status-unconfirmed a payment-confirmation-inconsistent vyžadují diagnostiku a nemají se automaticky krátce pollovat.",
+        "Order-not-assigned-to-current-login znamená, že objednávka existuje, ale byla zakoupena pod jiným nebo anonymním MOS loginem. Order-not-found potvrzuje neexistující objednávku.",
+        "Třetí krok volá GET /v1/client/coupons/receipt/{mosOrderId}. Správný pozitivní výsledek je HTTP 200, content-type application/pdf a tlačítko pro otevření PDF.",
+        "Po nákupním workflow lze stav i stažení spustit přímo s hodnotou mosCouponOrderId z kontextu."
       ],
       "steps": [
         {
@@ -87,20 +237,50 @@
           "description": "Načte GET /v1/client/coupons a umožní vybrat kupón, jehož MOS OrderId se použije pro stažení daňového dokladu.",
           "request": {
             "method": "GET",
-            "path": "/v1/client/coupons"
+            "path": "/v1/client/coupons",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.status", "equals": "Completed" },
-              { "path": "$.coupons", "lengthAtLeast": 1 },
-              { "path": "$.steps", "lengthAtLeast": 3 },
-              { "path": "$.steps[0].name", "equals": "CustomerResolution" },
-              { "path": "$.steps[0].status", "equals": "Completed" },
-              { "path": "$.steps[1].name", "equals": "IdentifierResolution" },
-              { "path": "$.steps[1].status", "equals": "Completed" },
-              { "path": "$.steps[2].name", "equals": "GetCoupons" },
-              { "path": "$.steps[2].status", "equals": "Completed" }
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.coupons",
+                "lengthAtLeast": 1
+              },
+              {
+                "path": "$.steps",
+                "lengthAtLeast": 3
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "IdentifierResolution"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[2].name",
+                "equals": "GetCoupons"
+              },
+              {
+                "path": "$.steps[2].status",
+                "equals": "Completed"
+              }
             ]
           },
           "selection": {
@@ -117,6 +297,392 @@
               "pidCouponReceiptTariffName": "$.tariffName",
               "pidCouponReceiptIdentifierId": "$.identifier.identifierId"
             }
+          }
+        },
+        {
+          "id": "client-coupons-receipt-status",
+          "title": "Ověřit dostupnost daňového dokladu",
+          "description": "Zavolá GET /v1/client/coupons/receipt/{mosOrderId}/status a ověří rozšířený kontrakt. Automatickou kontrolu plánujte jen pro recheckPolicy=delayed a respektujte recheckAfterSeconds.",
+          "fields": [
+            {
+              "name": "mosOrderId",
+              "label": "MOS OrderId",
+              "type": "number",
+              "value": "{{context.mosCouponOrderId}}",
+              "placeholder": "MOS OrderId z vybraného kupónu nebo nákupního workflow"
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons/receipt/{{form.mosOrderId}}/status"
+          },
+          "remember": {
+            "mosCouponOrderId": "{{form.mosOrderId}}",
+            "pidCouponReceiptMosOrderId": "{{form.mosOrderId}}",
+            "pidCouponReceiptOrderId": "{{form.mosOrderId}}"
+          },
+          "extract": {
+            "pidCouponReceiptStatus": "$.status",
+            "pidCouponReceiptReasonCode": "$.reasonCode",
+            "pidCouponReceiptIsFinal": "$.isFinal",
+            "pidCouponReceiptRecheckPolicy": "$.recheckPolicy",
+            "pidCouponReceiptRecheckAfterSeconds": "$.recheckAfterSeconds"
+          },
+          "expected": {
+            "status": 200,
+            "warnings": [
+              {
+                "appMessage": "Platba ještě není dokončená. Stav můžete ověřit později.",
+                "message": "Endpoint vrátil pending/payment-pending, isFinal=false, recheckPolicy=delayed a recheckAfterSeconds=30. Čeká se na dokončení platby, nikoli na asynchronní generování dokladu.",
+                "blockAdvance": true,
+                "when": [
+                  {
+                    "path": "$.status",
+                    "equals": "pending"
+                  },
+                  {
+                    "path": "$.reasonCode",
+                    "equals": "payment-pending"
+                  },
+                  {
+                    "path": "$.isFinal",
+                    "equals": false
+                  },
+                  {
+                    "path": "$.recheckPolicy",
+                    "equals": "delayed"
+                  },
+                  {
+                    "path": "$.recheckAfterSeconds",
+                    "equals": 30
+                  },
+                  {
+                    "path": "$.mosOrderId",
+                    "equals": "{{form.mosOrderId}}"
+                  }
+                ]
+              },
+              {
+                "appMessage": "Platba objednávky nebyla zahájena.",
+                "message": "Endpoint vrátil not-available/payment-not-started, isFinal=false a recheckPolicy=after-user-action. Doklad nyní nemůže vzniknout; automatické opakování nemá smysl.",
+                "blockAdvance": true,
+                "when": [
+                  {
+                    "path": "$.status",
+                    "equals": "not-available"
+                  },
+                  {
+                    "path": "$.reasonCode",
+                    "equals": "payment-not-started"
+                  },
+                  {
+                    "path": "$.isFinal",
+                    "equals": false
+                  },
+                  {
+                    "path": "$.recheckPolicy",
+                    "equals": "after-user-action"
+                  },
+                  {
+                    "path": "$.mosOrderId",
+                    "equals": "{{form.mosOrderId}}"
+                  }
+                ]
+              },
+              {
+                "appMessage": "Platba selhala a doklad pro tuto transakci nevznikne.",
+                "message": "Endpoint vrátil not-available/payment-failed, isFinal=true a recheckPolicy=none.",
+                "blockAdvance": true,
+                "when": [
+                  {
+                    "path": "$.status",
+                    "equals": "not-available"
+                  },
+                  {
+                    "path": "$.reasonCode",
+                    "equals": "payment-failed"
+                  },
+                  {
+                    "path": "$.isFinal",
+                    "equals": true
+                  },
+                  {
+                    "path": "$.recheckPolicy",
+                    "equals": "none"
+                  },
+                  {
+                    "path": "$.mosOrderId",
+                    "equals": "{{form.mosOrderId}}"
+                  }
+                ]
+              },
+              {
+                "appMessage": "Výsledek platby není v Core MOS spolehlivě potvrzen.",
+                "message": "Endpoint vrátil unknown/payment-status-unconfirmed, isFinal=false a recheckPolicy=after-user-action. Automatické krátké opakování není doporučené.",
+                "blockAdvance": true,
+                "when": [
+                  {
+                    "path": "$.status",
+                    "equals": "unknown"
+                  },
+                  {
+                    "path": "$.reasonCode",
+                    "equals": "payment-status-unconfirmed"
+                  },
+                  {
+                    "path": "$.isFinal",
+                    "equals": false
+                  },
+                  {
+                    "path": "$.recheckPolicy",
+                    "equals": "after-user-action"
+                  },
+                  {
+                    "path": "$.mosOrderId",
+                    "equals": "{{form.mosOrderId}}"
+                  }
+                ]
+              },
+              {
+                "appMessage": "Stav objednávky a platební brány si odporují.",
+                "message": "Endpoint vrátil unknown/payment-confirmation-inconsistent, isFinal=false a recheckPolicy=after-user-action. Stav vyžaduje diagnostiku.",
+                "blockAdvance": true,
+                "when": [
+                  {
+                    "path": "$.status",
+                    "equals": "unknown"
+                  },
+                  {
+                    "path": "$.reasonCode",
+                    "equals": "payment-confirmation-inconsistent"
+                  },
+                  {
+                    "path": "$.isFinal",
+                    "equals": false
+                  },
+                  {
+                    "path": "$.recheckPolicy",
+                    "equals": "after-user-action"
+                  },
+                  {
+                    "path": "$.mosOrderId",
+                    "equals": "{{form.mosOrderId}}"
+                  }
+                ]
+              },
+              {
+                "appMessage": "Objednávka čeká na připsání bankovního převodu.",
+                "message": "Endpoint vrátil pending/awaiting-bank-transfer, isFinal=false a recheckPolicy=after-user-action. Doklad zatím nemůže vzniknout.",
+                "blockAdvance": true,
+                "when": [
+                  {
+                    "path": "$.status",
+                    "equals": "pending"
+                  },
+                  {
+                    "path": "$.reasonCode",
+                    "equals": "awaiting-bank-transfer"
+                  },
+                  {
+                    "path": "$.isFinal",
+                    "equals": false
+                  },
+                  {
+                    "path": "$.recheckPolicy",
+                    "equals": "after-user-action"
+                  },
+                  {
+                    "path": "$.mosOrderId",
+                    "equals": "{{form.mosOrderId}}"
+                  }
+                ]
+              },
+              {
+                "appMessage": "Doklad není dostupný aktuálnímu MOS loginu.",
+                "message": "Endpoint vrátil not-available/order-not-assigned-to-current-login, isFinal=true a recheckPolicy=none. Objednávka existuje, ale je přiřazena jinému nebo anonymnímu loginu.",
+                "blockAdvance": true,
+                "when": [
+                  {
+                    "path": "$.status",
+                    "equals": "not-available"
+                  },
+                  {
+                    "path": "$.reasonCode",
+                    "equals": "order-not-assigned-to-current-login"
+                  },
+                  {
+                    "path": "$.isFinal",
+                    "equals": true
+                  },
+                  {
+                    "path": "$.recheckPolicy",
+                    "equals": "none"
+                  },
+                  {
+                    "path": "$.mosOrderId",
+                    "equals": "{{form.mosOrderId}}"
+                  }
+                ]
+              },
+              {
+                "appMessage": "Core MOS potvrdil, že objednávka neexistuje.",
+                "message": "Endpoint vrátil not-available/order-not-found, isFinal=true a recheckPolicy=none.",
+                "blockAdvance": true,
+                "when": [
+                  {
+                    "path": "$.status",
+                    "equals": "not-available"
+                  },
+                  {
+                    "path": "$.reasonCode",
+                    "equals": "order-not-found"
+                  },
+                  {
+                    "path": "$.isFinal",
+                    "equals": true
+                  },
+                  {
+                    "path": "$.recheckPolicy",
+                    "equals": "none"
+                  },
+                  {
+                    "path": "$.mosOrderId",
+                    "equals": "{{form.mosOrderId}}"
+                  }
+                ]
+              },
+              {
+                "appMessage": "Objednávka je zaplacená, ale doklad nebyl vytvořen.",
+                "message": "Endpoint vrátil not-available/receipt-not-created, isFinal=true a recheckPolicy=none. Další automatické ověřování stav nezmění.",
+                "blockAdvance": true,
+                "when": [
+                  {
+                    "path": "$.status",
+                    "equals": "not-available"
+                  },
+                  {
+                    "path": "$.reasonCode",
+                    "equals": "receipt-not-created"
+                  },
+                  {
+                    "path": "$.isFinal",
+                    "equals": true
+                  },
+                  {
+                    "path": "$.recheckPolicy",
+                    "equals": "none"
+                  },
+                  {
+                    "path": "$.mosOrderId",
+                    "equals": "{{form.mosOrderId}}"
+                  }
+                ]
+              },
+              {
+                "appMessage": "Objednávka byla zrušena a doklad není dostupný.",
+                "message": "Endpoint vrátil not-available/order-cancelled, isFinal=true a recheckPolicy=none.",
+                "blockAdvance": true,
+                "when": [
+                  {
+                    "path": "$.status",
+                    "equals": "not-available"
+                  },
+                  {
+                    "path": "$.reasonCode",
+                    "equals": "order-cancelled"
+                  },
+                  {
+                    "path": "$.isFinal",
+                    "equals": true
+                  },
+                  {
+                    "path": "$.recheckPolicy",
+                    "equals": "none"
+                  },
+                  {
+                    "path": "$.mosOrderId",
+                    "equals": "{{form.mosOrderId}}"
+                  }
+                ]
+              },
+              {
+                "appMessage": "Pro tento způsob nákupu není elektronický doklad dostupný.",
+                "message": "Endpoint vrátil not-available/payment-type-not-supported, isFinal=true a recheckPolicy=none.",
+                "blockAdvance": true,
+                "when": [
+                  {
+                    "path": "$.status",
+                    "equals": "not-available"
+                  },
+                  {
+                    "path": "$.reasonCode",
+                    "equals": "payment-type-not-supported"
+                  },
+                  {
+                    "path": "$.isFinal",
+                    "equals": true
+                  },
+                  {
+                    "path": "$.recheckPolicy",
+                    "equals": "none"
+                  },
+                  {
+                    "path": "$.mosOrderId",
+                    "equals": "{{form.mosOrderId}}"
+                  }
+                ]
+              },
+              {
+                "appMessage": "Backend nedokázal stav objednávky bezpečně klasifikovat.",
+                "message": "Endpoint vrátil unknown/unknown, isFinal=false a recheckPolicy=after-user-action. Stav vyžaduje diagnostiku a nemá se automaticky pollovat.",
+                "blockAdvance": true,
+                "when": [
+                  {
+                    "path": "$.status",
+                    "equals": "unknown"
+                  },
+                  {
+                    "path": "$.reasonCode",
+                    "equals": "unknown"
+                  },
+                  {
+                    "path": "$.isFinal",
+                    "equals": false
+                  },
+                  {
+                    "path": "$.recheckPolicy",
+                    "equals": "after-user-action"
+                  },
+                  {
+                    "path": "$.mosOrderId",
+                    "equals": "{{form.mosOrderId}}"
+                  }
+                ]
+              }
+            ],
+            "assertions": [
+              {
+                "path": "$.mosOrderId",
+                "equals": "{{form.mosOrderId}}"
+              },
+              {
+                "path": "$.status",
+                "equals": "available",
+                "message": "Pro pokračování ke stažení musí být doklad available/receipt-available."
+              },
+              {
+                "path": "$.reasonCode",
+                "equals": "receipt-available"
+              },
+              {
+                "path": "$.isFinal",
+                "equals": true
+              },
+              {
+                "path": "$.recheckPolicy",
+                "equals": "none"
+              }
+            ]
           }
         },
         {
@@ -144,9 +710,18 @@
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.contentType", "equals": "application/pdf" },
-              { "path": "$.size", "atLeast": 1 },
-              { "path": "$.downloadUrl", "notEmpty": true }
+              {
+                "path": "$.contentType",
+                "equals": "application/pdf"
+              },
+              {
+                "path": "$.size",
+                "atLeast": 1
+              },
+              {
+                "path": "$.downloadUrl",
+                "notEmpty": true
+              }
             ]
           }
         }
@@ -159,7 +734,13 @@
       "requiresAuth": true,
       "smoke": true,
       "manualInputRequired": true,
-      "tags": ["profile", "coupons", "client-identifiers", "client-read", "detail"],
+      "tags": [
+        "profile",
+        "coupons",
+        "client-identifiers",
+        "client-read",
+        "detail"
+      ],
       "app": {
         "section": "profile",
         "title": "Kupóny",
@@ -178,21 +759,54 @@
           "description": "Zavolá GET /v1/client/coupons a zobrazí detail aktuálního klienta seskupený podle identifikátorů.",
           "request": {
             "method": "GET",
-            "path": "/v1/client/coupons"
+            "path": "/v1/client/coupons",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.status", "equals": "Completed" },
-              { "path": "$.identifiers", "lengthAtLeast": 1 },
-              { "path": "$.coupons", "lengthAtLeast": 0 },
-              { "path": "$.steps", "lengthAtLeast": 3 },
-              { "path": "$.steps[0].name", "equals": "CustomerResolution" },
-              { "path": "$.steps[0].status", "equals": "Completed" },
-              { "path": "$.steps[1].name", "equals": "IdentifierResolution" },
-              { "path": "$.steps[1].status", "equals": "Completed" },
-              { "path": "$.steps[2].name", "equals": "GetCoupons" },
-              { "path": "$.steps[2].status", "equals": "Completed" }
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 1
+              },
+              {
+                "path": "$.coupons",
+                "lengthAtLeast": 0
+              },
+              {
+                "path": "$.steps",
+                "lengthAtLeast": 3
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "IdentifierResolution"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[2].name",
+                "equals": "GetCoupons"
+              },
+              {
+                "path": "$.steps[2].status",
+                "equals": "Completed"
+              }
             ]
           },
           "selection": {
@@ -219,7 +833,13 @@
       "requiresAuth": true,
       "smoke": true,
       "manualInputRequired": true,
-      "tags": ["profile", "coupons", "client-identifiers", "move-preview", "client-read"],
+      "tags": [
+        "profile",
+        "coupons",
+        "client-identifiers",
+        "move-preview",
+        "client-read"
+      ],
       "app": {
         "section": "profile",
         "title": "Kupóny",
@@ -240,7 +860,10 @@
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.identifiers", "lengthAtLeast": 1 }
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 1
+              }
             ]
           },
           "selection": {
@@ -261,7 +884,9 @@
           "id": "client-coupons-move-preview",
           "title": "Načíst náhled přesunu kupónů",
           "description": "Zavolá GET /v1/client/coupons/move-preview pro vybraný cílový identifikátor.",
-          "requiresContext": ["pidCouponTargetIdentifierId"],
+          "requiresContext": [
+            "pidCouponTargetIdentifierId"
+          ],
           "fields": [
             {
               "name": "targetIdentifierId",
@@ -272,7 +897,10 @@
           ],
           "request": {
             "method": "GET",
-            "path": "/v1/client/coupons/move-preview?targetIdentifierId={{form.targetIdentifierId}}"
+            "path": "/v1/client/coupons/move-preview?targetIdentifierId={{form.targetIdentifierId}}",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "remember": {
             "pidCouponTargetIdentifierId": "{{form.targetIdentifierId}}"
@@ -280,18 +908,54 @@
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.status", "equals": "Completed" },
-              { "path": "$.targetIdentifier.identifierId", "notEmpty": true },
-              { "path": "$.sources", "lengthAtLeast": 0 },
-              { "path": "$.couponCount", "notEmpty": true },
-              { "path": "$.warnings", "lengthAtLeast": 0 },
-              { "path": "$.steps", "lengthAtLeast": 3 },
-              { "path": "$.steps[0].name", "equals": "CustomerResolution" },
-              { "path": "$.steps[0].status", "equals": "Completed" },
-              { "path": "$.steps[1].name", "equals": "IdentifierResolution" },
-              { "path": "$.steps[1].status", "equals": "Completed" },
-              { "path": "$.steps[2].name", "equals": "GetCoupons" },
-              { "path": "$.steps[2].status", "equals": "Completed" }
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.targetIdentifier.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.sources",
+                "lengthAtLeast": 0
+              },
+              {
+                "path": "$.couponCount",
+                "notEmpty": true
+              },
+              {
+                "path": "$.warnings",
+                "lengthAtLeast": 0
+              },
+              {
+                "path": "$.steps",
+                "lengthAtLeast": 3
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "IdentifierResolution"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[2].name",
+                "equals": "GetCoupons"
+              },
+              {
+                "path": "$.steps[2].status",
+                "equals": "Completed"
+              }
             ]
           },
           "selection": {
@@ -315,7 +979,13 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["profile", "coupons", "client-identifiers", "move", "client-save"],
+      "tags": [
+        "profile",
+        "coupons",
+        "client-identifiers",
+        "move",
+        "client-save"
+      ],
       "app": {
         "section": "profile",
         "title": "Kupóny",
@@ -338,7 +1008,10 @@
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.identifiers", "lengthAtLeast": 1 }
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 1
+              }
             ]
           },
           "selection": {
@@ -359,7 +1032,9 @@
           "id": "client-coupons-move-preview-before-execute",
           "title": "Načíst preview před přesunem",
           "description": "Zobrazí, ze kterých zdrojů a jaké kupóny se bude BE pokoušet přesunout.",
-          "requiresContext": ["pidCouponMoveTargetIdentifierId"],
+          "requiresContext": [
+            "pidCouponMoveTargetIdentifierId"
+          ],
           "fields": [
             {
               "name": "targetIdentifierId",
@@ -370,7 +1045,10 @@
           ],
           "request": {
             "method": "GET",
-            "path": "/v1/client/coupons/move-preview?targetIdentifierId={{form.targetIdentifierId}}"
+            "path": "/v1/client/coupons/move-preview?targetIdentifierId={{form.targetIdentifierId}}",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "remember": {
             "pidCouponMoveTargetIdentifierId": "{{form.targetIdentifierId}}"
@@ -378,12 +1056,30 @@
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.status", "equals": "Completed" },
-              { "path": "$.targetIdentifier.identifierId", "notEmpty": true },
-              { "path": "$.sources", "lengthAtLeast": 0 },
-              { "path": "$.couponCount", "notEmpty": true },
-              { "path": "$.warnings", "lengthAtLeast": 0 },
-              { "path": "$.steps", "lengthAtLeast": 3 }
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.targetIdentifier.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.sources",
+                "lengthAtLeast": 0
+              },
+              {
+                "path": "$.couponCount",
+                "notEmpty": true
+              },
+              {
+                "path": "$.warnings",
+                "lengthAtLeast": 0
+              },
+              {
+                "path": "$.steps",
+                "lengthAtLeast": 3
+              }
             ]
           }
         },
@@ -391,7 +1087,9 @@
           "id": "client-coupons-move-execute",
           "title": "Provést přesun kupónů",
           "description": "Zavolá POST /v1/client/coupons/move. Business status může být Completed, Failed nebo PartiallyCompleted podle výsledků jednotlivých kupónů v MOS.",
-          "requiresContext": ["pidCouponMoveTargetIdentifierId"],
+          "requiresContext": [
+            "pidCouponMoveTargetIdentifierId"
+          ],
           "readonlyContext": {
             "kind": "couponMoveTargetIdentifier",
             "title": "Vybraný cílový identifikátor",
@@ -423,18 +1121,54 @@
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.status", "notEmpty": true },
-              { "path": "$.targetIdentifierId", "notEmpty": true },
-              { "path": "$.moved", "lengthAtLeast": 0 },
-              { "path": "$.skipped", "lengthAtLeast": 0 },
-              { "path": "$.failed", "lengthAtLeast": 0 },
-              { "path": "$.steps", "lengthAtLeast": 4 },
-              { "path": "$.steps[0].name", "equals": "CustomerResolution" },
-              { "path": "$.steps[0].status", "equals": "Completed" },
-              { "path": "$.steps[1].name", "equals": "IdentifierResolution" },
-              { "path": "$.steps[1].status", "equals": "Completed" },
-              { "path": "$.steps[2].name", "equals": "GetCoupons" },
-              { "path": "$.steps[2].status", "equals": "Completed" }
+              {
+                "path": "$.status",
+                "notEmpty": true
+              },
+              {
+                "path": "$.targetIdentifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.moved",
+                "lengthAtLeast": 0
+              },
+              {
+                "path": "$.skipped",
+                "lengthAtLeast": 0
+              },
+              {
+                "path": "$.failed",
+                "lengthAtLeast": 0
+              },
+              {
+                "path": "$.steps",
+                "lengthAtLeast": 4
+              },
+              {
+                "path": "$.steps[0].name",
+                "equals": "CustomerResolution"
+              },
+              {
+                "path": "$.steps[0].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[1].name",
+                "equals": "IdentifierResolution"
+              },
+              {
+                "path": "$.steps[1].status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.steps[2].name",
+                "equals": "GetCoupons"
+              },
+              {
+                "path": "$.steps[2].status",
+                "equals": "Completed"
+              }
             ]
           },
           "selection": {
@@ -456,12 +1190,17 @@
           "id": "client-coupons-move-preview-after-execute",
           "title": "Přehled identifikátorů po přesunu",
           "description": "Znovu načte stejný přehled identifikátorů a kupónů jako na začátku, aby byl na první pohled vidět stav po přesunu.",
-          "requiresContext": ["pidCouponMoveTargetIdentifierId"],
+          "requiresContext": [
+            "pidCouponMoveTargetIdentifierId"
+          ],
           "customAction": "couponMoveTargetOverview",
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.identifiers", "lengthAtLeast": 1 }
+              {
+                "path": "$.identifiers",
+                "lengthAtLeast": 1
+              }
             ]
           }
         }
@@ -474,7 +1213,13 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
-      "tags": ["profile", "coupons", "move", "empty-state", "client-save"],
+      "tags": [
+        "profile",
+        "coupons",
+        "move",
+        "empty-state",
+        "client-save"
+      ],
       "app": {
         "section": "profile",
         "title": "Kupóny",
@@ -501,7 +1246,10 @@
           ],
           "request": {
             "method": "GET",
-            "path": "/v1/client/coupons/move-preview?targetIdentifierId={{form.targetIdentifierId}}"
+            "path": "/v1/client/coupons/move-preview?targetIdentifierId={{form.targetIdentifierId}}",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "remember": {
             "pidCouponEmptyTargetIdentifierId": "{{form.targetIdentifierId}}"
@@ -509,10 +1257,22 @@
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.status", "equals": "Completed" },
-              { "path": "$.targetIdentifier.identifierId", "notEmpty": true },
-              { "path": "$.sources", "equals": [] },
-              { "path": "$.couponCount", "equals": 0 }
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.targetIdentifier.identifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.sources",
+                "equals": []
+              },
+              {
+                "path": "$.couponCount",
+                "equals": 0
+              }
             ]
           }
         },
@@ -520,7 +1280,9 @@
           "id": "client-coupons-empty-move",
           "title": "Provést prázdný přesun",
           "description": "Execute nad stejným cílem má vrátit Completed, prázdné moved/skipped/failed a krok MoveCouponFromToken ve stavu Skipped.",
-          "requiresContext": ["pidCouponEmptyTargetIdentifierId"],
+          "requiresContext": [
+            "pidCouponEmptyTargetIdentifierId"
+          ],
           "fields": [
             {
               "name": "targetIdentifierId",
@@ -539,13 +1301,34 @@
           "expected": {
             "status": 200,
             "assertions": [
-              { "path": "$.status", "equals": "Completed" },
-              { "path": "$.targetIdentifierId", "notEmpty": true },
-              { "path": "$.moved", "equals": [] },
-              { "path": "$.skipped", "equals": [] },
-              { "path": "$.failed", "equals": [] },
-              { "path": "$.steps[3].name", "equals": "MoveCouponFromToken" },
-              { "path": "$.steps[3].status", "equals": "Skipped" }
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.targetIdentifierId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.moved",
+                "equals": []
+              },
+              {
+                "path": "$.skipped",
+                "equals": []
+              },
+              {
+                "path": "$.failed",
+                "equals": []
+              },
+              {
+                "path": "$.steps[3].name",
+                "equals": "MoveCouponFromToken"
+              },
+              {
+                "path": "$.steps[3].status",
+                "equals": "Skipped"
+              }
             ]
           }
         }
@@ -558,7 +1341,13 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": false,
-      "tags": ["profile", "coupons", "move-preview", "validation", "negative"],
+      "tags": [
+        "profile",
+        "coupons",
+        "move-preview",
+        "validation",
+        "negative"
+      ],
       "app": {
         "section": "profile",
         "title": "Kupóny",
@@ -575,14 +1364,23 @@
           "description": "Backend má cílový identifikátor odmítnout ještě před pokusem o přesun.",
           "request": {
             "method": "GET",
-            "path": "/v1/client/coupons/move-preview?targetIdentifierId=999999999"
+            "path": "/v1/client/coupons/move-preview?targetIdentifierId=999999999",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 400,
             "outcome": "expectedError",
             "assertions": [
-              { "path": "$.title", "notEmpty": true },
-              { "path": "$.detail", "notEmpty": true }
+              {
+                "path": "$.title",
+                "notEmpty": true
+              },
+              {
+                "path": "$.detail",
+                "notEmpty": true
+              }
             ]
           }
         },
@@ -601,8 +1399,14 @@
             "status": 400,
             "outcome": "expectedError",
             "assertions": [
-              { "path": "$.title", "notEmpty": true },
-              { "path": "$.detail", "notEmpty": true }
+              {
+                "path": "$.title",
+                "notEmpty": true
+              },
+              {
+                "path": "$.detail",
+                "notEmpty": true
+              }
             ]
           }
         }
@@ -615,7 +1419,12 @@
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": false,
-      "tags": ["profile", "coupons", "validation", "negative"],
+      "tags": [
+        "profile",
+        "coupons",
+        "validation",
+        "negative"
+      ],
       "app": {
         "section": "profile",
         "title": "Kupóny",
@@ -632,7 +1441,10 @@
           "description": "Chybějící query parametr se namapuje na 0 a FluentValidation ho má odmítnout.",
           "request": {
             "method": "GET",
-            "path": "/v1/client/coupons/move-preview"
+            "path": "/v1/client/coupons/move-preview",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 400,
@@ -645,7 +1457,10 @@
           "description": "Nulový cílový identifikátor je neplatný.",
           "request": {
             "method": "GET",
-            "path": "/v1/client/coupons/move-preview?targetIdentifierId=0"
+            "path": "/v1/client/coupons/move-preview?targetIdentifierId=0",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 400,
@@ -1133,7 +1948,8 @@
               "name": "returnUrlFromPaymentGateway",
               "label": "FE návratový target (ReturnUrlFromPaymentGateway)",
               "type": "text",
-              "value": "http://localhost:5096/analysis/html/GwResponsePage.html?flow=coupon-card-gw-be-fe&target=unchanged#gw-be-fe"
+              "value": "http://localhost:5096/analysis/html/GwResponsePage.html?flow=coupon-card-gw-be-fe&target=unchanged#gw-be-fe",
+              "placeholder": "Přesný target, na který má BE po zpracování callbacku přesměrovat"
             }
           ],
           "request": {
@@ -1821,8 +2637,7 @@
               "name": "returnUrlFromPaymentGateway",
               "label": "FE návratový target (ReturnUrlFromPaymentGateway)",
               "type": "text",
-              "value": "http://localhost:5096/analysis/html/GwResponsePage.html?flow=coupon-card-gw-be-fe&target=unchanged#gw-be-fe",
-              "placeholder": "Přesný target, na který má BE po zpracování callbacku přesměrovat"
+              "value": "http://localhost:5096/analysis/html/GwResponsePage.html?flow=coupon-card-gw-be-fe&target=unchanged#gw-be-fe"
             }
           ],
           "request": {

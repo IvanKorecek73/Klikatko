@@ -1749,6 +1749,37 @@ button:disabled {
   padding-top: 10px;
 }
 
+.presentation-emulator-actions {
+  align-items: center;
+  border-top: 1px solid rgba(176, 111, 0, 0.22);
+  margin: 4px 0 12px;
+  padding-top: 12px;
+}
+
+.presentation-emulator-actions button {
+  background: var(--accent);
+  color: #fff;
+}
+
+.presentation-emulator-actions button.ready {
+  background: var(--ok);
+}
+
+.presentation-emulator-actions button.error {
+  background: var(--error);
+}
+
+.presentation-emulator-actions span {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.presentation-emulator-actions span.error {
+  color: var(--error);
+  font-weight: 700;
+}
+
 .workflow-pause-inline {
   border: 1px solid rgba(176, 111, 0, 0.28);
   border-left: 5px solid #d8891f;

@@ -34,7 +34,10 @@
           "description": "Nacte identifikatory aktualniho klienta a umozni vybrat jeden nosic.",
           "request": {
             "method": "GET",
-            "path": "/v1/client/identifiers"
+            "path": "/v1/client/identifiers",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 200,
@@ -136,7 +139,10 @@
           "description": "Znovu nacte identifikatory aktualniho klienta. Vybrany identifikator by mel mit novy nazev.",
           "request": {
             "method": "GET",
-            "path": "/v1/client/identifiers"
+            "path": "/v1/client/identifiers",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 200,
@@ -191,7 +197,10 @@
           "description": "Nacte identifikatory klienta. V kartach sledujte Aktivni a Blokace.",
           "request": {
             "method": "GET",
-            "path": "/v1/client/identifiers"
+            "path": "/v1/client/identifiers",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 200,
@@ -276,7 +285,10 @@
           "description": "Znovu nacte identifikatory. Vybrany identifikator by mel byt neaktivni a blokovany uzivatelem.",
           "request": {
             "method": "GET",
-            "path": "/v1/client/identifiers"
+            "path": "/v1/client/identifiers",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 200,
@@ -331,7 +343,10 @@
           "description": "Nacte identifikatory klienta. V kartach vyberte identifikator s uzivatelskou blokaci.",
           "request": {
             "method": "GET",
-            "path": "/v1/client/identifiers"
+            "path": "/v1/client/identifiers",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 200,
@@ -416,7 +431,10 @@
           "description": "Znovu nacte identifikatory. Vybrany identifikator by mel byt aktivni a bez uzivatelske blokace.",
           "request": {
             "method": "GET",
-            "path": "/v1/client/identifiers"
+            "path": "/v1/client/identifiers",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 200,
@@ -533,7 +551,10 @@
           "description": "Nacte identifikatory aktualniho klienta a overi, ze mezi nimi existuje alespon jeden MobApp token.",
           "request": {
             "method": "GET",
-            "path": "/v1/client/identifiers"
+            "path": "/v1/client/identifiers",
+            "headers": {
+              "X-Device-Id": "{{context.pidCurrentDeviceId}}"
+            }
           },
           "expected": {
             "status": 200,
