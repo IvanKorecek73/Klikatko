@@ -86,6 +86,28 @@ async function executeEmulatorActions(payload = {}) {
 async function executeAction(deviceId, action, index) {
   const type = String(action?.type || "").trim();
 
+  if (type === "restartApp") {
+    const packageName = normalizeAppPackageName(action.packageName);
+    await runAdb(["-s", deviceId, "shell", "am", "force-stop", packageName]);
+    await runAdb([
+      "-s", deviceId,
+      "shell", "monkey",
+      "-p", packageName,
+      "-c", "android.intent.category.LAUNCHER",
+      "1"
+    ], { timeoutMs: 15000 });
+
+    const readyContentDescriptions = Array.isArray(action.readyContentDescriptions)
+      ? action.readyContentDescriptions.map(value => String(value || "").trim()).filter(Boolean)
+      : [];
+    const readyLabel = await waitForAnyContentDescription(
+      deviceId,
+      readyContentDescriptions,
+      clampInteger(action.timeoutMs, 3000, 30000, 15000)
+    );
+    return { index, type, packageName, readyLabel };
+  }
+
   if (type === "ifNode") {
     const nodes = await dumpVisibleNodes(deviceId);
     const match = findNode(nodes, action);
@@ -208,17 +230,49 @@ function countConfiguredActions(actions) {
   }, 0);
 }
 
+async function waitForAnyContentDescription(deviceId, expectedLabels, timeoutMs) {
+  if (expectedLabels.length === 0) {
+    await delay(Math.min(timeoutMs, 8000));
+    return "";
+  }
+
+  const deadline = Date.now() + timeoutMs;
+  let currentLabels = [];
+  do {
+    const nodes = await dumpVisibleNodes(deviceId);
+    currentLabels = summarizeNodes(nodes);
+    const matched = currentLabels.find(actual => expectedLabels.some(expected =>
+      actual.toLocaleLowerCase("cs-CZ").includes(expected.toLocaleLowerCase("cs-CZ"))));
+    if (matched) {
+      return matched;
+    }
+    await delay(500);
+  } while (Date.now() < deadline);
+
+  throw new Error(`Aplikace po restartu nezobrazila očekávanou výchozí obrazovku (${expectedLabels.join(" nebo ")}).`);
+}
+
 async function configurePresentationTouches(deviceId, enabled) {
   await runAdb(["-s", deviceId, "shell", "settings", "put", "system", "show_touches", enabled ? "1" : "0"]);
   await runAdb(["-s", deviceId, "shell", "settings", "put", "system", "pointer_location", "0"]);
 }
 
 async function presentationTap(deviceId, x, y, action = {}) {
-  const hoverMs = clampInteger(action.hoverMs ?? action.holdMs, 120, 1200, 420);
+  const { hoverMs, touchMs, waitAfterMs } = getPresentationTapTiming(action);
   await runAdb(["-s", deviceId, "shell", "input", "mouse", "motionevent", "MOVE", String(x), String(y)]);
   await delay(hoverMs);
-  await runAdb(["-s", deviceId, "shell", "input", "touchscreen", "tap", String(x), String(y)]);
-  await delay(clampInteger(action.waitAfterMs, 0, 5000, 650));
+  await runAdb(["-s", deviceId, "shell", "input", "touchscreen", "motionevent", "DOWN", String(x), String(y)]);
+  await delay(touchMs);
+  await runAdb(["-s", deviceId, "shell", "input", "touchscreen", "motionevent", "UP", String(x), String(y)]);
+  await delay(waitAfterMs);
+}
+
+function getPresentationTapTiming(action = {}) {
+  return {
+    hoverMs: clampInteger(action.hoverMs ?? action.holdMs, 120, 1200, 420),
+    touchMs: clampInteger(action.touchMs, 80, 500, 160),
+    waitAfterMs: clampInteger(action.waitAfterMs, 0, 5000, 650)
+  };
 }
 
 async function typeAdbText(deviceId, value) {
@@ -379,6 +433,15 @@ function normalizeDeviceId(value) {
   return deviceId;
 }
 
+function normalizeAppPackageName(value) {
+  const packageName = String(value || "").trim();
+  if (packageName.length > 200
+    || !/^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$/.test(packageName)) {
+    throw new Error("Neplatný název balíčku aplikace.");
+  }
+  return packageName;
+}
+
 function clampInteger(value, minimum, maximum, fallback = minimum) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
@@ -470,8 +533,10 @@ module.exports = {
   countConfiguredActions,
   executeEmulatorActions,
   findNode,
+  getPresentationTapTiming,
   getEmulatorStatus,
   handleEmulatorBridgeRequest,
+  normalizeAppPackageName,
   parseUiNodes,
   tokenizeAdbText
 };

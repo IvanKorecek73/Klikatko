@@ -3708,6 +3708,10 @@ function hasRequiredAuthorizationFor(item) {
 }
 
 function requiresAuthorizationForStep(step) {
+  if (step?.customAction === "loginPidLitackaProfile") {
+    return false;
+  }
+
   return requiresAuthorization(step) || requiresAuthorization(state.scenario);
 }
 
@@ -7140,6 +7144,122 @@ async function runCustomStep(step, runningStepIndex) {
     return;
   }
 
+  if (step.customAction === "requirePidLitackaIntEnvironment") {
+    const rawBaseUrl = elements.baseUrl.value.trim() || "/api";
+    const selectedEnvironment = (state.currentProject?.environments || [])
+      .find(environment => environment.id === state.currentEnvironmentId) || null;
+    const proxyTarget = String(state.harnessMeta?.proxyTarget || "").trim();
+    let effectiveTarget = rawBaseUrl;
+    let hostname = "";
+
+    try {
+      const parsedBaseUrl = new URL(rawBaseUrl, window.location.origin);
+      const usesHarnessProxy = parsedBaseUrl.origin === window.location.origin
+        && parsedBaseUrl.pathname.startsWith("/api");
+      effectiveTarget = usesHarnessProxy ? proxyTarget : parsedBaseUrl.toString();
+      hostname = new URL(effectiveTarget).hostname.toLowerCase();
+    } catch {
+      throw new Error(`Skutečný cíl API proxy se nepodařilo určit: ${effectiveTarget || "(prázdný)"}.`);
+    }
+
+    if (state.currentProject?.id !== "pidlitacka"
+      || selectedEnvironment?.id !== "pidlitacka-integration"
+      || hostname !== "pidl2-backend.int.pidlitacka.cz") {
+      throw new Error(`Tento scénář smí běžet pouze v profilu PidLitacka / INTEGRAČNÍ a proti pidl2-backend.int.pidlitacka.cz. Aktuální profil je ${selectedEnvironment?.name || state.currentEnvironmentId || "neznámý"}, skutečný cíl ${hostname || effectiveTarget}.`);
+    }
+
+    const result = {
+      level: "ok",
+      appMessage: "Prostředí INT bylo ověřeno.",
+      messages: [`Všechny následující změny míří na ${hostname}.`]
+    };
+
+    state.lastStepResult = result;
+    state.stepResults[runningStepIndex] = result;
+    addLog("ok", `${step.title} -> kontrola prostředí`, {
+      request: { action: step.customAction, baseUrl: rawBaseUrl },
+      response: { environmentId: selectedEnvironment.id, hostname, effectiveTarget },
+      expected: step.expected || null,
+      mode: state.dirty ? "exploratory" : "scenario",
+      notes: result.messages
+    });
+    showResult("ok", result.appMessage, {
+      environment: selectedEnvironment.name,
+      environmentId: selectedEnvironment.id,
+      target: effectiveTarget
+    }, step);
+    renderContext();
+    updateNextStepControl();
+    return;
+  }
+
+  if (step.customAction === "requireSavedCardSuffix") {
+    const maskedPan = resolveTemplate(step.savedCardCheck?.maskedPan || "", { fieldValues: state.values }).trim();
+    const suffix = String(step.savedCardCheck?.suffix || "").replace(/\D/g, "");
+    const contextKey = String(step.savedCardCheck?.contextKey || "savedCardSuffixVerified").trim();
+    const digits = maskedPan.replace(/\D/g, "");
+
+    if (!suffix || !digits.endsWith(suffix)) {
+      throw new Error(`Vybraná karta ${maskedPan || "bez maskovaného čísla"} nekončí požadovanými číslicemi ${suffix || "(neuvedeno)"}. Vraťte se a vyberte správnou testovací kartu.`);
+    }
+
+    state.context[contextKey] = maskedPan;
+    const result = {
+      level: "ok",
+      appMessage: `Vybraná karta končí ${suffix}.`,
+      messages: ["Testovací platební metoda odpovídá připravenému účtu."]
+    };
+
+    state.lastStepResult = result;
+    state.stepResults[runningStepIndex] = result;
+    addLog("ok", `${step.title} -> kontrola karty`, {
+      request: { action: step.customAction, suffix },
+      response: { maskedPan },
+      expected: step.expected || null,
+      mode: state.dirty ? "exploratory" : "scenario",
+      notes: result.messages
+    });
+    showResult("ok", result.appMessage, { maskedPan, suffix }, step);
+    renderContext();
+    updateNextStepControl();
+    return;
+  }
+
+  if (step.customAction === "showPaymentGatewayLink") {
+    const paymentUrl = resolveTemplate(step.paymentGateway?.url || "", { fieldValues: state.values }).trim();
+    const paymentId = resolveTemplate(step.paymentGateway?.paymentId || "", { fieldValues: state.values }).trim();
+
+    if (!/^https?:\/\/[^\s]+$/i.test(paymentUrl)) {
+      throw new Error("Odkaz na platební bránu v kontextu chybí nebo není platná HTTP(S) URL.");
+    }
+
+    const body = {
+      paymentId,
+      paymentUrl,
+      status: "IN_PROGRESS",
+      method: "card"
+    };
+    const result = {
+      level: "ok",
+      appMessage: "Platební brána je připravena k otevření.",
+      messages: ["Klikněte na Otevřít platební bránu a dokončete testovací platbu."]
+    };
+
+    state.lastStepResult = result;
+    state.stepResults[runningStepIndex] = result;
+    addLog("ok", `${step.title} -> odkaz na platební bránu`, {
+      request: { action: step.customAction },
+      response: body,
+      expected: step.expected || null,
+      mode: state.dirty ? "exploratory" : "scenario",
+      notes: result.messages
+    });
+    showResult("ok", result.appMessage, body, step);
+    renderContext();
+    updateNextStepControl();
+    return;
+  }
+
   if (step.customAction === "requireTemplateValue") {
     const templates = step.requireValue?.templates || [step.requireValue?.template || ""];
     const value = templates
@@ -7336,7 +7456,263 @@ async function runCustomStep(step, runningStepIndex) {
     return;
   }
 
+  if (step.customAction === "activateTicketDataset") {
+    const startedAt = performance.now();
+    const overview = await activateTicketDataset(step);
+    const durationMs = Math.round(performance.now() - startedAt);
+    const result = {
+      level: "ok",
+      appMessage: `Aktivováno a ověřeno ${overview.activatedCount} jízdenek.`,
+      messages: [
+        `Objednávky: ${overview.bookingIds.join(", ")}.`,
+        `Nově aktivováno: ${overview.newlyActivatedCount}; již aktivních při opakování kroku: ${overview.alreadyActivatedCount}.`,
+        `Časová platnost skončí nejpozději ${overview.latestValidUntil || "podle odpovědi Ticket Service"}.`,
+        "Stav EXPIRED se v úložišti projeví až po tarifní půlnoci a proběhnutí expiračního workeru."
+      ]
+    };
+
+    state.lastStepResult = result;
+    state.stepResults[runningStepIndex] = result;
+    addLog("ok", `${step.title} -> hromadná aktivace`, {
+      request: {
+        action: step.customAction,
+        bookingIds: overview.bookingIds,
+        deviceId: overview.deviceId,
+        expectedCount: overview.expectedCount
+      },
+      response: {
+        durationMs,
+        body: overview
+      },
+      expected: step.expected || null,
+      mode: state.dirty ? "exploratory" : "scenario",
+      notes: result.messages
+    });
+    showResult("ok", result.appMessage, overview, step);
+    renderContext();
+    updateNextStepControl();
+    return;
+  }
+
   throw new Error(`Neznámá vlastní akce kroku: ${step.customAction}`);
+}
+
+async function activateTicketDataset(step) {
+  const config = step.ticketDataset || {};
+  const bookingIds = [...new Set((config.bookingIds || [])
+    .map(value => resolveTemplate(value, { fieldValues: state.values }).trim())
+    .filter(Boolean))];
+  const deviceId = resolveTemplate(config.deviceId || "", { fieldValues: state.values }).trim();
+  const expectedEmail = String(config.expectedEmail || "").trim().toLowerCase();
+  const expectedCount = Number(config.expectedCount || 0);
+  const concurrency = Math.max(1, Math.min(8, Number(config.concurrency || 4)));
+  const issuanceTimeoutMs = Math.max(30, Number(config.issuanceTimeoutSeconds || 180)) * 1000;
+  const contextPrefix = String(config.contextPrefix || "ticketDataset").trim() || "ticketDataset";
+  const loggedInEmail = String(state.authSession?.email || "").trim().toLowerCase();
+
+  if (bookingIds.length === 0 || bookingIds.some(id => !isUuidValue(id))) {
+    throw new Error("Pro hromadnou aktivaci chybí platná ID objednávek.");
+  }
+
+  if (!deviceId || !isUuidValue(deviceId)) {
+    throw new Error("Pro hromadnou aktivaci chybí platné ID registrovaného zařízení.");
+  }
+
+  if (!Number.isInteger(expectedCount) || expectedCount < 1) {
+    throw new Error("Očekávaný počet jízdenek pro hromadnou aktivaci musí být kladné celé číslo.");
+  }
+
+  if (expectedEmail && loggedInEmail !== expectedEmail) {
+    throw new Error(`Hromadná aktivace očekává účet ${expectedEmail}, ale přihlášen je ${loggedInEmail || "neznámý účet"}.`);
+  }
+
+  showTicketDatasetProgress(step, "Čekám na vydání zaplacených jízdenek", 0, expectedCount);
+  const issuanceStartedAt = Date.now();
+  let bookingResponses = [];
+  let fulfillments = [];
+
+  while (Date.now() - issuanceStartedAt <= issuanceTimeoutMs) {
+    bookingResponses = await Promise.all(bookingIds.map(bookingId =>
+      callPidLitackaJson(`/v1/client/tickets/purchase/payment/bookings/${encodeURIComponent(bookingId)}`)));
+    fulfillments = bookingResponses.flatMap(response => Array.isArray(response.body?.fulfillments)
+      ? response.body.fulfillments
+      : []);
+
+    const uniqueCount = new Set(fulfillments.map(item => String(item?.fulfillmentId || ""))).size;
+    showTicketDatasetProgress(step, "Čekám na vydání zaplacených jízdenek", uniqueCount, expectedCount);
+
+    if (uniqueCount >= expectedCount) {
+      break;
+    }
+
+    await waitForMilliseconds(2000);
+  }
+
+  const byId = new Map();
+  for (const fulfillment of fulfillments) {
+    const fulfillmentId = String(fulfillment?.fulfillmentId || "").trim();
+    if (fulfillmentId) {
+      byId.set(fulfillmentId, fulfillment);
+    }
+  }
+
+  if (byId.size !== expectedCount) {
+    throw new Error(`Z objednávek bylo vydáno ${byId.size} unikátních jízdenek, očekáváno přesně ${expectedCount}. Aktivace nebyla spuštěna.`);
+  }
+
+  const entries = [...byId.values()];
+  const successful = [];
+  const failures = [];
+  let completedCount = 0;
+  let nextIndex = 0;
+
+  const activateOne = async fulfillment => {
+    const fulfillmentId = String(fulfillment.fulfillmentId);
+    const currentStatus = String(fulfillment.status || "").toUpperCase();
+
+    if (["FULFILLED", "IN_PROTECTION_DELAY", "EXPIRED"].includes(currentStatus)) {
+      return {
+        fulfillmentId,
+        status: currentStatus,
+        validSince: fulfillment.validSince || null,
+        validUntil: fulfillment.validUntil || null,
+        alreadyActivated: true
+      };
+    }
+
+    if (currentStatus !== "AVAILABLE") {
+      throw new Error(`Jízdenka ${fulfillmentId} je ve stavu ${currentStatus || "UNKNOWN"}, který nelze aktivovat.`);
+    }
+
+    const idempotencyKey = crypto.randomUUID();
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= 4; attempt += 1) {
+      try {
+        const response = await callPidLitackaApi(`/v1/client/tickets/${encodeURIComponent(fulfillmentId)}`, {
+          method: "PATCH",
+          headers: { "Idempotency-Key": idempotencyKey },
+          body: { zones: null, validSince: null, deviceId }
+        });
+        const activated = response.body || {};
+        const returnedId = String(activated.fulfillmentId || "");
+        const returnedStatus = String(activated.status || "").toUpperCase();
+
+        if (returnedId !== fulfillmentId || !["FULFILLED", "IN_PROTECTION_DELAY"].includes(returnedStatus)) {
+          throw new Error(`Aktivace ${fulfillmentId} vrátila neočekávaný stav ${returnedStatus || "UNKNOWN"}.`);
+        }
+
+        return {
+          fulfillmentId,
+          status: returnedStatus,
+          validSince: activated.validSince || null,
+          validUntil: activated.validUntil || null,
+          alreadyActivated: false
+        };
+      } catch (error) {
+        lastError = error;
+        const status = Number(error?.response?.status || 0);
+        if (![429, 502, 504].includes(status) || attempt === 4) {
+          throw error;
+        }
+
+        const retryAfterSeconds = Number(error?.response?.retryAfter || 0);
+        await waitForMilliseconds(retryAfterSeconds > 0 ? retryAfterSeconds * 1000 : 750 * attempt);
+      }
+    }
+
+    throw lastError || new Error(`Aktivaci jízdenky ${fulfillmentId} se nepodařilo dokončit.`);
+  };
+
+  const worker = async () => {
+    while (true) {
+      const index = nextIndex;
+      nextIndex += 1;
+
+      if (index >= entries.length) {
+        return;
+      }
+
+      const fulfillment = entries[index];
+      try {
+        successful.push(await activateOne(fulfillment));
+      } catch (error) {
+        failures.push({
+          fulfillmentId: String(fulfillment.fulfillmentId || ""),
+          status: Number(error?.response?.status || 0) || null,
+          message: error?.message || String(error)
+        });
+      } finally {
+        completedCount += 1;
+        if (completedCount % 5 === 0 || completedCount === expectedCount) {
+          showTicketDatasetProgress(step, "Aktivuji jízdenky", completedCount, expectedCount, failures.length);
+        }
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, entries.length) }, () => worker()));
+
+  if (failures.length > 0 || successful.length !== expectedCount) {
+    const error = new Error(`Aktivace skončila částečně: ${successful.length}/${expectedCount} úspěšně, ${failures.length} chyb. Krok lze bezpečně zopakovat; již aktivní jízdenky přeskočí.`);
+    error.request = {
+      action: step.customAction,
+      bookingIds,
+      deviceId,
+      expectedCount
+    };
+    error.response = {
+      status: null,
+      body: { successfulCount: successful.length, failures: failures.slice(0, 25) }
+    };
+    throw error;
+  }
+
+  const validUntilValues = successful
+    .map(item => item.validUntil)
+    .filter(Boolean)
+    .sort();
+  const fulfillmentIds = successful.map(item => item.fulfillmentId);
+  const alreadyActivatedCount = successful.filter(item => item.alreadyActivated).length;
+
+  state.context[`${contextPrefix}ActivatedCount`] = successful.length;
+  state.context[`${contextPrefix}FulfillmentIds`] = fulfillmentIds;
+  state.context[`${contextPrefix}EarliestValidUntil`] = validUntilValues[0] || "";
+  state.context[`${contextPrefix}LatestValidUntil`] = validUntilValues.at(-1) || "";
+
+  return {
+    bookingIds,
+    deviceId,
+    expectedCount,
+    activatedCount: successful.length,
+    newlyActivatedCount: successful.length - alreadyActivatedCount,
+    alreadyActivatedCount,
+    earliestValidUntil: validUntilValues[0] || null,
+    latestValidUntil: validUntilValues.at(-1) || null,
+    statusCounts: successful.reduce((counts, item) => {
+      counts[item.status] = (counts[item.status] || 0) + 1;
+      return counts;
+    }, {}),
+    fulfillmentIds
+  };
+}
+
+function showTicketDatasetProgress(step, stage, completed, total, failureCount = 0) {
+  const suffix = failureCount > 0 ? `; chyb: ${failureCount}` : "";
+  showResult("warn", `${stage}: ${completed}/${total}${suffix}.`, {
+    stage,
+    completed,
+    total,
+    failureCount
+  }, step);
+}
+
+function waitForMilliseconds(milliseconds) {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+function isUuidValue(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
 }
 
 async function loadMosSessionFromRedisStep(step) {
@@ -7956,10 +8332,18 @@ function mergeCouponsById(existing, incoming) {
 }
 
 async function callPidLitackaJson(path) {
+  return callPidLitackaApi(path);
+}
+
+async function callPidLitackaApi(path, options = {}) {
   const baseUrl = elements.baseUrl.value.replace(/\/$/, "");
   const url = `${baseUrl}${path}`;
-  const headers = {};
-  const visibleHeaders = {};
+  const method = String(options.method || "GET").toUpperCase();
+  const headers = { ...(options.headers || {}) };
+  const visibleHeaders = { ...(options.headers || {}) };
+  const requestBody = options.body === undefined || options.body === null
+    ? null
+    : JSON.stringify(options.body);
 
   if (state.authSession?.accessToken) {
     headers.Authorization = `Bearer ${state.authSession.accessToken}`;
@@ -7972,17 +8356,23 @@ async function callPidLitackaJson(path) {
     visibleHeaders["X-Device-Id"] = currentDeviceId;
   }
 
+  if (requestBody !== null && !Object.keys(headers).some(name => name.toLowerCase() === "content-type")) {
+    headers["Content-Type"] = "application/json";
+    visibleHeaders["Content-Type"] = "application/json";
+  }
+
   const request = {
-    method: "GET",
+    method,
     url,
     resolvedUrl: resolveDisplayedRequestUrl(url),
     headers: visibleHeaders,
-    body: null
+    body: options.body ?? null
   };
   const startedAt = performance.now();
   const response = await fetch(url, {
-    method: "GET",
-    headers
+    method,
+    headers,
+    body: requestBody
   });
   const durationMs = Math.round(performance.now() - startedAt);
   const contentType = response.headers.get("content-type") || "";
@@ -7995,7 +8385,8 @@ async function callPidLitackaJson(path) {
       status: response.status,
       durationMs,
       contentType,
-      body
+      body,
+      retryAfter: response.headers.get("retry-after") || ""
     };
     throw error;
   }
@@ -8005,7 +8396,8 @@ async function callPidLitackaJson(path) {
     durationMs,
     contentType,
     request,
-    body
+    body,
+    retryAfter: response.headers.get("retry-after") || ""
   };
 }
 
@@ -8866,6 +9258,12 @@ function workflowFieldNeedsInput(field) {
 }
 
 function getWorkflowStopAfterStep(item, step) {
+  if (step.workflowStopAfter) {
+    return normalizeWorkflowStop(
+      step.workflowStopAfter,
+      `Čeká se na navazující ruční akci po kroku: ${step.title}`);
+  }
+
   const stopAfter = (item.stopAfter || []).find(stop => stop.stepId === step.id);
 
   if (stopAfter) {
@@ -15577,6 +15975,7 @@ function resolveTemplate(template, { fieldValues, requestContext = null }) {
     .replaceAll("{{uuid}}", crypto.randomUUID())
     .replaceAll("{{hex64}}", randomHex(32))
     .replaceAll("{{now}}", new Date().toISOString())
+    .replaceAll("{{nowPlus2Minutes}}", new Date(Date.now() + 2 * 60 * 1000).toISOString())
     .replaceAll("{{today}}", new Date().toISOString().slice(0, 10))
     .replaceAll("{{todayPlus365}}", new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
     .replace(/\{\{stpTimestamp\}\}/g, () => String(requestContext?.timestamp ?? Math.floor(Date.now() / 1000)))
@@ -16295,6 +16694,8 @@ function getWorkflowCategoryLabel(category) {
       return "Nákup kupónu";
     case "payment-diagnostics":
       return "Diagnostika plateb";
+    case "ticket-payment":
+      return "Platby jízdenek";
     default:
       return "Ostatní";
   }

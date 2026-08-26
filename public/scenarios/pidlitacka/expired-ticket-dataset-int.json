@@ -1,0 +1,584 @@
+{
+  "version": 1,
+  "projectId": "pidlitacka",
+  "scenarios": [
+    {
+      "id": "pidlitacka-int-create-200-expired-ticket-dataset",
+      "title": "INT: připravit 200 expirovaných jízdenek",
+      "description": "Nakoupí dvě dávky po 100 půlhodinových jízdenkách, obě zaplatí kartou přes testovací platební bránu a aktivuje přesně fulfillmenty z obou objednávek.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "prewarmReturnUrl": true,
+      "tags": ["tickets", "data-preparation", "int-only", "payment", "activation", "destructive"],
+      "app": {
+        "section": "tickets",
+        "title": "200 expirovaných jízdenek",
+        "subtitle": "Datová příprava pouze pro INT"
+      },
+      "instructions": [
+        "POZOR: Scénář skutečně vytvoří a zaplatí 200 testovacích jízdenek. Spouštějte jej pouze jednou a pouze na INT.",
+        "Použije připravený účet wijessibrouma-5506@yopmail.com. Obě dávky zaplaťte kartou 4000007000010006, platnost 11/30, CVC 111.",
+        "Po každé platbě se workflow vrátí do Klikátka a ověří autoritativní stav příslušné objednávky.",
+        "Produkt 1018 je 30minutová zvýhodněná jízdenka pro zóny P, 0 a B. Na tomto účtu byl na INT již ověřen.",
+        "Backend dovoluje nejvýše 100 jízdenek v jedné objednávce, proto scénář vytváří dvě samostatné objednávky po 100 kusech.",
+        "Po obou platbách aktivuje jen fulfillmenty patřící k právě vytvořeným objednávkám; starších jízdenek účtu se nedotkne.",
+        "Časová platnost každé jízdenky skončí přibližně 30 minut po její aktivaci. Stav EXPIRED se v úložišti Ticket Service projeví až po tarifní půlnoci a proběhnutí expiračního workeru."
+      ],
+      "steps": [
+        {
+          "id": "expired-dataset-login",
+          "title": "Přihlásit bezpečný testovací účet",
+          "customAction": "loginPidLitackaProfile",
+          "profileLogin": {
+            "email": "wijessibrouma-5506@yopmail.com",
+            "roleLabel": "vlastník testovací sady",
+            "identityContextKey": "expiredDatasetIdentityId",
+            "successDetail": "Účet pro hromadnou přípravu jízdenek je přihlášen."
+          }
+        },
+        {
+          "id": "expired-dataset-require-int",
+          "title": "Ověřit, že je vybrané prostředí INT",
+          "customAction": "requirePidLitackaIntEnvironment"
+        },
+        {
+          "id": "expired-dataset-register-device",
+          "title": "Zaregistrovat zařízení pro aktivaci",
+          "fields": [
+            { "name": "deviceIdentifier", "label": "Identifikátor instalace", "value": "{{auth.deviceId}}" },
+            { "name": "deviceModel", "label": "Model zařízení", "value": "{{auth.model}}" },
+            { "name": "platform", "label": "Platforma", "value": "{{auth.platform}}" },
+            { "name": "deviceKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "headers": {
+              "Idempotency-Key": "{{form.deviceKey}}"
+            },
+            "body": {
+              "deviceIdentifier": "{{form.deviceIdentifier}}",
+              "deviceModel": "{{form.deviceModel}}",
+              "platform": "{{form.platform}}"
+            }
+          },
+          "extract": {
+            "expiredDatasetDeviceId": "$.deviceId"
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.deviceId", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "expired-dataset-offer-1",
+          "title": "1/2 – nacenit prvních 100 jízdenek",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/offers",
+            "body": {
+              "productId": 1018,
+              "amount": 100,
+              "validSince": "{{nowPlus2Minutes}}",
+              "zones": ["P", "0", "B"]
+            }
+          },
+          "extract": {
+            "expiredDatasetOfferId1": "$.offers[0].offerId",
+            "expiredDatasetValidSince1": "$.offers[0].admission.validFrom"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.offers", "lengthAtLeast": 1 },
+              { "path": "$.offers[0].offerId", "notEmpty": true },
+              { "path": "$.offers[0].admission.duration", "equals": 30 }
+            ]
+          }
+        },
+        {
+          "id": "expired-dataset-booking-1",
+          "title": "1/2 – vytvořit objednávku 100 kusů",
+          "requiresContext": ["expiredDatasetOfferId1", "expiredDatasetDeviceId"],
+          "fields": [
+            { "name": "bookingKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/bookings",
+            "headers": {
+              "Idempotency-Key": "{{form.bookingKey}}"
+            },
+            "body": {
+              "offerIds": ["{{context.expiredDatasetOfferId1}}"],
+              "amount": 100,
+              "activateAfterPayment": false,
+              "sendConfirmationEmail": false,
+              "deviceId": "{{context.expiredDatasetDeviceId}}"
+            }
+          },
+          "extract": {
+            "expiredDatasetBookingId1": "$.bookingId"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.bookingId", "notEmpty": true },
+              { "path": "$.bookedOffers[0].amount", "equals": 100 }
+            ]
+          }
+        },
+        {
+          "id": "expired-dataset-payment-1",
+          "title": "1/2 – otevřít platbu kartou",
+          "description": "Zahájí standardní platbu první objednávky. Ve výsledku klikněte na Otevřít platební bránu a použijte testovací kartu 4000007000010006, 11/30, 111.",
+          "requiresContext": ["expiredDatasetBookingId1"],
+          "fields": [
+            {
+              "name": "returnUrl",
+              "label": "Návratová URL",
+              "type": "url",
+              "value": "pid-litacka-payment://ticket",
+              "help": "INT povoluje pro platby jízdenek aplikační návratový cíl pid-litacka-payment://ticket; backend zpracuje platbu a kartu uloží ještě před tímto přesměrováním."
+            },
+            { "name": "paymentKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "headers": {
+              "Idempotency-Key": "{{form.paymentKey}}"
+            },
+            "body": {
+              "bookingId": "{{context.expiredDatasetBookingId1}}",
+              "returnUrlFromPaymentGateway": "{{form.returnUrl}}",
+              "language": "cs",
+              "saveCard": false
+            }
+          },
+          "extract": {
+            "expiredDatasetPaymentId1": "$.paymentId",
+            "expiredDatasetPaymentUrl1": "$.paymentUrl"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.paymentId", "notEmpty": true },
+              { "path": "$.paymentUrl", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "expired-dataset-open-payment-1",
+          "title": "1/2 – otevřít platební bránu",
+          "description": "Zobrazí odkaz vrácený při založení platby a zastaví workflow, dokud nebude platba kartou dokončena.",
+          "requiresContext": ["expiredDatasetPaymentId1", "expiredDatasetPaymentUrl1"],
+          "customAction": "showPaymentGatewayLink",
+          "paymentGateway": {
+            "paymentId": "{{context.expiredDatasetPaymentId1}}",
+            "url": "{{context.expiredDatasetPaymentUrl1}}"
+          },
+          "workflowStopAfter": {
+            "message": "Dokončete úspěšnou platbu první dávky na platební bráně.",
+            "preserveResult": true,
+            "instructions": [
+              "Klikněte na Otevřít platební bránu.",
+              "Zadejte kartu 4000007000010006, platnost 11/30 a CVC 111.",
+              "Dokončete platbu a vraťte se do Klikátka.",
+              "Potom klikněte na Pokračovat ve workflow."
+            ]
+          }
+        },
+        {
+          "id": "expired-dataset-payment-1-check",
+          "title": "1/2 – po návratu ověřit zaplacení první objednávky",
+          "description": "Tento krok spusťte až po úspěšném dokončení platební brány. Pokud je platba ještě pending, chvíli počkejte a krok zopakujte.",
+          "requiresContext": ["expiredDatasetBookingId1", "expiredDatasetPaymentId1"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.expiredDatasetBookingId1}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.paymentState", "equals": "PAID" }
+            ]
+          }
+        },
+        {
+          "id": "expired-dataset-offer-2",
+          "title": "2/2 – nacenit druhých 100 jízdenek",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/offers",
+            "body": {
+              "productId": 1018,
+              "amount": 100,
+              "validSince": "{{nowPlus2Minutes}}",
+              "zones": ["P", "0", "B"]
+            }
+          },
+          "extract": {
+            "expiredDatasetOfferId2": "$.offers[0].offerId",
+            "expiredDatasetValidSince2": "$.offers[0].admission.validFrom"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.offers", "lengthAtLeast": 1 },
+              { "path": "$.offers[0].offerId", "notEmpty": true },
+              { "path": "$.offers[0].admission.duration", "equals": 30 }
+            ]
+          }
+        },
+        {
+          "id": "expired-dataset-booking-2",
+          "title": "2/2 – vytvořit objednávku 100 kusů",
+          "requiresContext": ["expiredDatasetOfferId2", "expiredDatasetDeviceId"],
+          "fields": [
+            { "name": "bookingKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/bookings",
+            "headers": {
+              "Idempotency-Key": "{{form.bookingKey}}"
+            },
+            "body": {
+              "offerIds": ["{{context.expiredDatasetOfferId2}}"],
+              "amount": 100,
+              "activateAfterPayment": false,
+              "sendConfirmationEmail": false,
+              "deviceId": "{{context.expiredDatasetDeviceId}}"
+            }
+          },
+          "extract": {
+            "expiredDatasetBookingId2": "$.bookingId"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.bookingId", "notEmpty": true },
+              { "path": "$.bookedOffers[0].amount", "equals": 100 }
+            ]
+          }
+        },
+        {
+          "id": "expired-dataset-payment-2",
+          "title": "2/2 – otevřít platbu kartou",
+          "requiresContext": ["expiredDatasetBookingId2"],
+          "fields": [
+            {
+              "name": "returnUrl",
+              "label": "Návratová URL",
+              "type": "url",
+              "value": "pid-litacka-payment://ticket",
+              "help": "Návratový cíl povolený pro platby jízdenek na INT."
+            },
+            { "name": "paymentKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "headers": {
+              "Idempotency-Key": "{{form.paymentKey}}"
+            },
+            "body": {
+              "bookingId": "{{context.expiredDatasetBookingId2}}",
+              "returnUrlFromPaymentGateway": "{{form.returnUrl}}",
+              "language": "cs",
+              "saveCard": false
+            }
+          },
+          "extract": {
+            "expiredDatasetPaymentId2": "$.paymentId",
+            "expiredDatasetPaymentUrl2": "$.paymentUrl"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.paymentId", "notEmpty": true },
+              { "path": "$.paymentUrl", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "expired-dataset-open-payment-2",
+          "title": "2/2 – otevřít platební bránu",
+          "description": "Zobrazí odkaz vrácený při založení druhé platby a zastaví workflow do jejího dokončení.",
+          "requiresContext": ["expiredDatasetPaymentId2", "expiredDatasetPaymentUrl2"],
+          "customAction": "showPaymentGatewayLink",
+          "paymentGateway": {
+            "paymentId": "{{context.expiredDatasetPaymentId2}}",
+            "url": "{{context.expiredDatasetPaymentUrl2}}"
+          },
+          "workflowStopAfter": {
+            "message": "Dokončete úspěšnou platbu druhé dávky na platební bráně.",
+            "preserveResult": true,
+            "instructions": [
+              "Klikněte na Otevřít platební bránu.",
+              "Zadejte kartu 4000007000010006, platnost 11/30 a CVC 111.",
+              "Dokončete platbu a vraťte se do Klikátka.",
+              "Potom klikněte na Pokračovat ve workflow."
+            ]
+          }
+        },
+        {
+          "id": "expired-dataset-payment-2-check",
+          "title": "2/2 – po návratu ověřit zaplacení druhé objednávky",
+          "description": "Ověří autoritativní stav druhé objednávky před hromadnou aktivací.",
+          "requiresContext": ["expiredDatasetBookingId2", "expiredDatasetPaymentId2"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.expiredDatasetBookingId2}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.paymentState", "equals": "PAID" }
+            ]
+          }
+        },
+        {
+          "id": "expired-dataset-activate-all",
+          "title": "Aktivovat všech 200 nových jízdenek",
+          "description": "Počká na vydání fulfillmentů obou objednávek a aktivuje je s omezenou paralelizací a bezpečným opakováním přechodných chyb.",
+          "requiresContext": ["expiredDatasetBookingId1", "expiredDatasetBookingId2", "expiredDatasetDeviceId"],
+          "customAction": "activateTicketDataset",
+          "ticketDataset": {
+            "bookingIds": [
+              "{{context.expiredDatasetBookingId1}}",
+              "{{context.expiredDatasetBookingId2}}"
+            ],
+            "deviceId": "{{context.expiredDatasetDeviceId}}",
+            "expectedCount": 200,
+            "expectedEmail": "wijessibrouma-5506@yopmail.com",
+            "concurrency": 4,
+            "issuanceTimeoutSeconds": 180,
+            "contextPrefix": "expiredDataset"
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-int-create-active-120h-ticket",
+      "title": "INT: připravit jednu aktivní jízdenku na 120 hodin",
+      "description": "Na stejném bezpečném účtu koupí jednu pětidenní jízdenku P, 0, B, zaplatí ji testovací kartou a ihned ji aktivuje.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "prewarmReturnUrl": true,
+      "tags": ["tickets", "data-preparation", "int-only", "payment", "activation", "destructive"],
+      "app": {
+        "section": "tickets",
+        "title": "Aktivní jízdenka na 120 hodin",
+        "subtitle": "Datová příprava pouze pro INT"
+      },
+      "instructions": [
+        "POZOR: Scénář na INT skutečně koupí a aktivuje jednu testovací jízdenku za 450 CZK.",
+        "Použije účet wijessibrouma-5506@yopmail.com a kartu 4000007000010006, platnost 11/30, CVC 111.",
+        "Produkt 1052 je pětidenní občanská jízdenka pro zóny P, 0 a B s platností 7200 minut od aktivace.",
+        "Scénář aktivuje pouze fulfillment právě vytvořené objednávky a na ostatní jízdenky účtu nesahá."
+      ],
+      "steps": [
+        {
+          "id": "active-long-ticket-login",
+          "title": "Přihlásit bezpečný testovací účet",
+          "customAction": "loginPidLitackaProfile",
+          "profileLogin": {
+            "email": "wijessibrouma-5506@yopmail.com",
+            "roleLabel": "vlastník aktivní jízdenky",
+            "identityContextKey": "activeLongTicketIdentityId",
+            "successDetail": "Účet pro přípravu aktivní dlouhodobé jízdenky je přihlášen."
+          }
+        },
+        {
+          "id": "active-long-ticket-require-int",
+          "title": "Ověřit, že je vybrané prostředí INT",
+          "customAction": "requirePidLitackaIntEnvironment"
+        },
+        {
+          "id": "active-long-ticket-register-device",
+          "title": "Zaregistrovat zařízení pro aktivaci",
+          "fields": [
+            { "name": "deviceIdentifier", "label": "Identifikátor instalace", "value": "{{auth.deviceId}}" },
+            { "name": "deviceModel", "label": "Model zařízení", "value": "{{auth.model}}" },
+            { "name": "platform", "label": "Platforma", "value": "{{auth.platform}}" },
+            { "name": "deviceKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "headers": {
+              "Idempotency-Key": "{{form.deviceKey}}"
+            },
+            "body": {
+              "deviceIdentifier": "{{form.deviceIdentifier}}",
+              "deviceModel": "{{form.deviceModel}}",
+              "platform": "{{form.platform}}"
+            }
+          },
+          "extract": {
+            "activeLongTicketDeviceId": "$.deviceId"
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.deviceId", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "active-long-ticket-offer",
+          "title": "Nacenit jednu pětidenní jízdenku",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/offers",
+            "body": {
+              "productId": 1052,
+              "amount": 1,
+              "validSince": "{{nowPlus2Minutes}}",
+              "zones": ["P", "0", "B"]
+            }
+          },
+          "extract": {
+            "activeLongTicketOfferId": "$.offers[0].offerId"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.offers", "lengthAtLeast": 1 },
+              { "path": "$.offers[0].productId", "equals": 1052 },
+              { "path": "$.offers[0].admission.duration", "equals": 7200 }
+            ]
+          }
+        },
+        {
+          "id": "active-long-ticket-booking",
+          "title": "Vytvořit objednávku jedné jízdenky",
+          "requiresContext": ["activeLongTicketOfferId", "activeLongTicketDeviceId"],
+          "fields": [
+            { "name": "bookingKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/bookings",
+            "headers": {
+              "Idempotency-Key": "{{form.bookingKey}}"
+            },
+            "body": {
+              "offerIds": ["{{context.activeLongTicketOfferId}}"],
+              "amount": 1,
+              "activateAfterPayment": false,
+              "sendConfirmationEmail": false,
+              "deviceId": "{{context.activeLongTicketDeviceId}}"
+            }
+          },
+          "extract": {
+            "activeLongTicketBookingId": "$.bookingId"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.bookingId", "notEmpty": true },
+              { "path": "$.bookedOffers[0].amount", "equals": 1 }
+            ]
+          }
+        },
+        {
+          "id": "active-long-ticket-payment",
+          "title": "Otevřít platbu kartou",
+          "requiresContext": ["activeLongTicketBookingId"],
+          "fields": [
+            {
+              "name": "returnUrl",
+              "label": "Návratová URL",
+              "type": "url",
+              "value": "pid-litacka-payment://ticket",
+              "help": "Návratový cíl povolený pro platby jízdenek na INT."
+            },
+            { "name": "paymentKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "headers": {
+              "Idempotency-Key": "{{form.paymentKey}}"
+            },
+            "body": {
+              "bookingId": "{{context.activeLongTicketBookingId}}",
+              "returnUrlFromPaymentGateway": "{{form.returnUrl}}",
+              "language": "cs",
+              "saveCard": false
+            }
+          },
+          "extract": {
+            "activeLongTicketPaymentId": "$.paymentId",
+            "activeLongTicketPaymentUrl": "$.paymentUrl"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.paymentId", "notEmpty": true },
+              { "path": "$.paymentUrl", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "active-long-ticket-open-payment",
+          "title": "Otevřít platební bránu",
+          "requiresContext": ["activeLongTicketPaymentId", "activeLongTicketPaymentUrl"],
+          "customAction": "showPaymentGatewayLink",
+          "paymentGateway": {
+            "paymentId": "{{context.activeLongTicketPaymentId}}",
+            "url": "{{context.activeLongTicketPaymentUrl}}"
+          },
+          "workflowStopAfter": {
+            "message": "Dokončete platbu pětidenní jízdenky.",
+            "preserveResult": true,
+            "instructions": [
+              "Klikněte na Otevřít platební bránu.",
+              "Zadejte kartu 4000007000010006, platnost 11/30 a CVC 111.",
+              "Dokončete platbu, vraťte se do Klikátka a klikněte na Pokračovat ve workflow."
+            ]
+          }
+        },
+        {
+          "id": "active-long-ticket-payment-check",
+          "title": "Ověřit zaplacení objednávky",
+          "requiresContext": ["activeLongTicketBookingId", "activeLongTicketPaymentId"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.activeLongTicketBookingId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.paymentState", "equals": "PAID" },
+              { "path": "$.fulfillments", "lengthAtLeast": 1 }
+            ]
+          }
+        },
+        {
+          "id": "active-long-ticket-activate",
+          "title": "Aktivovat a ověřit pětidenní jízdenku",
+          "description": "Aktivuje pouze fulfillment nové objednávky a uloží jeho ID i konec platnosti do kontextu.",
+          "requiresContext": ["activeLongTicketBookingId", "activeLongTicketDeviceId"],
+          "customAction": "activateTicketDataset",
+          "ticketDataset": {
+            "bookingIds": ["{{context.activeLongTicketBookingId}}"],
+            "deviceId": "{{context.activeLongTicketDeviceId}}",
+            "expectedCount": 1,
+            "expectedEmail": "wijessibrouma-5506@yopmail.com",
+            "concurrency": 1,
+            "issuanceTimeoutSeconds": 180,
+            "contextPrefix": "activeLongTicket"
+          }
+        }
+      ]
+    }
+  ]
+}

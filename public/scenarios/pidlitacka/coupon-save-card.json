@@ -1,12 +1,12 @@
 {
   "version": 1,
-  "name": "PidLitacka - uložení karty při nákupu kupónu",
-  "description": "Cílený regresní scénář pro ověření, že se karta po úspěšném nákupu kupónu uloží k účtu a je dostupná v nové aplikaci.",
+  "name": "PidLitacka - uložení a použití karty při nákupu kupónu",
+  "description": "Cílené regresní a diagnostické scénáře pro uložení karty, následnou tokenovou platbu kupónu a bezpečný lokální cleanup.",
   "scenarios": [
     {
       "id": "client-coupon-purchase-save-card",
-      "title": "Kupóny - uložit kartu při nákupu",
-      "description": "Na účtu bez uložených karet koupí placený kupón s příznakem saveCard=true a po dokončení platby ověří novou aktivní kartu v seznamu účtu.",
+      "title": "Kupóny - uložit a znovu použít kartu",
+      "description": "Na účtu bez uložených karet koupí placený kupón se saveCard=true, novou kartu použije pro druhý kupón a nakonec ji lokálně odstraní.",
       "requiresAuth": true,
       "smoke": false,
       "manualInputRequired": true,
@@ -30,7 +30,10 @@
         "Při inicializaci platby posílá Klikátko paymentDetails.saveCard=true. Hodnotu neměňte; je hlavním předmětem testu.",
         "Na platební bráně dokončete úspěšnou testovací platbu a nechte prohlížeč vrátit se přes backendový gateway-return callback.",
         "Po návratu opakujte kontrolu stavu, dokud backend nevrátí paid. Teprve potom se ověřuje seznam uložených karet.",
-        "Úspěšný výsledek vyžaduje novou aktivní kartu v GET /v1/accounts/me/saved-cards. Právě tento endpoint poskytuje seznam karet nové aplikaci."
+        "Po uložení scénář stejnou kartu použije pro druhou skutečnou kupónovou objednávku. Podle odpovědí rozliší funkční token od odmítnutí při InitiateOrderPaymentWithTokenCustomerPresent.",
+        "Fingerprint a 3DS challenge se otevírají v samostatném panelu. Mezikroky process podle instrukcí opakujte, dokud se neobjeví další akce nebo terminální výsledek.",
+        "Na konci se právě vytvořená karta soft-deleteuje přes DELETE /v1/accounts/me/saved-cards/{id}. Token na GDPay se tím nerevokuje.",
+        "Pokud běh přerušíte před cleanupem, spusťte samostatný scénář Kupóny - odstranit testovací uloženou kartu."
       ],
       "steps": [
         {
@@ -402,11 +405,27 @@
         },
         {
           "id": "coupon-save-card-after",
-          "title": "Ověřit nově uloženou kartu",
-          "description": "Znovu načte karty účtu. Protože byl výchozí seznam prázdný, jediná vrácená aktivní karta musí pocházet z právě dokončené platby kupónu.",
+          "title": "Vybrat nově uloženou kartu",
+          "description": "Znovu načte karty účtu. Protože byl výchozí seznam prázdný, vybraná aktivní karta musí pocházet z právě dokončené platby kupónu.",
           "request": {
             "method": "GET",
             "path": "/v1/accounts/me/saved-cards"
+          },
+          "selection": {
+            "sourcePath": "$",
+            "filter": {
+              "status": "Active"
+            },
+            "buttonLabel": "Použít pro druhou platbu",
+            "selectedButtonLabel": "Testovací karta vybrána",
+            "emptyTitle": "Karta nebyla uložena",
+            "emptyText": "Po první platbě není dostupná žádná aktivní uložená karta.",
+            "store": {
+              "pidCouponSavedCardId": "$.id",
+              "pidCouponSavedCardMaskedPan": "$.maskedPan",
+              "pidCouponSavedCardExpirationMonth": "$.expirationMonth",
+              "pidCouponSavedCardExpirationYear": "$.expirationYear"
+            }
           },
           "expected": {
             "status": 200,
@@ -424,6 +443,571 @@
                 "message": "Seznam neobsahuje žádnou aktivní uloženou kartu."
               }
             ]
+          }
+        },
+        {
+          "id": "coupon-saved-card-create-second-order",
+          "title": "Vytvořit druhou objednávku kupónu",
+          "description": "Založí druhou placenou objednávku se stejnou nabídkou. Jejím účelem je ověřit právě vytvořený token uložené karty.",
+          "requiresContext": [
+            "pidCouponSavedCardId",
+            "pidCouponSaveCardIdentifierId",
+            "pidCouponSaveCardTariffId"
+          ],
+          "fields": [
+            {
+              "name": "identifierId",
+              "label": "Identifier ID",
+              "type": "number",
+              "value": "{{context.pidCouponSaveCardIdentifierId}}"
+            },
+            {
+              "name": "tariffId",
+              "label": "Tariff ID",
+              "type": "number",
+              "value": "{{context.pidCouponSaveCardTariffId}}"
+            },
+            {
+              "name": "startDate",
+              "label": "Začátek platnosti",
+              "type": "date",
+              "value": "{{context.pidCouponSaveCardStartDate}}"
+            },
+            {
+              "name": "zoneNames",
+              "label": "Zóny",
+              "type": "tag-list",
+              "value": "{{context.pidCouponSaveCardZoneNames}}"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/coupons/purchase/orders",
+            "body": {
+              "identifierId": "{{form.identifierId}}",
+              "tariffId": "{{form.tariffId}}",
+              "zoneNames": "{{form.zoneNames}}",
+              "startDate": "{{form.startDate}}"
+            }
+          },
+          "extract": {
+            "pidCouponSavedCardOrderId": "$.orderId"
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.orderId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.totalPrice",
+                "atLeast": 0.01,
+                "message": "Druhá objednávka musí být placená, jinak tokenovou platbu nelze ověřit."
+              }
+            ]
+          }
+        },
+        {
+          "id": "coupon-saved-card-second-receipt-details",
+          "title": "Doplnit údaje druhé objednávky",
+          "description": "Doplní fakturační údaje vyžadované před platbou druhého kupónu.",
+          "requiresContext": [
+            "pidCouponSavedCardOrderId"
+          ],
+          "fields": [
+            { "name": "name", "label": "Jméno", "value": "Jan Testovací", "workflowAutoStop": false },
+            { "name": "street", "label": "Ulice", "value": "Testovací", "workflowAutoStop": false },
+            { "name": "number", "label": "Číslo", "value": "1", "workflowAutoStop": false },
+            { "name": "city", "label": "Město", "value": "Praha", "workflowAutoStop": false },
+            { "name": "zip", "label": "PSČ", "value": "11000", "workflowAutoStop": false },
+            { "name": "country", "label": "Země", "value": "CZ", "workflowAutoStop": false }
+          ],
+          "request": {
+            "method": "PUT",
+            "path": "/v1/client/coupons/purchase/orders/{{context.pidCouponSavedCardOrderId}}/receipt-details",
+            "body": {
+              "name": "{{form.name}}",
+              "street": "{{form.street}}",
+              "number": "{{form.number}}",
+              "city": "{{form.city}}",
+              "zip": "{{form.zip}}",
+              "country": "{{form.country}}"
+            }
+          },
+          "expected": {
+            "status": 204
+          }
+        },
+        {
+          "id": "coupon-saved-card-process-init",
+          "title": "Zahájit druhou platbu uloženou kartou",
+          "description": "Poprvé zavolá tokenový process. Okamžité Canceled s chybovou zprávou reprodukuje zkoumané odmítnutí tokenu; InProgress pokračuje do 3DS kroků.",
+          "requiresContext": [
+            "pidCouponSavedCardOrderId",
+            "pidCouponSavedCardId"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/coupons/purchase/payment/card-token/{{context.pidCouponSavedCardOrderId}}/process",
+            "body": {
+              "paymentMethod": "SavedCard",
+              "returnUrlFromPaymentGateway": "http://localhost:5096/analysis/html/GwResponsePage.html?flow=coupon-saved-card",
+              "automaticPaymentResultProcessing": false,
+              "saveCard": false,
+              "isSdkUsed": false,
+              "paymentData": null,
+              "savedPaymentCardId": "{{context.pidCouponSavedCardId}}",
+              "additionalBrowserData": {
+                "acceptHeader": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "javaEnabled": false,
+                "language": "cs-CZ",
+                "colorDepth": 24,
+                "screenWidth": 390,
+                "screenHeight": 844,
+                "timezone": -120,
+                "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
+                "challengeWindowSize": "05",
+                "javascriptEnabled": true
+              },
+              "additionalSdkData": null
+            }
+          },
+          "extract": {
+            "pidCouponSavedCardCouponCreated": "$.couponSuccessfullyCreated",
+            "pidCouponSavedCardErrorMessage": "$.errorMessage",
+            "pidCouponSavedCardFingerprintUrl": "$.actions.fingerprintAction.browserFingerprintSubAction.url",
+            "pidCouponSavedCardAuthenticateUrl": "$.actions.authenticateAction.browserChallengeAuthSubAction.url"
+          },
+          "expected": {
+            "status": 200,
+            "warnings": [
+              {
+                "appMessage": "Tokenová platba byla odmítnuta už při zahájení.",
+                "message": "Scénář reprodukoval zkoumanou chybu uložené karty. Pokračujte k vyhodnocení a cleanupu.",
+                "when": [
+                  { "path": "$.errorMessage", "notEmpty": true }
+                ]
+              },
+              {
+                "appMessage": "Platební brána požaduje fingerprint pro 3DS.",
+                "message": "Pokračujte krokem Otevřít 3DS fingerprint.",
+                "when": [
+                  { "path": "$.actions.fingerprintAction.browserFingerprintSubAction.url", "notEmpty": true }
+                ]
+              },
+              {
+                "appMessage": "Platební brána požaduje 3DS ověření.",
+                "message": "Pokračujte krokem Otevřít 3DS ověření.",
+                "when": [
+                  { "path": "$.actions.authenticateAction.browserChallengeAuthSubAction.url", "notEmpty": true }
+                ]
+              }
+            ],
+            "assertions": [
+              {
+                "path": "$.order.orderId",
+                "equals": "{{context.pidCouponSavedCardOrderId}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "coupon-saved-card-open-fingerprint",
+          "title": "Otevřít 3DS fingerprint",
+          "description": "Otevře browser fingerprint URL, pokud ji platební brána vrátila.",
+          "requiresContext": [
+            "pidCouponSavedCardFingerprintUrl"
+          ],
+          "skipWhen": {
+            "contextMissing": "pidCouponSavedCardFingerprintUrl"
+          },
+          "customAction": "showPaymentGatewayLink",
+          "paymentGateway": {
+            "paymentId": "{{context.pidCouponSavedCardOrderId}}",
+            "url": "{{context.pidCouponSavedCardFingerprintUrl}}"
+          },
+          "workflowStopAfter": {
+            "message": "Nechte fingerprint URL dokončit přesměrování a vraťte se do Klikátka.",
+            "preserveResult": true,
+            "instructions": [
+              "Klikněte na Otevřít platební bránu.",
+              "Po dokončení nebo přesměrování se vraťte do Klikátka.",
+              "Pokračujte dalším process krokem."
+            ]
+          }
+        },
+        {
+          "id": "coupon-saved-card-process-after-fingerprint",
+          "title": "Pokračovat po fingerprintu",
+          "description": "Opakujte tento krok, dokud odpověď neobsahuje authenticateAction, CouponReady nebo chybu. Meziprodukt InProgress bez actions je očekávaný.",
+          "requiresContext": [
+            "pidCouponSavedCardOrderId",
+            "pidCouponSavedCardId"
+          ],
+          "skipWhen": [
+            {
+              "contextEquals": {
+                "key": "pidCouponSavedCardCouponCreated",
+                "value": true
+              }
+            },
+            {
+              "contextExists": "pidCouponSavedCardErrorMessage"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/coupons/purchase/payment/card-token/{{context.pidCouponSavedCardOrderId}}/process",
+            "body": {
+              "paymentMethod": "SavedCard",
+              "returnUrlFromPaymentGateway": "http://localhost:5096/analysis/html/GwResponsePage.html?flow=coupon-saved-card",
+              "automaticPaymentResultProcessing": false,
+              "saveCard": false,
+              "isSdkUsed": false,
+              "paymentData": null,
+              "savedPaymentCardId": "{{context.pidCouponSavedCardId}}",
+              "additionalBrowserData": {
+                "acceptHeader": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "javaEnabled": false,
+                "language": "cs-CZ",
+                "colorDepth": 24,
+                "screenWidth": 390,
+                "screenHeight": 844,
+                "timezone": -120,
+                "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
+                "challengeWindowSize": "05",
+                "javascriptEnabled": true
+              },
+              "additionalSdkData": null
+            }
+          },
+          "extract": {
+            "pidCouponSavedCardCouponCreated": "$.couponSuccessfullyCreated",
+            "pidCouponSavedCardErrorMessage": "$.errorMessage",
+            "pidCouponSavedCardAuthenticateUrl": "$.actions.authenticateAction.browserChallengeAuthSubAction.url"
+          },
+          "expected": {
+            "status": 200,
+            "warnings": [
+              {
+                "appMessage": "Platba je stále ve zpracování.",
+                "message": "Pokud odpověď ještě neobsahuje authenticateAction, chvíli počkejte a tento krok zopakujte.",
+                "when": [
+                  { "path": "$.order.status", "equals": "InProgress" }
+                ]
+              },
+              {
+                "appMessage": "Tokenová platba byla odmítnuta.",
+                "message": "Pokračujte k vyhodnocení a cleanupu testovací karty.",
+                "when": [
+                  { "path": "$.errorMessage", "notEmpty": true }
+                ]
+              }
+            ],
+            "assertions": [
+              {
+                "path": "$.order.orderId",
+                "equals": "{{context.pidCouponSavedCardOrderId}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "coupon-saved-card-open-authenticate",
+          "title": "Otevřít 3DS ověření",
+          "description": "Otevře challenge URL vrácenou tokenovou platbou a umožní dokončit ověření držitele karty.",
+          "requiresContext": [
+            "pidCouponSavedCardAuthenticateUrl"
+          ],
+          "skipWhen": {
+            "contextMissing": "pidCouponSavedCardAuthenticateUrl"
+          },
+          "customAction": "showPaymentGatewayLink",
+          "paymentGateway": {
+            "paymentId": "{{context.pidCouponSavedCardOrderId}}",
+            "url": "{{context.pidCouponSavedCardAuthenticateUrl}}"
+          },
+          "workflowStopAfter": {
+            "message": "Dokončete 3DS ověření uložené karty.",
+            "preserveResult": true,
+            "instructions": [
+              "Klikněte na Otevřít platební bránu.",
+              "Dokončete požadované testovací ověření.",
+              "Po návratu se vraťte do Klikátka a pokračujte finalizačním krokem."
+            ]
+          }
+        },
+        {
+          "id": "coupon-saved-card-process-final",
+          "title": "Finalizovat tokenovou platbu",
+          "description": "Opakovaně volá process po 3DS. InProgress blokuje pokračování; CouponReady, PreparingCoupon nebo řízené odmítnutí pustí scénář k autoritativní kontrole objednávky.",
+          "requiresContext": [
+            "pidCouponSavedCardOrderId",
+            "pidCouponSavedCardId"
+          ],
+          "skipWhen": [
+            {
+              "contextEquals": {
+                "key": "pidCouponSavedCardCouponCreated",
+                "value": true
+              }
+            },
+            {
+              "contextExists": "pidCouponSavedCardErrorMessage"
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/coupons/purchase/payment/card-token/{{context.pidCouponSavedCardOrderId}}/process",
+            "body": {
+              "paymentMethod": "SavedCard",
+              "returnUrlFromPaymentGateway": "http://localhost:5096/analysis/html/GwResponsePage.html?flow=coupon-saved-card",
+              "automaticPaymentResultProcessing": false,
+              "saveCard": false,
+              "isSdkUsed": false,
+              "paymentData": null,
+              "savedPaymentCardId": "{{context.pidCouponSavedCardId}}",
+              "additionalBrowserData": {
+                "acceptHeader": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "javaEnabled": false,
+                "language": "cs-CZ",
+                "colorDepth": 24,
+                "screenWidth": 390,
+                "screenHeight": 844,
+                "timezone": -120,
+                "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
+                "challengeWindowSize": "05",
+                "javascriptEnabled": true
+              },
+              "additionalSdkData": null
+            }
+          },
+          "extract": {
+            "pidCouponSavedCardCouponCreated": "$.couponSuccessfullyCreated",
+            "pidCouponSavedCardErrorMessage": "$.errorMessage"
+          },
+          "expected": {
+            "status": 200,
+            "warnings": [
+              {
+                "appMessage": "Platba ještě není dokončená.",
+                "message": "Počkejte přibližně 30 sekund a tento krok zopakujte.",
+                "blockAdvance": true,
+                "when": [
+                  { "path": "$.order.status", "equals": "InProgress" }
+                ]
+              },
+              {
+                "appMessage": "Platba proběhla a kupón se připravuje.",
+                "message": "Pokračujte kontrolou objednávky; stav se může změnit na CouponReady až při následném načtení.",
+                "when": [
+                  { "path": "$.order.status", "equals": "PreparingCoupon" }
+                ]
+              },
+              {
+                "appMessage": "Tokenová platba byla odmítnuta.",
+                "message": "Scénář reprodukoval chybu uložené karty. Pokračujte kontrolou objednávky a cleanupem.",
+                "when": [
+                  { "path": "$.errorMessage", "notEmpty": true }
+                ]
+              }
+            ],
+            "assertions": [
+              {
+                "path": "$.order.orderId",
+                "equals": "{{context.pidCouponSavedCardOrderId}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "coupon-saved-card-second-order-result",
+          "title": "Vyhodnotit druhou platbu",
+          "description": "Autoritativně rozliší úspěšné použití tokenu od Canceled. Při InProgress nebo PreparingCoupon krok opakujte.",
+          "requiresContext": [
+            "pidCouponSavedCardOrderId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons/purchase/orders/{{context.pidCouponSavedCardOrderId}}"
+          },
+          "extract": {
+            "pidCouponSavedCardFinalOrderStatus": "$.status"
+          },
+          "expected": {
+            "status": 200,
+            "warnings": [
+              {
+                "appMessage": "Objednávka ještě není v terminálním stavu.",
+                "message": "Počkejte a tento krok zopakujte, dokud nebude CouponReady nebo Canceled.",
+                "blockAdvance": true,
+                "when": [
+                  { "path": "$.status", "equals": "InProgress" }
+                ]
+              },
+              {
+                "appMessage": "Zaplacený kupón se ještě připravuje.",
+                "message": "Počkejte a tento krok zopakujte, dokud nebude CouponReady.",
+                "blockAdvance": true,
+                "when": [
+                  { "path": "$.status", "equals": "PreparingCoupon" }
+                ]
+              },
+              {
+                "appMessage": "Uložený token selhal při druhé platbě.",
+                "message": "Výsledek Canceled potvrzuje problém tokenu nebo jeho přijetí GDPay. Karta bude nyní odstraněna z testovacího účtu.",
+                "when": [
+                  { "path": "$.status", "equals": "Canceled" }
+                ]
+              }
+            ],
+            "assertions": [
+              {
+                "path": "$.orderId",
+                "equals": "{{context.pidCouponSavedCardOrderId}}"
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(CouponReady|Canceled)$",
+                "message": "Druhá objednávka musí skončit jako CouponReady nebo diagnosticky reprodukované Canceled."
+              }
+            ]
+          }
+        },
+        {
+          "id": "coupon-saved-card-delete-created-card",
+          "title": "Odstranit vytvořenou testovací kartu",
+          "description": "Soft-deleteuje přesně kartu vytvořenou první platbou, aby šel scénář na čistém účtu spustit znovu.",
+          "requiresContext": [
+            "pidCouponSavedCardId"
+          ],
+          "request": {
+            "method": "DELETE",
+            "path": "/v1/accounts/me/saved-cards/{{context.pidCouponSavedCardId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.id",
+                "equals": "{{context.pidCouponSavedCardId}}"
+              },
+              {
+                "path": "$.status",
+                "equals": "Deleted"
+              }
+            ]
+          }
+        },
+        {
+          "id": "coupon-saved-card-verify-cleanup",
+          "title": "Ověřit čistý účet po testu",
+          "description": "Potvrdí, že aktivní seznam karet je znovu prázdný a scénář lze opakovat.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/saved-cards"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "equals": [],
+                "message": "Po cleanupu zůstala na vyhrazeném testovacím účtu aktivní uložená karta."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-coupon-saved-card-cleanup",
+      "title": "Kupóny - odstranit testovací uloženou kartu",
+      "description": "Samostatný bezpečnostní cleanup pro případ, že byl hlavní save → use → delete průchod přerušen před závěrečným smazáním.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "coupons",
+        "saved-cards",
+        "cleanup",
+        "manual"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Kupóny",
+        "subtitle": "Cleanup testovací karty"
+      },
+      "instructions": [
+        "Použijte pouze vyhrazený testovací účet.",
+        "Vyberte kartu vytvořenou diagnostickým scénářem podle maskovaného PAN a expirace.",
+        "DELETE provede pouze lokální soft-delete v PidLítačce; token na GDPay nerevokuje."
+      ],
+      "steps": [
+        {
+          "id": "coupon-saved-card-cleanup-select",
+          "title": "Vybrat kartu k odstranění",
+          "description": "Načte aktivní karty a nechá testera explicitně vybrat pouze testovací kartu.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/saved-cards"
+          },
+          "selection": {
+            "sourcePath": "$",
+            "filter": {
+              "status": "Active"
+            },
+            "buttonLabel": "Vybrat k odstranění",
+            "selectedButtonLabel": "Karta vybrána",
+            "emptyTitle": "Žádná aktivní karta",
+            "emptyText": "Účet neobsahuje kartu, kterou by bylo potřeba uklidit.",
+            "store": {
+              "pidCouponCleanupSavedCardId": "$.id",
+              "pidCouponCleanupSavedCardMaskedPan": "$.maskedPan",
+              "pidCouponCleanupSavedCardExpirationMonth": "$.expirationMonth",
+              "pidCouponCleanupSavedCardExpirationYear": "$.expirationYear"
+            }
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "coupon-saved-card-cleanup-delete",
+          "title": "Soft-deleteovat vybranou kartu",
+          "description": "Odstraní pouze testerem vybranou kartu z aktivního seznamu PidLítačky.",
+          "requiresContext": [
+            "pidCouponCleanupSavedCardId"
+          ],
+          "request": {
+            "method": "DELETE",
+            "path": "/v1/accounts/me/saved-cards/{{context.pidCouponCleanupSavedCardId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.id",
+                "equals": "{{context.pidCouponCleanupSavedCardId}}"
+              },
+              {
+                "path": "$.status",
+                "equals": "Deleted"
+              }
+            ]
+          }
+        },
+        {
+          "id": "coupon-saved-card-cleanup-list-after",
+          "title": "Načíst zbývající aktivní karty",
+          "description": "Znovu načte seznam pro vizuální kontrolu, že vybraná testovací karta zmizela.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/saved-cards"
+          },
+          "expected": {
+            "status": 200
           }
         }
       ]

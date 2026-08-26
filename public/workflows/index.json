@@ -28,6 +28,24 @@
   ],
   "emulatorSubscenarios": [
     {
+      "id": "pidlitacka-reset-to-root",
+      "name": "PID Lítačka – návrat emulátoru do výchozího stavu",
+      "label": "Připravit emulátor",
+      "description": "Bez mazání účtu nebo aplikačních dat ukončí rozpracovanou obrazovku, znovu spustí PID Lítačku a počká na hlavní nebo přihlašovací obrazovku.",
+      "standalone": false,
+      "actions": [
+        {
+          "type": "restartApp",
+          "packageName": "cz.dpp.praguepublictransport.dev.pidlitacka",
+          "readyContentDescriptions": [
+            "Vyhledávání",
+            "Přihlaste se"
+          ],
+          "timeoutMs": 20000
+        }
+      ]
+    },
+    {
       "id": "pidlitacka-login-saved-profile",
       "name": "PID Lítačka – přihlášení uloženého profilu",
       "label": "Přepnout účet v emulátoru",
@@ -71,7 +89,9 @@
               "type": "tapNode",
               "contentDescription": "Odhlásit se",
               "clickable": true,
-              "waitAfterMs": 1600
+              "hoverMs": 140,
+              "touchMs": 100,
+              "waitAfterMs": 700
             }
           ]
         },
@@ -154,6 +174,57 @@
           "value": "{{cvc}}",
           "sensitive": true,
           "waitAfterMs": 350
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-open-ticket-purchase",
+      "name": "PID Lítačka – otevření nákupu jízdenky",
+      "label": "Otevřít nákup jízdenky",
+      "description": "Z hlavní obrazovky otevře Jízdné a spustí nákup jednotlivé jízdenky.",
+      "standalone": false,
+      "actions": [
+        {
+          "type": "tapNode",
+          "contentDescription": "Jízdné",
+          "exact": false,
+          "clickable": true,
+          "waitAfterMs": 900
+        },
+        {
+          "type": "tapNode",
+          "contentDescription": "Koupit jízdenku",
+          "clickable": true,
+          "waitAfterMs": 1200
+        },
+        {
+          "type": "assertNode",
+          "contentDescription": "Nákup jízdenek"
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-select-prague-30-minute-ticket",
+      "name": "PID Lítačka – výběr 30minutové pražské jízdenky",
+      "label": "Vybrat 30minutovou jízdenku",
+      "description": "V otevřeném katalogu vybere jednu pražskou 30minutovou jízdenku podle sémantického popisku, nikoli podle souřadnic.",
+      "standalone": false,
+      "actions": [
+        {
+          "type": "assertNode",
+          "contentDescription": "Nákup jízdenek"
+        },
+        {
+          "type": "tapNode",
+          "contentDescription": "30 min",
+          "exact": false,
+          "clickable": true,
+          "waitAfterMs": 900
+        },
+        {
+          "type": "assertNode",
+          "contentDescription": "Způsob platby",
+          "exact": false
         }
       ]
     }
@@ -672,6 +743,458 @@
       ],
       "report": {
         "title": "PID Lítačka FE – přepnutí testovacího účtu"
+      }
+    },
+    {
+      "id": "pidlitacka-ticket-save-card-emulator",
+      "name": "Jízdenky – uložit kartu při platbě v emulátoru",
+      "category": "ticket-payment",
+      "description": "Ručně krokovaný regresní průchod INT aplikací: nákup jedné 30minutové jízdenky novou kartou se zapnutým uložením a následné ověření karty končící 0006 v dalším platebním výběru.",
+      "mode": "presentation",
+      "tags": [
+        "pidlitacka",
+        "tickets",
+        "saved-card",
+        "emulator",
+        "regression"
+      ],
+      "items": [
+        {
+          "id": "ticket-save-card-prepare",
+          "type": "presentation",
+          "section": "Příprava testu",
+          "title": "0. Vrátit emulátor do výchozího stavu",
+          "message": "Klikátko restartuje aplikaci bez smazání účtu nebo dat a počká na kořenovou obrazovku.",
+          "instructions": [
+            "Tento krok odstraňuje mezistav po přerušeném nákupu, otevřeném dialogu nebo jiné záložce.",
+            "Aplikace může po startu několik sekund zobrazovat prázdnou nebo úvodní obrazovku; Klikátko čeká na její připravenost."
+          ],
+          "expected": [
+            "Je zobrazena hlavní obrazovka Vyhledávání nebo výchozí přihlašovací obrazovka."
+          ],
+          "emulator": {
+            "subscenarioId": "pidlitacka-reset-to-root"
+          }
+        },
+        {
+          "id": "ticket-save-card-login",
+          "type": "presentation",
+          "section": "Příprava testu",
+          "title": "Přihlásit vyhrazený platební účet",
+          "message": "Emulátor přepneme na účet wijessibrouma-5506@yopmail.com používaný pro opakovatelné platební průchody.",
+          "instructions": [
+            "Aplikace musí být na hlavní obrazovce se spodní navigací.",
+            "Workflow neposuzuje počet dříve zakoupených jízdenek; každý běh vytvoří další placenou jízdenku.",
+            "Pro průkazné ověření opravy použijte účet, na kterém před prvním během není karta končící 0006. Při opakování workflow ověřuje, že karta po platbě zůstane dostupná."
+          ],
+          "expected": [
+            "Po přihlášení je zobrazena hlavní obrazovka Vyhledávání."
+          ],
+          "emulator": {
+            "subscenarioId": "pidlitacka-login-saved-profile",
+            "profileEmail": "wijessibrouma-5506@yopmail.com",
+            "label": "Přihlásit platební účet"
+          }
+        },
+        {
+          "id": "ticket-save-card-open-purchase",
+          "type": "presentation",
+          "section": "Nákup jízdenky",
+          "title": "Otevřít katalog jízdenek",
+          "message": "Klikátko otevře Jízdné a spustí nákup jednotlivé jízdenky.",
+          "instructions": [
+            "Krok používá sémantické popisky prvků, takže není závislý na rozlišení emulátoru."
+          ],
+          "expected": [
+            "Je otevřená obrazovka Nákup jízdenek."
+          ],
+          "emulator": {
+            "subscenarioId": "pidlitacka-open-ticket-purchase"
+          }
+        },
+        {
+          "id": "ticket-save-card-select-ticket",
+          "type": "presentation",
+          "section": "Nákup jízdenky",
+          "title": "Vybrat jednu 30minutovou jízdenku",
+          "message": "Vybereme jednu pražskou 30minutovou jízdenku a zobrazíme platební část nákupu.",
+          "instructions": [
+            "Pokud se tarif nebo cena na INT změní, rozhodující je doba 30 minut; workflow nezávisí na konkrétní ceně."
+          ],
+          "expected": [
+            "Ve spodní platební části je dostupná metoda Nová karta."
+          ],
+          "emulator": {
+            "subscenarioId": "pidlitacka-select-prague-30-minute-ticket"
+          }
+        },
+        {
+          "id": "ticket-save-card-enable-save",
+          "type": "presentation",
+          "section": "Nákup jízdenky",
+          "title": "Zvolit novou kartu a zapnout její uložení",
+          "message": "Otevřeme výběr platební metody, zvolíme Novou kartu a zaškrtneme Uložit kartu pro příště.",
+          "instructions": [
+            "Volba uložení musí být zapnutá ještě před inicializací platby.",
+            "Po potvrzení výběru zůstane jako platební metoda Nová karta."
+          ],
+          "expected": [
+            "Nová karta je potvrzená a požadavek na její uložení je aktivní."
+          ],
+          "emulator": {
+            "label": "Zapnout uložení nové karty",
+            "actions": [
+              {
+                "type": "tapNode",
+                "contentDescription": "Způsob platby",
+                "exact": false,
+                "clickable": true,
+                "waitAfterMs": 700
+              },
+              {
+                "type": "tapNode",
+                "contentDescription": "Nová karta",
+                "exact": false,
+                "clickable": true,
+                "waitAfterMs": 350
+              },
+              {
+                "type": "tapNode",
+                "contentDescription": "Uložit kartu pro příště",
+                "exact": false,
+                "clickable": true,
+                "waitAfterMs": 350
+              },
+              {
+                "type": "tapNode",
+                "contentDescription": "Potvrdit",
+                "clickable": true,
+                "waitAfterMs": 700
+              },
+              {
+                "type": "assertNode",
+                "contentDescription": "Nová karta",
+                "exact": false
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-save-card-initiate",
+          "type": "presentation",
+          "section": "Platba novou kartou",
+          "title": "Inicializovat platbu nové karty",
+          "message": "Klikátko stiskne Zaplatit a ověří, že se otevřela testovací platební brána.",
+          "instructions": [
+            "Pokud aplikace skončí chybou ještě před otevřením brány, uložte její log a workflow ukončete jako neúspěšné."
+          ],
+          "expected": [
+            "Brána zobrazí pole Číslo karty, Platnost a CVC/CVV."
+          ],
+          "emulator": {
+            "label": "Otevřít platební bránu",
+            "actions": [
+              {
+                "type": "tapNode",
+                "contentDescription": "Zaplatit",
+                "exact": false,
+                "clickable": true,
+                "waitAfterMs": 3000
+              },
+              {
+                "type": "assertNode",
+                "className": "android.widget.EditText",
+                "occurrence": 2
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-save-card-fill-gateway",
+          "type": "presentation",
+          "section": "Platba novou kartou",
+          "title": "Vyplnit testovací kartu",
+          "message": "Do platební brány vyplníme kartu 4000007000010006, platnost 11/30 a CVC 111.",
+          "instructions": [
+            "Klikátko pouze vyplní formulář; odeslání je záměrně samostatný krok s potvrzením."
+          ],
+          "expected": [
+            "Všechna tři pole brány obsahují testovací údaje a tlačítko Zaplatit je aktivní."
+          ],
+          "emulator": {
+            "subscenarioId": "gdpay-fill-test-card"
+          }
+        },
+        {
+          "id": "ticket-save-card-submit-gateway",
+          "type": "presentation",
+          "section": "Platba novou kartou",
+          "title": "Odeslat testovací platbu",
+          "message": "Po samostatném potvrzení odešleme vyplněnou testovací platbu a necháme aplikaci zpracovat návrat z brány.",
+          "instructions": [
+            "Pokud brána zobrazí další testovací 3DS krok, dokončete jej ručně v emulátoru.",
+            "K dalšímu kroku pokračujte až po návratu do PID Lítačky a zobrazení úspěšně zakoupené jízdenky."
+          ],
+          "expected": [
+            "Platba skončí jako úspěšná a aplikace se vrátí na Jízdné bez chybové hlášky."
+          ],
+          "emulator": {
+            "label": "Potvrdit testovací platbu",
+            "confirm": "Tento krok odešle skutečnou platbu v INT testovacím prostředí a vytvoří další jízdenku. Pokračovat?",
+            "actions": [
+              {
+                "type": "tapNode",
+                "text": "Zaplatit",
+                "exact": false,
+                "clickable": true,
+                "waitAfterMs": 5000
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-save-card-verify",
+          "type": "presentation",
+          "section": "Ověření uložení",
+          "title": "Ověřit kartu v novém platebním výběru",
+          "message": "Zahájíme nový nákup bez jeho zaplacení a ověříme, že výběr platebních metod obsahuje kartu končící 0006.",
+          "instructions": [
+            "Tento krok nevytvoří další booking ani platbu; skončí pouze v otevřeném výběru platební metody.",
+            "První běh na čistém účtu je autoritativním ověřením opravy formátu expirace. Další běhy jsou regresní kontrolou dostupnosti stejné karty."
+          ],
+          "expected": [
+            "Ve výběru je aktivní uložená karta s maskovaným PAN končícím 0006."
+          ],
+          "emulator": {
+            "label": "Ověřit uloženou kartu 0006",
+            "actions": [
+              {
+                "type": "tapNode",
+                "contentDescription": "Jízdné",
+                "clickable": true,
+                "waitAfterMs": 700
+              },
+              {
+                "type": "tapNode",
+                "contentDescription": "Koupit jízdenku",
+                "clickable": true,
+                "waitAfterMs": 1000
+              },
+              {
+                "type": "tapNode",
+                "contentDescription": "30 min",
+                "exact": false,
+                "clickable": true,
+                "waitAfterMs": 700
+              },
+              {
+                "type": "tapNode",
+                "contentDescription": "Způsob platby",
+                "exact": false,
+                "clickable": true,
+                "waitAfterMs": 700
+              },
+              {
+                "type": "assertNode",
+                "contentDescription": "0006",
+                "exact": false
+              }
+            ]
+          }
+        }
+      ],
+      "report": {
+        "title": "Jízdenky – uložení karty při platbě v emulátoru"
+      }
+    },
+    {
+      "id": "pidlitacka-ticket-saved-card-emulator",
+      "name": "Jízdenky – zaplatit uloženou kartou v emulátoru",
+      "category": "ticket-payment",
+      "description": "Ručně krokovaný regresní průchod INT aplikací: samostatný nákup jedné 30minutové jízdenky předem uloženou kartou končící 0006 a ověření, že inicializace nespadne na HTTP 400.",
+      "mode": "presentation",
+      "tags": [
+        "pidlitacka",
+        "tickets",
+        "saved-card",
+        "opaque-token",
+        "emulator",
+        "regression"
+      ],
+      "items": [
+        {
+          "id": "ticket-saved-card-prepare",
+          "type": "presentation",
+          "section": "Příprava testu",
+          "title": "0. Vrátit emulátor do výchozího stavu",
+          "message": "Klikátko restartuje aplikaci bez smazání účtu nebo dat a počká na kořenovou obrazovku.",
+          "instructions": [
+            "Tento krok odstraňuje mezistav po přerušeném nákupu, otevřeném dialogu nebo jiné záložce.",
+            "Aplikace může po startu několik sekund zobrazovat prázdnou nebo úvodní obrazovku; Klikátko čeká na její připravenost."
+          ],
+          "expected": [
+            "Je zobrazena hlavní obrazovka Vyhledávání nebo výchozí přihlašovací obrazovka."
+          ],
+          "emulator": {
+            "subscenarioId": "pidlitacka-reset-to-root"
+          }
+        },
+        {
+          "id": "ticket-saved-card-login",
+          "type": "presentation",
+          "section": "Příprava testu",
+          "title": "Přihlásit vyhrazený platební účet",
+          "message": "Emulátor přepneme na účet wijessibrouma-5506@yopmail.com; tento test nepřebírá rozpracovaný nákup z předchozího workflow.",
+          "instructions": [
+            "Aplikace musí být na hlavní obrazovce se spodní navigací.",
+            "Účet musí obsahovat aktivní testovací kartu končící 0006. Lze ji připravit workflow pro uložení karty, ale tento běh začíná novým přihlášením a novým nákupem."
+          ],
+          "expected": [
+            "Po přihlášení je zobrazena hlavní obrazovka Vyhledávání."
+          ],
+          "emulator": {
+            "subscenarioId": "pidlitacka-login-saved-profile",
+            "profileEmail": "wijessibrouma-5506@yopmail.com",
+            "label": "Přihlásit platební účet"
+          }
+        },
+        {
+          "id": "ticket-saved-card-open-purchase",
+          "type": "presentation",
+          "section": "Nákup jízdenky",
+          "title": "Otevřít nový nákup jízdenky",
+          "message": "Klikátko otevře nový katalog jízdenek nezávisle na předchozím běhu.",
+          "instructions": [
+            "Každé spuštění používá nově otevřený nákup; žádný booking ID se mezi workflow nepřenáší."
+          ],
+          "expected": [
+            "Je otevřená obrazovka Nákup jízdenek."
+          ],
+          "emulator": {
+            "subscenarioId": "pidlitacka-open-ticket-purchase"
+          }
+        },
+        {
+          "id": "ticket-saved-card-select-ticket",
+          "type": "presentation",
+          "section": "Nákup jízdenky",
+          "title": "Vybrat jednu 30minutovou jízdenku",
+          "message": "Vybereme jednu pražskou 30minutovou jízdenku a otevřeme platební metody.",
+          "instructions": [
+            "Výběr tarifu je stejný v obou regresních workflow, ale vzniká v novém nákupním kontextu."
+          ],
+          "expected": [
+            "Ve spodní části je připravené placení jedné jízdenky."
+          ],
+          "emulator": {
+            "subscenarioId": "pidlitacka-select-prague-30-minute-ticket"
+          }
+        },
+        {
+          "id": "ticket-saved-card-select-method",
+          "type": "presentation",
+          "section": "Platba uloženou kartou",
+          "title": "Vybrat uloženou kartu končící 0006",
+          "message": "Otevřeme platební metody, nejprve ověříme precondition a potom vybereme uloženou kartu.",
+          "instructions": [
+            "Pokud karta 0006 není nalezena, test se zastaví ještě před vytvořením platby; připravte kartu a celý workflow spusťte znovu.",
+            "Výběr podle posledních čtyř číslic nezávisí na interním UUID uložené karty."
+          ],
+          "expected": [
+            "Karta 0006 je dostupná a po potvrzení se zobrazí jako zvolený způsob platby."
+          ],
+          "emulator": {
+            "label": "Vybrat uloženou kartu 0006",
+            "actions": [
+              {
+                "type": "tapNode",
+                "contentDescription": "Způsob platby",
+                "exact": false,
+                "clickable": true,
+                "waitAfterMs": 700
+              },
+              {
+                "type": "assertNode",
+                "contentDescription": "0006",
+                "exact": false
+              },
+              {
+                "type": "tapNode",
+                "contentDescription": "0006",
+                "exact": false,
+                "clickable": true,
+                "waitAfterMs": 350
+              },
+              {
+                "type": "tapNode",
+                "contentDescription": "Potvrdit",
+                "clickable": true,
+                "waitAfterMs": 700
+              },
+              {
+                "type": "assertNode",
+                "contentDescription": "0006",
+                "exact": false
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-saved-card-initiate",
+          "type": "presentation",
+          "section": "Platba uloženou kartou",
+          "title": "Inicializovat platbu uloženou kartou",
+          "message": "Klikátko stiskne Zaplatit. Opravený Tickets backend musí přijmout neprázdný opaque token a nesmí vrátit HTTP 400 kvůli jeho formátu.",
+          "instructions": [
+            "Krok má samostatné potvrzení, protože založí skutečnou INT platbu a další jízdenku.",
+            "Pokud se zobrazí 3DS challenge, dokončete ji ručně v emulátoru.",
+            "Pokud aplikace zobrazí chybu hned po stisknutí Zaplatit, uložte Flutter/API log; zejména status a URL saved-card initiate."
+          ],
+          "expected": [
+            "Inicializace pokračuje do platebního/3DS toku nebo přímo do úspěchu; nevrátí prázdnou odpověď HTTP 400."
+          ],
+          "emulator": {
+            "label": "Zaplatit uloženou kartou",
+            "confirm": "Tento krok inicializuje skutečnou platbu uloženou kartou v INT testovacím prostředí a může vytvořit další jízdenku. Pokračovat?",
+            "actions": [
+              {
+                "type": "tapNode",
+                "contentDescription": "Zaplatit",
+                "exact": false,
+                "clickable": true,
+                "waitAfterMs": 5000
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-saved-card-verify",
+          "type": "presentation",
+          "section": "Vyhodnocení",
+          "title": "Dokončit případné 3DS a potvrdit nákup",
+          "message": "Dokončíme případný ověřovací krok a autoritativně zkontrolujeme výsledek v aplikaci i v zachyceném API logu.",
+          "instructions": [
+            "V emulátoru dokončete případný fingerprint nebo 3DS challenge a počkejte na návrat do PID Lítačky.",
+            "V API logu musí saved-card initiate skončit jinak než HTTP 400; finální GET payment musí vrátit status PAID.",
+            "Ověřte, že nová jízdenka je v aplikaci viditelná."
+          ],
+          "expected": [
+            "Platba je PAID, booking CONFIRMED a aplikace zobrazí zakoupenou jízdenku bez chybového dialogu."
+          ],
+          "emulator": {
+            "label": "Ověřit návrat na Jízdné",
+            "actions": [
+              {
+                "type": "assertNode",
+                "contentDescription": "Jízdné",
+                "exact": false
+              }
+            ]
+          }
+        }
+      ],
+      "report": {
+        "title": "Jízdenky – platba uloženou kartou v emulátoru"
       }
     },
     {

@@ -63,6 +63,12 @@
       "file": "feature-967-prevod-jizdenky.json"
     },
     {
+      "id": "pidlitacka-expired-ticket-dataset-int",
+      "name": "PidLitacka - INT: 200 expirovaných jízdenek",
+      "description": "Řízená příprava 200 půlhodinových jízdenek na INT včetně platby uloženou kartou a hromadné aktivace.",
+      "file": "expired-ticket-dataset-int.json"
+    },
+    {
       "id": "pidlitacka-task-1067-product-subtype",
       "name": "PidLitacka - task 1067: podtyp zakoupené jízdenky",
       "description": "Lokální E2E ověření kategorie a ikony produktu v seznamu, aktivaci a detailu fulfillmentu.",

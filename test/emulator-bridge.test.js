@@ -1,6 +1,13 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { countConfiguredActions, findNode, parseUiNodes, tokenizeAdbText } = require("../tools/emulator-bridge");
+const {
+  countConfiguredActions,
+  findNode,
+  getPresentationTapTiming,
+  normalizeAppPackageName,
+  parseUiNodes,
+  tokenizeAdbText
+} = require("../tools/emulator-bridge");
 
 const fixture = `<?xml version="1.0"?>
 <hierarchy>
@@ -55,4 +62,30 @@ test("emulator bridge counts conditional actions against the safety limit", () =
     },
     { type: "assertNode", contentDescription: "Přihlaste se", exact: false }
   ]), 4);
+});
+
+test("presentation taps keep the touch visible and allow fast confirmation pacing", () => {
+  assert.deepEqual(getPresentationTapTiming(), {
+    hoverMs: 420,
+    touchMs: 160,
+    waitAfterMs: 650
+  });
+  assert.deepEqual(getPresentationTapTiming({
+    hoverMs: 140,
+    touchMs: 100,
+    waitAfterMs: 700
+  }), {
+    hoverMs: 140,
+    touchMs: 100,
+    waitAfterMs: 700
+  });
+});
+
+test("emulator bridge accepts only safe Android application package names", () => {
+  assert.equal(
+    normalizeAppPackageName("cz.dpp.praguepublictransport.dev.pidlitacka"),
+    "cz.dpp.praguepublictransport.dev.pidlitacka"
+  );
+  assert.throws(() => normalizeAppPackageName("pidlitacka"), /Neplatný název balíčku/);
+  assert.throws(() => normalizeAppPackageName("cz.dpp.app; reboot"), /Neplatný název balíčku/);
 });

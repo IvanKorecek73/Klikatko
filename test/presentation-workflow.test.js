@@ -94,11 +94,13 @@ test("workflow catalog has stable primary categories for filtering", () => {
     "authentication",
     "client-setup",
     "coupon-purchase",
-    "payment-diagnostics"
+    "payment-diagnostics",
+    "ticket-payment"
   ]);
 
   assert.ok(workflowIndex.workflows.every(workflow => allowed.has(workflow.category)));
   assert.equal(workflowIndex.workflows.filter(workflow => workflow.category === "payment-diagnostics").length, 4);
+  assert.equal(workflowIndex.workflows.filter(workflow => workflow.category === "ticket-payment").length, 2);
   assert.match(appSource, /renderWorkflowCategoryFilters/);
   assert.match(appSource, /buildWorkflowSearchText/);
 });

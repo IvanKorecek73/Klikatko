@@ -12,6 +12,10 @@ const port = Number(process.env.PORT || 5096);
 let targetBaseUrl = process.env.TICKET_SERVICE_BASE_URL || "http://localhost:5087";
 let targetIgnoreTlsCertificateErrors = false;
 const proxyTimeoutMs = Number(process.env.HARNESS_PROXY_TIMEOUT_MS || 30000);
+const emulatorActionTimeoutMs = normalizeTimeout(
+  process.env.HARNESS_EMULATOR_ACTION_TIMEOUT_MS,
+  120000
+);
 const publicDir = path.join(__dirname, "public");
 
 const mimeTypes = {
@@ -53,6 +57,10 @@ const server = http.createServer((request, response) => {
   }
 
   if (request.url.startsWith("/__emulator/")) {
+    if (request.method === "POST" && request.url.startsWith("/__emulator/actions")) {
+      request.setTimeout(emulatorActionTimeoutMs);
+      response.setTimeout(emulatorActionTimeoutMs);
+    }
     handleEmulatorBridgeRequest(request, response);
     return;
   }
@@ -66,6 +74,13 @@ server.listen(port, host, () => {
 });
 
 server.timeout = proxyTimeoutMs + 2000;
+
+function normalizeTimeout(value, fallback) {
+  const timeout = Number(value);
+  return Number.isFinite(timeout) && timeout >= 10000
+    ? Math.round(timeout)
+    : fallback;
+}
 
 function serveMeta(response) {
   response.writeHead(200, {
