@@ -165,8 +165,6 @@
           "resourceId": "cardnumber",
           "value": "{{cardNumber}}",
           "expectedValue": "{{cardNumber}}",
-          "keyByKey": true,
-          "keyDelayMs": 350,
           "sensitive": true,
           "retryCount": 2
         },
@@ -175,8 +173,6 @@
           "resourceId": "expiry",
           "value": "{{expiry}}",
           "expectedValue": "11/30",
-          "keyByKey": true,
-          "keyDelayMs": 300,
           "sensitive": true,
           "retryCount": 2
         },
@@ -185,8 +181,6 @@
           "resourceId": "cvc",
           "value": "{{cvc}}",
           "expectedValue": "{{cvc}}",
-          "keyByKey": true,
-          "keyDelayMs": 400,
           "tapHorizontalRatio": 0.35,
           "sensitive": true,
           "retryCount": 2
@@ -1045,6 +1039,10 @@
             "label": "Potvrdit testovací platbu",
             "confirm": "Tento krok odešle skutečnou platbu v INT testovacím prostředí a vytvoří další jízdenku. Pokračovat?",
             "actions": [
+              {
+                "type": "back",
+                "waitAfterMs": 500
+              },
               {
                 "type": "tapNode",
                 "text": "Zaplatit",

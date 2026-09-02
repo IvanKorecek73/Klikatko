@@ -205,18 +205,19 @@ test("save-card workflow enables persistence before opening and submitting the g
   assert.equal(fill.emulator.subscenarioId, "gdpay-fill-test-card");
   const fillScenario = getSubscenario("gdpay-fill-test-card");
   assert.deepEqual(fillScenario.actions.map(action => action.resourceId), ["cardnumber", "expiry", "cvc"]);
-  assert.equal(fillScenario.actions[0].keyByKey, true);
+  assert.notEqual(fillScenario.actions[0].keyByKey, true);
   assert.equal(fillScenario.actions[0].expectedValue, "{{cardNumber}}");
   assert.equal(fillScenario.actions[1].expectedValue, "11/30");
-  assert.equal(fillScenario.actions[1].keyByKey, true);
+  assert.notEqual(fillScenario.actions[1].keyByKey, true);
   assert.equal(fillScenario.actions[2].expectedValue, "{{cvc}}");
   assert.equal(fillScenario.actions[2].tapHorizontalRatio, 0.35);
   assert.match(submit.emulator.confirm, /vytvoří další jízdenku/i);
-  assert.deepEqual(submit.emulator.actions[0].waitFor, {
+  assert.equal(submit.emulator.actions[0].type, "back");
+  assert.deepEqual(submit.emulator.actions[1].waitFor, {
     contentDescription: "Jízdné",
     exact: false
   });
-  assert.equal(submit.emulator.actions[0].transitionTimeoutMs, 30000);
+  assert.equal(submit.emulator.actions[1].transitionTimeoutMs, 30000);
   assert.ok(verify.emulator.actions.some(action => action.contentDescription === "0006"));
   assert.match(verify.instructions.join(" "), /První běh na čistém účtu/i);
 });
