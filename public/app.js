@@ -32,6 +32,7 @@ const state = {
   workflowRun: null,
   workflowContext: {},
   workflowSecrets: {},
+  hybridPayment: null,
   workflowInputs: {},
   workflowInputsReady: false,
   gatewayReturnSwRegistered: false,
@@ -5447,6 +5448,7 @@ function selectWorkflow(workflowId) {
   state.workflowRun = null;
   state.workflowContext = {};
   state.workflowSecrets = {};
+  state.hybridPayment = null;
   renderWorkflowList();
   clearWorkflowSummary();
   updateWorkflowControls();
@@ -8691,6 +8693,7 @@ function prepareWorkflowRun(workflow, itemIndex, options = {}) {
   if (!keepContext) {
     state.workflowContext = {};
     state.workflowSecrets = {};
+    state.hybridPayment = null;
   }
 
   state.workflowRun = {
@@ -9540,6 +9543,8 @@ function showPresentationWorkflowPauseResult(level, message, item) {
   const emulator = item.emulator || null;
   const emulatorSubscenario = getEmulatorSubscenario(emulator?.subscenarioId);
   const hasEmulatorActions = Boolean(emulator?.actions?.length || emulatorSubscenario?.actions?.length);
+  const hasHybridPayment = Boolean(item.hybridPayment);
+  const hybridPaymentReady = Boolean(state.hybridPayment?.paymentUrl);
   const emulatorActionLabel = emulator?.label || emulatorSubscenario?.label || "Provést v emulátoru";
   state.displayedResult = {
     level,
@@ -9582,6 +9587,14 @@ function showPresentationWorkflowPauseResult(level, message, item) {
         <span id="presentationEmulatorStatus" role="status" aria-live="polite">Emulátor nemusí mít focus.</span>
       </div>
     ` : ""}
+    ${hasHybridPayment ? `
+      <div class="toolbar presentation-emulator-actions">
+        <button type="button" id="openHybridPaymentInDesktop">Otevřít bránu v desktopovém prohlížeči</button>
+        <span id="hybridPaymentStatus" role="status" aria-live="polite">${hybridPaymentReady
+          ? "Jednorázová platební URL je připravena pouze v paměti Klikátka."
+          : "Klikátko před otevřením obnoví poslední platební URL z živého logu emulátoru."}</span>
+      </div>
+    ` : ""}
     <div class="workflow-pause-next">
       <span>Až je krok odprezentovaný, pokračujte dalším krokem.</span>
       <button type="button" class="workflow-mobile-continue" data-workflow-continue ${hasEmulatorActions ? "disabled" : ""}>Pokračovat ve workflow</button>
@@ -9608,7 +9621,119 @@ function showPresentationWorkflowPauseResult(level, message, item) {
   if (emulatorButton) {
     emulatorButton.addEventListener("click", () => runPresentationWorkflowItemInEmulator(item, emulatorButton));
   }
+  const hybridPaymentButton = document.getElementById("openHybridPaymentInDesktop");
+  if (hybridPaymentButton) {
+    hybridPaymentButton.addEventListener("click", () => openHybridPaymentInDesktop(hybridPaymentButton));
+  }
   bindWorkflowContinueButtons(elements.resultCard);
+}
+
+async function openHybridPaymentInDesktop(button) {
+  const status = document.getElementById("hybridPaymentStatus");
+  let paymentUrl = String(state.hybridPayment?.paymentUrl || "").trim();
+  if (!paymentUrl && status) {
+    status.classList.remove("error");
+    status.textContent = "Obnovuji poslední platební URL z emulátoru...";
+  }
+
+  if (!paymentUrl) {
+    try {
+      const captureResponse = await fetch("/__emulator/actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceId: "emulator-5554",
+          showTouches: true,
+          pace: "fast",
+          actions: [{ type: "captureTicketCardPayment", timeoutMs: 3000 }]
+        })
+      });
+      const capturePayload = await captureResponse.json();
+      const capturedPayment = captureHybridPaymentFromEmulatorResult(capturePayload.actions);
+      if (!captureResponse.ok || capturePayload.ok === false || !capturedPayment) {
+        throw new Error(capturePayload.message || `Emulátor vrátil HTTP ${captureResponse.status}.`);
+      }
+      paymentUrl = capturedPayment.paymentUrl;
+    } catch (error) {
+      if (status) {
+        status.classList.add("error");
+        status.textContent = error instanceof Error ? error.message : String(error);
+      }
+      return;
+    }
+  }
+
+  if (!paymentUrl) {
+    if (status) {
+      status.classList.add("error");
+      status.textContent = "Platební URL není k dispozici; zopakujte inicializační krok.";
+    }
+    return;
+  }
+
+  button.disabled = true;
+  if (status) {
+    status.classList.remove("error");
+    status.textContent = "Otevírám systémový desktopový prohlížeč...";
+  }
+
+  try {
+    const response = await fetch("/__desktop/open-payment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: paymentUrl })
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.ok === false) {
+      throw new Error(payload.message || `Desktopový bridge vrátil HTTP ${response.status}.`);
+    }
+    button.textContent = "Brána otevřena v desktopu";
+    button.classList.add("ready");
+    if (status) {
+      status.textContent = "Dokončete platbu v otevřeném prohlížeči. Potom se vraťte do Klikátka a pokračujte.";
+    }
+    addLog("ok", "Hybrid payment gateway opened in desktop browser", {
+      bookingId: state.hybridPayment.bookingId,
+      paymentId: state.hybridPayment.paymentId,
+      paymentUrl: "<ephemeral>"
+    });
+  } catch (error) {
+    button.disabled = false;
+    button.classList.add("error");
+    if (status) {
+      status.classList.add("error");
+      status.textContent = error instanceof Error ? error.message : String(error);
+    }
+  }
+}
+
+function captureHybridPaymentFromEmulatorResult(actions = []) {
+  const captured = [...actions].reverse().find(action =>
+    action?.type === "captureTicketCardPayment"
+    && action.bookingId
+    && action.paymentId
+    && action.paymentUrl);
+  if (!captured) {
+    return null;
+  }
+
+  state.hybridPayment = {
+    bookingId: captured.bookingId,
+    paymentId: captured.paymentId,
+    paymentUrl: captured.paymentUrl
+  };
+  state.workflowContext.hybridTicketBookingId = captured.bookingId;
+  state.workflowContext.hybridTicketPaymentId = captured.paymentId;
+  return state.hybridPayment;
+}
+
+function sanitizeEmulatorActionsForLog(actions = []) {
+  return actions.map(action => action?.type === "captureTicketCardPayment"
+    ? {
+        ...action,
+        paymentUrl: action.paymentUrl ? "<ephemeral>" : ""
+      }
+    : action);
 }
 
 async function runPresentationWorkflowItemInEmulator(item, button) {
@@ -9635,9 +9760,18 @@ async function runPresentationWorkflowItemInEmulator(item, button) {
     return;
   }
 
-  if (emulator.confirm && !window.confirm(emulator.confirm)) {
+  if (emulator.confirm && button.dataset.confirmed !== "true") {
+    button.dataset.confirmed = "true";
+    button.textContent = "Potvrdit a provést";
+    button.classList.add("ready");
+    if (status) {
+      status.classList.remove("error");
+      status.textContent = emulator.confirm;
+    }
     return;
   }
+
+  delete button.dataset.confirmed;
 
   button.disabled = true;
   if (paceSelect) {
@@ -9666,6 +9800,8 @@ async function runPresentationWorkflowItemInEmulator(item, button) {
       throw new Error(payload.message || `Emulátor vrátil HTTP ${response.status}.`);
     }
 
+    const capturedPayment = captureHybridPaymentFromEmulatorResult(payload.actions);
+
     button.textContent = "Provedeno v emulátoru";
     button.classList.add("ready");
     if (continueButton) {
@@ -9674,12 +9810,14 @@ async function runPresentationWorkflowItemInEmulator(item, button) {
     }
     if (status) {
       const labels = (payload.currentLabels || []).slice(0, 4).join(" · ");
-      status.textContent = labels ? `Hotovo. Na obrazovce: ${labels}` : "Akce byla provedena a ověřena.";
+      status.textContent = capturedPayment
+        ? `Platba ${capturedPayment.paymentId} byla zachycena; jednorázová URL se neuloží do reportu.`
+        : labels ? `Hotovo. Na obrazovce: ${labels}` : "Akce byla provedena a ověřena.";
     }
     addLog("ok", "Presentation emulator action completed", {
       workflowItemId: item.id,
       pace,
-      actions: payload.actions,
+      actions: sanitizeEmulatorActionsForLog(payload.actions),
       currentLabels: payload.currentLabels
     });
   } catch (error) {
@@ -9720,6 +9858,7 @@ function resolvePresentationEmulatorExecution(item) {
   }
 
   const variables = {
+    ...state.workflowContext,
     ...(subscenario?.variables || {}),
     ...(configured.variables || {})
   };

@@ -129,7 +129,7 @@ test("saved-profile login verifies the email-to-password transition and retries 
   assert.equal(emailInput.expectedValue, "{{email}}");
   assert.equal(emailInput.retryCount, 1);
   assert.deepEqual(continueAction.waitFor, { contentDescription: "Heslo" });
-  assert.equal(continueAction.transitionTimeoutMs, 3000);
+  assert.equal(continueAction.transitionTimeoutMs, 10000);
   assert.equal(continueAction.retryCount, 1);
   assert.deepEqual(submitAction.waitFor, { contentDescription: "Vyhledávání" });
   assert.equal(submitAction.transitionTimeoutMs, 15000);
@@ -156,12 +156,12 @@ test("ticket navigation and product selection use semantic labels instead of coo
   assert.deepEqual(open.actions[2].waitFor, { contentDescription: "Nákup jízdenek" });
   assert.equal(select.actions[1].type, "ifNode");
   assert.equal(select.actions[1].contentDescription, "Dospělý");
-  assert.notEqual(select.actions[1].exact, false);
+  assert.equal(select.actions[1].exact, false);
   assert.equal(select.actions[1].actions[0].type, "tapNode");
   assert.equal(select.actions[1].actions[0].contentDescription, "Dospělý");
-  assert.notEqual(select.actions[1].actions[0].exact, false);
+  assert.equal(select.actions[1].actions[0].exact, false);
   assert.equal(select.actions[1].actions[0].waitFor.selected, true);
-  assert.notEqual(select.actions[1].actions[0].waitFor.exact, false);
+  assert.equal(select.actions[1].actions[0].waitFor.exact, false);
   assert.equal(select.actions[2].type, "swipe");
   assert.equal(select.actions[2].repeat, 20);
   assert.equal(select.actions[3].type, "swipe");
@@ -207,12 +207,12 @@ test("save-card workflow enables persistence before opening and submitting the g
   assert.deepEqual(fillScenario.actions.map(action => action.resourceId), ["cardnumber", "expiry", "cvc"]);
   assert.notEqual(fillScenario.actions[0].keyByKey, true);
   assert.equal(fillScenario.actions[0].expectedValue, "{{cardNumber}}");
-  assert.equal(fillScenario.actions[1].expectedValue, "11/30");
+  assert.equal(fillScenario.actions[1].expectedValue, "08/28");
   assert.notEqual(fillScenario.actions[1].keyByKey, true);
   assert.equal(fillScenario.actions[2].expectedValue, "{{cvc}}");
   assert.equal(fillScenario.actions[2].tapHorizontalRatio, 0.35);
   assert.match(submit.emulator.confirm, /vytvoří další jízdenku/i);
-  assert.equal(submit.emulator.actions[0].type, "back");
+  assert.equal(submit.emulator.actions[0].type, "hideKeyboard");
   assert.deepEqual(submit.emulator.actions[1].waitFor, {
     contentDescription: "Jízdné",
     exact: false
@@ -226,6 +226,7 @@ test("saved-card workflow asserts card 0006 before initiating the opaque-token p
   const workflow = getWorkflow("pidlitacka-ticket-saved-card-emulator");
   const select = getItem(workflow, "ticket-saved-card-select-method");
   const initiate = getItem(workflow, "ticket-saved-card-initiate");
+  const verify = getItem(workflow, "ticket-saved-card-verify");
   const serialized = JSON.stringify(workflow);
 
   const assertIndex = select.emulator.actions.findIndex(
@@ -239,9 +240,57 @@ test("saved-card workflow asserts card 0006 before initiating the opaque-token p
   assert.ok(tapIndex > assertIndex);
   assert.deepEqual(select.emulator.actions[0].contentDescriptions, ["Nová karta", "0006"]);
   assert.equal(initiate.emulator.actions[0].contentDescription, "Zaplatit");
+  assert.deepEqual(initiate.emulator.actions[0].waitFor, {
+    text: "Enter 1234 for OK auth",
+    exact: false
+  });
+  assert.equal(initiate.emulator.actions[0].transitionTimeoutMs, 30000);
   assert.match(initiate.emulator.confirm, /uloženou kartou/i);
   assert.match(initiate.expected.join(" "), /HTTP 400/i);
+  assert.deepEqual(verify.emulator.actions.map(action => action.type), [
+    "inputText",
+    "hideKeyboard",
+    "tapNode",
+    "tapNode",
+    "assertNode"
+  ]);
+  assert.equal(verify.emulator.actions[0].resourceId, "otp");
+  assert.equal(verify.emulator.actions[0].value, "1234");
+  assert.equal(verify.emulator.actions[2].resourceId, "sendOtp");
+  assert.deepEqual(verify.emulator.actions[2].waitFor, {
+    text: "Unauthorized",
+    exact: false
+  });
+  assert.equal(verify.emulator.actions[3].contentDescription, "Close tab");
+  assert.equal(verify.emulator.actions[4].contentDescription, "Jízdné");
+  assert.equal(verify.emulator.actions[4].timeoutMs, 30000);
   assert.doesNotMatch(serialized, /gdpay-fill-test-card/);
+});
+
+test("hybrid workflow keeps the app-owned payment and returns it to the same live booking", () => {
+  const workflow = getWorkflow("pidlitacka-ticket-save-card-hybrid");
+  const initiate = getItem(workflow, "hybrid-ticket-save-card-initiate");
+  const desktop = getItem(workflow, "hybrid-ticket-save-card-desktop-payment");
+  const callback = getItem(workflow, "hybrid-ticket-save-card-return");
+
+  assert.ok(workflow.tags.includes("hybrid"));
+  assert.deepEqual(initiate.emulator.actions.map(action => action.type), [
+    "clearLogcat",
+    "tapNode",
+    "captureTicketCardPayment"
+  ]);
+  assert.equal(initiate.emulator.actions[1].waitFor, undefined);
+  assert.match(initiate.expected.join(" "), /Emulátor zůstane v aplikaci/i);
+  assert.equal(desktop.hybridPayment.kind, "ticket-card");
+  assert.deepEqual(callback.emulator.actions[0], {
+    type: "openDeepLink",
+    uri: "pid-litacka-payment://ticket/{{hybridTicketBookingId}}",
+    packageName: "cz.dpp.praguepublictransport.dev.pidlitacka",
+    waitFor: { contentDescription: "Jízdné", exact: false },
+    transitionTimeoutMs: 30000
+  });
+  assert.match(appSource, /paymentUrl:\s*"<ephemeral>"/);
+  assert.match(appSource, /__desktop\/open-payment/);
 });
 
 test("all configured ticket-payment emulator actions fit the bridge safety limit", () => {

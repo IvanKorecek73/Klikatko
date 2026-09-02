@@ -8,6 +8,8 @@ const DEFAULT_DEVICE_ID = "emulator-5554";
 const MAX_ACTIONS = 24;
 const MAX_BODY_BYTES = 64 * 1024;
 const SAFE_KEY_EVENTS = new Set(["BACK", "HOME", "ENTER", "ESCAPE", "TAB", "DPAD_UP", "DPAD_DOWN", "DPAD_LEFT", "DPAD_RIGHT"]);
+const TICKET_PAYMENT_CALLBACK_SCHEME = "pid-litacka-payment:";
+const TICKET_PAYMENT_CALLBACK_HOST = "ticket";
 const EMULATOR_PACE_PROFILES = Object.freeze({
   natural: Object.freeze({
     hoverMs: 160,
@@ -145,6 +147,63 @@ async function executeAction(
     return { index, type, packageName, readyLabel };
   }
 
+  if (type === "clearLogcat") {
+    await runAdb(["-s", deviceId, "logcat", "-c"]);
+    return { index, type };
+  }
+
+  if (type === "captureTicketCardPayment") {
+    const timeoutMs = clampInteger(action.timeoutMs, 1000, 30000, 10000);
+    const pollMs = clampInteger(action.pollMs, 100, 2000, 400);
+    const deadline = Date.now() + timeoutMs;
+
+    while (Date.now() <= deadline) {
+      const log = await runAdb(["-s", deviceId, "logcat", "-d", "-v", "raw"], {
+        timeoutMs: 12000
+      });
+      const payment = extractTicketPaymentInitiationFromLog(log);
+      if (payment) {
+        return { index, type, ...payment };
+      }
+      await delay(pollMs);
+    }
+
+    throw new Error("V logu emulátoru nebyla nalezena iniciační odpověď platby jízdenky.");
+  }
+
+  if (type === "openDeepLink") {
+    const uri = normalizeTicketPaymentDeepLink(action.uri);
+    const packageName = action.packageName
+      ? normalizeAppPackageName(action.packageName)
+      : null;
+    const args = [
+      "-s", deviceId,
+      "shell", "am", "start",
+      "-a", "android.intent.action.VIEW",
+      "-d", uri
+    ];
+    if (packageName) {
+      args.push("-p", packageName);
+    }
+    await runAdb(args, { timeoutMs: 15000 });
+    invalidateVisibleNodes(executionContext);
+
+    const waitForMatcher = normalizeWaitForMatcher(action.waitFor, action.transitionTimeoutMs);
+    const transitionMatch = waitForMatcher
+      ? await waitForNode(deviceId, waitForMatcher, pace, executionContext)
+      : null;
+    if (waitForMatcher && !transitionMatch) {
+      throw new Error(`Po návratu přes deep link se neobjevil očekávaný prvek: ${describeMatcher(waitForMatcher)}.`);
+    }
+
+    return {
+      index,
+      type,
+      bookingId: new URL(uri).pathname.replace(/^\//, ""),
+      waitForMatchedText: transitionMatch?.contentDescription || transitionMatch?.text || null
+    };
+  }
+
   if (type === "ifNode") {
     const nodes = await getVisibleNodes(deviceId, executionContext);
     const match = findNode(nodes, action);
@@ -179,6 +238,17 @@ async function executeAction(
     await delay(getPacedWaitMs(action.waitAfterMs, pace, 500));
     invalidateVisibleNodes(executionContext);
     return { index, type };
+  }
+
+  if (type === "hideKeyboard") {
+    const inputMethodState = await runAdb(["-s", deviceId, "shell", "dumpsys", "input_method"]);
+    const wasVisible = /\bmInputShown=true\b/.test(inputMethodState);
+    if (wasVisible) {
+      await runAdb(["-s", deviceId, "shell", "input", "keyevent", "BACK"]);
+      await delay(clampInteger(action.settleMs, 0, 2000, 250));
+      invalidateVisibleNodes(executionContext);
+    }
+    return { index, type, wasVisible };
   }
 
   if (type === "keyevent") {
@@ -282,6 +352,11 @@ async function executeAction(
         }
         const point = pointWithinBounds(matchedField.bounds, action.tapHorizontalRatio);
         await presentationTap(deviceId, point.x, point.y, { ...action, waitAfterMs: 250 }, pace, executionContext);
+        // Chrome Custom Tabs may expose the focused field in the accessibility
+        // tree before the web input is ready to accept ADB key events. This is
+        // a synchronization wait, not presentation pacing, so keep it even at
+        // the fastest workflow pace.
+        await delay(clampInteger(action.focusSettleMs, 0, 2000, 250));
         invalidateVisibleNodes(executionContext);
       }
 
@@ -836,6 +911,67 @@ function delay(durationMs) {
   return new Promise(resolve => setTimeout(resolve, durationMs));
 }
 
+function extractTicketPaymentInitiationFromLog(log) {
+  const source = String(log || "");
+  const candidates = [];
+  const starts = [...source.matchAll(/\{\s*"paymentId"\s*:/g)].map(match => match.index);
+
+  for (const start of starts) {
+    // Flutter's debug logger wraps long response bodies across physical logcat lines,
+    // including in the middle of URL and UUID string values. Join only the bounded
+    // response window and extract the three fields needed to resume the live booking.
+    const response = source.slice(start, start + 30000).replace(/\r?\n/g, "");
+    const paymentId = response.match(/"paymentId"\s*:\s*"([0-9a-f-]+)"/i)?.[1] || "";
+    const paymentUrl = (response.match(/"paymentUrl"\s*:\s*"([^"]+)"/i)?.[1] || "")
+      .replace(/\s+/g, "");
+    const booking = response.slice(Math.max(0, response.indexOf('"booking"')));
+    const bookingId = booking.match(/"bookingId"\s*:\s*"([0-9a-f-]+)"/i)?.[1] || "";
+
+    if (isUuid(paymentId) && isUuid(bookingId) && isSafePaymentGatewayUrl(paymentUrl)) {
+      candidates.push({ paymentId, paymentUrl, bookingId });
+    }
+  }
+
+  return candidates.at(-1) || null;
+}
+
+function isSafePaymentGatewayUrl(value) {
+  try {
+    const uri = new URL(value);
+    return uri.protocol === "https:"
+      && Boolean(uri.hostname)
+      && !uri.username
+      && !uri.password;
+  } catch {
+    return false;
+  }
+}
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function normalizeTicketPaymentDeepLink(value) {
+  const raw = String(value || "").trim();
+  let uri;
+  try {
+    uri = new URL(raw);
+  } catch {
+    throw new Error("Neplatný návratový deep link platby jízdenky.");
+  }
+
+  const bookingId = uri.pathname.replace(/^\//, "");
+  if (uri.protocol !== TICKET_PAYMENT_CALLBACK_SCHEME
+      || uri.hostname !== TICKET_PAYMENT_CALLBACK_HOST
+      || !isUuid(bookingId)
+      || uri.username
+      || uri.password) {
+    throw new Error("Deep link musí mířit na konkrétní booking pid-litacka-payment://ticket/{bookingId}.");
+  }
+
+  return raw;
+}
+
 function readJsonBody(request) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -902,12 +1038,14 @@ module.exports = {
   buildPointerMovePoints,
   countConfiguredActions,
   executeEmulatorActions,
+  extractTicketPaymentInitiationFromLog,
   findNode,
   getPresentationTapTiming,
   getEmulatorStatus,
   handleEmulatorBridgeRequest,
   normalizeEmulatorPace,
   normalizeAppPackageName,
+  normalizeTicketPaymentDeepLink,
   normalizeSwipeRepeat,
   keyEventForCharacter,
   parseUiNodes,

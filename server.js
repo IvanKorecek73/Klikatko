@@ -6,6 +6,7 @@ const zlib = require("zlib");
 const { handleRedisBridgeRequest } = require("./tools/redis-bridge/src/server");
 const { handleTask960FixtureRequest } = require("./tools/task-960-fixture-bridge");
 const { handleEmulatorBridgeRequest } = require("./tools/emulator-bridge");
+const { handleDesktopBridgeRequest } = require("./tools/desktop-bridge");
 
 const host = process.env.HARNESS_HOST || "127.0.0.1";
 const port = Number(process.env.PORT || 5096);
@@ -62,6 +63,11 @@ const server = http.createServer((request, response) => {
       response.setTimeout(emulatorActionTimeoutMs);
     }
     handleEmulatorBridgeRequest(request, response);
+    return;
+  }
+
+  if (request.url.startsWith("/__desktop/")) {
+    handleDesktopBridgeRequest(request, response);
     return;
   }
 

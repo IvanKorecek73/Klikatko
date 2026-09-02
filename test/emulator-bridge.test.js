@@ -6,11 +6,13 @@ const {
   buildDeleteKeyBatches,
   buildPointerMovePoints,
   countConfiguredActions,
+  extractTicketPaymentInitiationFromLog,
   findNode,
   getPresentationTapTiming,
   keyEventForCharacter,
   normalizeEmulatorPace,
   normalizeAppPackageName,
+  normalizeTicketPaymentDeepLink,
   normalizeSwipeRepeat,
   parseUiNodes,
   tokenizeAdbText
@@ -154,4 +156,44 @@ test("emulator bridge accepts only safe Android application package names", () =
   );
   assert.throws(() => normalizeAppPackageName("pidlitacka"), /Neplatný název balíčku/);
   assert.throws(() => normalizeAppPackageName("cz.dpp.app; reboot"), /Neplatný název balíčku/);
+});
+
+test("emulator bridge extracts the newest ticket payment initiation without persisting unrelated log data", () => {
+  const log = [
+    "Body:",
+    '{"paymentId":"0a6fa35e-bd7c-4a29-b2f2-238d53fc228a","paymentUrl":"https://gateway.example/old","booking":{"bookingId":"1108f0c5-e93c-4213-a7d0-b4115d503852"}}',
+    "unrelated diagnostic",
+    '{"paymentId":"a906282f-a593-4cb2-8626-dc735f880a5e","paymentUrl":"https://gateway.example/new?token=once","booking":{"bookingId":"c03b029b-1f84-4f88-bfa2-f02aa2584271"}}'
+  ].join("\n");
+
+  assert.deepEqual(extractTicketPaymentInitiationFromLog(log), {
+    paymentId: "a906282f-a593-4cb2-8626-dc735f880a5e",
+    paymentUrl: "https://gateway.example/new?token=once",
+    bookingId: "c03b029b-1f84-4f88-bfa2-f02aa2584271"
+  });
+  assert.equal(extractTicketPaymentInitiationFromLog('{"paymentUrl":"http://gateway.example/insecure"}'), null);
+});
+
+test("emulator bridge reconstructs Flutter payment responses wrapped by logcat", () => {
+  const log = [
+    '{"paymentId":"f32597d6-7fe6-4c84-a976-2b2a2a36762b","paymentUrl":"https://iplatebnibrana.csob.cz/pay/pidlitacka.cz/2fe1',
+    'd498-dee7-4101-b77f-34f1f9c2c342/","status":"IN_PROGRESS","booking":{"bookingId":"2e6e706a-9542-4fa5-b361-97b3ea827d24"',
+    ',"status":"PREBOOKED"}}'
+  ].join("\n");
+
+  assert.deepEqual(extractTicketPaymentInitiationFromLog(log), {
+    paymentId: "f32597d6-7fe6-4c84-a976-2b2a2a36762b",
+    paymentUrl: "https://iplatebnibrana.csob.cz/pay/pidlitacka.cz/2fe1d498-dee7-4101-b77f-34f1f9c2c342/",
+    bookingId: "2e6e706a-9542-4fa5-b361-97b3ea827d24"
+  });
+});
+
+test("emulator bridge only opens ticket payment deep links for a concrete booking", () => {
+  const valid = "pid-litacka-payment://ticket/c03b029b-1f84-4f88-bfa2-f02aa2584271";
+  assert.equal(normalizeTicketPaymentDeepLink(valid), valid);
+  assert.throws(
+    () => normalizeTicketPaymentDeepLink("pid-litacka-payment://coupon/c03b029b-1f84-4f88-bfa2-f02aa2584271"),
+    /ticket/
+  );
+  assert.throws(() => normalizeTicketPaymentDeepLink("https://example.com/"), /ticket/);
 });
