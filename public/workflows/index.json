@@ -105,6 +105,8 @@
           "className": "android.widget.EditText",
           "occurrence": 0,
           "value": "{{email}}",
+          "expectedValue": "{{email}}",
+          "retryCount": 1,
           "sensitive": true,
           "waitAfterMs": 400
         },
@@ -112,7 +114,11 @@
           "type": "tapNode",
           "contentDescription": "Pokračovat",
           "clickable": true,
-          "waitAfterMs": 1000
+          "waitFor": {
+            "contentDescription": "Heslo"
+          },
+          "transitionTimeoutMs": 3000,
+          "retryCount": 1
         },
         {
           "type": "assertNode",
@@ -130,7 +136,10 @@
           "type": "tapNode",
           "contentDescription": "Přihlásit se",
           "clickable": true,
-          "waitAfterMs": 2500
+          "waitFor": {
+            "contentDescription": "Vyhledávání"
+          },
+          "transitionTimeoutMs": 15000
         },
         {
           "type": "assertNode",
@@ -153,27 +162,34 @@
       "actions": [
         {
           "type": "inputText",
-          "className": "android.widget.EditText",
-          "occurrence": 0,
+          "resourceId": "cardnumber",
           "value": "{{cardNumber}}",
+          "expectedValue": "{{cardNumber}}",
+          "keyByKey": true,
+          "keyDelayMs": 350,
           "sensitive": true,
-          "waitAfterMs": 350
+          "retryCount": 2
         },
         {
           "type": "inputText",
-          "className": "android.widget.EditText",
-          "occurrence": 1,
+          "resourceId": "expiry",
           "value": "{{expiry}}",
+          "expectedValue": "11/30",
+          "keyByKey": true,
+          "keyDelayMs": 300,
           "sensitive": true,
-          "waitAfterMs": 350
+          "retryCount": 2
         },
         {
           "type": "inputText",
-          "className": "android.widget.EditText",
-          "occurrence": 2,
+          "resourceId": "cvc",
           "value": "{{cvc}}",
+          "expectedValue": "{{cvc}}",
+          "keyByKey": true,
+          "keyDelayMs": 400,
+          "tapHorizontalRatio": 0.35,
           "sensitive": true,
-          "waitAfterMs": 350
+          "retryCount": 2
         }
       ]
     },
@@ -189,13 +205,36 @@
           "contentDescription": "Jízdné",
           "exact": false,
           "clickable": true,
-          "waitAfterMs": 900
+          "waitFor": {
+            "contentDescription": "Platné jízdné",
+            "exact": false
+          },
+          "transitionTimeoutMs": 8000,
+          "retryCount": 1
+        },
+        {
+          "type": "swipe",
+          "x1": 540,
+          "y1": 1900,
+          "x2": 540,
+          "y2": 500,
+          "durationMs": 300,
+          "repeat": 60,
+          "checkEvery": 6,
+          "until": {
+            "contentDescription": "Koupit jízdenku",
+            "clickable": true
+          }
         },
         {
           "type": "tapNode",
           "contentDescription": "Koupit jízdenku",
           "clickable": true,
-          "waitAfterMs": 1200
+          "waitFor": {
+            "contentDescription": "Nákup jízdenek"
+          },
+          "transitionTimeoutMs": 8000,
+          "retryCount": 1
         },
         {
           "type": "assertNode",
@@ -215,15 +254,62 @@
           "contentDescription": "Nákup jízdenek"
         },
         {
+          "type": "ifNode",
+          "contentDescription": "Dospělý",
+          "clickable": true,
+          "actions": [
+            {
+              "type": "tapNode",
+              "contentDescription": "Dospělý",
+              "clickable": true,
+              "waitFor": {
+                "contentDescription": "Dospělý",
+                "selected": true
+              },
+              "transitionTimeoutMs": 8000,
+              "retryCount": 1
+            }
+          ]
+        },
+        {
+          "type": "swipe",
+          "x1": 540,
+          "y1": 1700,
+          "x2": 540,
+          "y2": 700,
+          "durationMs": 300,
+          "repeat": 20
+        },
+        {
+          "type": "swipe",
+          "x1": 540,
+          "y1": 700,
+          "x2": 540,
+          "y2": 1700,
+          "durationMs": 300,
+          "repeat": 10,
+          "checkEvery": 1,
+          "until": {
+            "contentDescription": "Praha\nDospělý\n30 min",
+            "exact": false,
+            "clickable": true
+          }
+        },
+        {
           "type": "tapNode",
-          "contentDescription": "30 min",
+          "contentDescription": "Praha\nDospělý\n30 min",
           "exact": false,
           "clickable": true,
-          "waitAfterMs": 900
+          "waitFor": {
+            "contentDescription": "Nová karta",
+            "exact": false
+          },
+          "transitionTimeoutMs": 8000,
+          "retryCount": 1
         },
         {
           "type": "assertNode",
-          "contentDescription": "Způsob platby",
+          "contentDescription": "Zaplatit",
           "exact": false
         }
       ]
@@ -846,10 +932,18 @@
             "actions": [
               {
                 "type": "tapNode",
-                "contentDescription": "Způsob platby",
+                "contentDescriptions": [
+                  "Nová karta",
+                  "0006"
+                ],
                 "exact": false,
                 "clickable": true,
-                "waitAfterMs": 700
+                "waitFor": {
+                  "contentDescription": "Uložit kartu pro příště",
+                  "exact": false
+                },
+                "transitionTimeoutMs": 8000,
+                "retryCount": 1
               },
               {
                 "type": "tapNode",
@@ -869,7 +963,11 @@
                 "type": "tapNode",
                 "contentDescription": "Potvrdit",
                 "clickable": true,
-                "waitAfterMs": 700
+                "waitFor": {
+                  "contentDescription": "Zaplatit"
+                },
+                "transitionTimeoutMs": 8000,
+                "retryCount": 1
               },
               {
                 "type": "assertNode",
@@ -899,7 +997,12 @@
                 "contentDescription": "Zaplatit",
                 "exact": false,
                 "clickable": true,
-                "waitAfterMs": 3000
+                "waitFor": {
+                  "className": "android.widget.EditText",
+                  "occurrence": 2
+                },
+                "transitionTimeoutMs": 30000,
+                "retryCount": 0
               },
               {
                 "type": "assertNode",
@@ -947,7 +1050,12 @@
                 "text": "Zaplatit",
                 "exact": false,
                 "clickable": true,
-                "waitAfterMs": 5000
+                "waitFor": {
+                  "contentDescription": "Jízdné",
+                  "exact": false
+                },
+                "transitionTimeoutMs": 30000,
+                "retryCount": 0
               }
             ]
           }
@@ -971,28 +1079,63 @@
               {
                 "type": "tapNode",
                 "contentDescription": "Jízdné",
+                "exact": false,
                 "clickable": true,
-                "waitAfterMs": 700
+                "waitFor": {
+                  "contentDescription": "Platné jízdné",
+                  "exact": false
+                },
+                "transitionTimeoutMs": 8000,
+                "retryCount": 1
+              },
+              {
+                "type": "swipe",
+                "x1": 540,
+                "y1": 1900,
+                "x2": 540,
+                "y2": 500,
+                "durationMs": 300,
+                "repeat": 60,
+                "checkEvery": 6,
+                "until": {
+                  "contentDescription": "Koupit jízdenku",
+                  "clickable": true
+                }
               },
               {
                 "type": "tapNode",
                 "contentDescription": "Koupit jízdenku",
                 "clickable": true,
-                "waitAfterMs": 1000
+                "waitFor": {
+                  "contentDescription": "Nákup jízdenek"
+                },
+                "transitionTimeoutMs": 8000,
+                "retryCount": 1
               },
               {
                 "type": "tapNode",
                 "contentDescription": "30 min",
                 "exact": false,
                 "clickable": true,
-                "waitAfterMs": 700
+                "waitFor": {
+                  "contentDescription": "Zaplatit"
+                },
+                "transitionTimeoutMs": 8000,
+                "retryCount": 1
               },
               {
                 "type": "tapNode",
-                "contentDescription": "Způsob platby",
+                "contentDescriptions": [
+                  "Nová karta",
+                  "0006"
+                ],
                 "exact": false,
                 "clickable": true,
-                "waitAfterMs": 700
+                "waitFor": {
+                  "contentDescription": "Potvrdit"
+                },
+                "transitionTimeoutMs": 8000,
+                "retryCount": 1
               },
               {
                 "type": "assertNode",
@@ -1108,10 +1251,17 @@
             "actions": [
               {
                 "type": "tapNode",
-                "contentDescription": "Způsob platby",
+                "contentDescriptions": [
+                  "Nová karta",
+                  "0006"
+                ],
                 "exact": false,
                 "clickable": true,
-                "waitAfterMs": 700
+                "waitFor": {
+                  "contentDescription": "Potvrdit"
+                },
+                "transitionTimeoutMs": 8000,
+                "retryCount": 1
               },
               {
                 "type": "assertNode",

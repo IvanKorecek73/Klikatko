@@ -1,0 +1,411 @@
+{
+  "version": 1,
+  "projectId": "pidlitacka",
+  "name": "Task 1121 - multi-offer nákup pěti jízdenek",
+  "description": "Reprodukční a regresní průchod původní chyby 5 → 4: pět různých offers, jeden booking, jedna platba a kontrola pěti fulfillmentů přes veřejné API BE PidLitacka.",
+  "scenarios": [
+    {
+      "id": "pidlitacka-task-1121-five-ticket-purchase",
+      "title": "Jízdenky - ověřit multi-offer nákup 5 → 5",
+      "description": "Simuluje hlášení tasku #1121 s produkty 1004 až 1008. Stejná ID poskytuje taskový lokální seed i INT. Před opravou zvýrazní booking 4/5; po opravě musí celý průchod skončit pěti jízdenkami.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "prewarmReturnUrl": true,
+      "tags": [
+        "tickets",
+        "purchase",
+        "multi-offer",
+        "regression",
+        "task-1121",
+        "local-seed",
+        "manual"
+      ],
+      "app": {
+        "section": "tickets",
+        "title": "Jízdenky",
+        "subtitle": "Task 1121: pět různých jízdenek"
+      },
+      "instructions": [
+        "Scénář je přímo navázaný na GitLab task #1121: https://gitlab.com/operator-ict/mobility/mos-pid/pid-litacka-aplikace/pid-litacka-2.0/pid-litacka-2.0-general/-/work_items/1121",
+        "Na LOCAL nejprve aplikujte idempotentní tickets/config/seed-dev.sql; fixture tasku #1121 vytvoří stejné produkty 1004 až 1008 jako na INT.",
+        "Používá přesně produkty 1004, 1005, 1006, 1007 a 1008 z původního hlášení, každý s amount=1, prázdnými zónami a vlastním offer tokenem.",
+        "Všech pět tokenů odešle v jednom booking requestu. Celková očekávaná cena je 48 + 60 + 72 + 84 + 96 = 360 Kč.",
+        "Před opravou má booking známý chybný výsledek: produkty 1005 až 1008, čtyři BookedOffers a cena 312 Kč. Klikátko jej označí jako potvrzenou regresi, ale dovolí pokračovat k platbě.",
+        "Platbu dokončete testovací kartou na GD Pay. Po návratu Klikátko automaticky čeká na stav FULFILLED/PAID.",
+        "Konečná kontrola používá bookingId právě vytvořené objednávky, takže starší jízdenky testovacího účtu nemohou výsledek zamaskovat.",
+        "Po opravě musí booking i fulfillmenty obsahovat přesně pět položek, cenu 360 Kč a produkty 1004 až 1008. Scénář lze spustit na LOCAL, LOCAL ASPIRE i INT."
+      ],
+      "steps": [
+        {
+          "id": "ticket-1121-offer-1004",
+          "title": "1/5 - nacenit produkt 1004",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/offers",
+            "body": {
+              "productId": 1004,
+              "amount": 1,
+              "validSince": "{{nowPlus2Minutes}}",
+              "zones": []
+            }
+          },
+          "extract": {
+            "ticket1121Offer1004": "$.offers[0].offerId"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.offers", "lengthAtLeast": 1 },
+              { "path": "$.offers[0].offerId", "notEmpty": true },
+              { "path": "$.offers[0].productId", "equals": 1004 },
+              { "path": "$.offers[0].price.amount", "equals": 48 }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1121-offer-1005",
+          "title": "2/5 - nacenit produkt 1005",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/offers",
+            "body": {
+              "productId": 1005,
+              "amount": 1,
+              "validSince": "{{nowPlus2Minutes}}",
+              "zones": []
+            }
+          },
+          "extract": {
+            "ticket1121Offer1005": "$.offers[0].offerId"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.offers", "lengthAtLeast": 1 },
+              { "path": "$.offers[0].offerId", "notEmpty": true },
+              { "path": "$.offers[0].productId", "equals": 1005 },
+              { "path": "$.offers[0].price.amount", "equals": 60 }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1121-offer-1006",
+          "title": "3/5 - nacenit produkt 1006",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/offers",
+            "body": {
+              "productId": 1006,
+              "amount": 1,
+              "validSince": "{{nowPlus2Minutes}}",
+              "zones": []
+            }
+          },
+          "extract": {
+            "ticket1121Offer1006": "$.offers[0].offerId"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.offers", "lengthAtLeast": 1 },
+              { "path": "$.offers[0].offerId", "notEmpty": true },
+              { "path": "$.offers[0].productId", "equals": 1006 },
+              { "path": "$.offers[0].price.amount", "equals": 72 }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1121-offer-1007",
+          "title": "4/5 - nacenit produkt 1007",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/offers",
+            "body": {
+              "productId": 1007,
+              "amount": 1,
+              "validSince": "{{nowPlus2Minutes}}",
+              "zones": []
+            }
+          },
+          "extract": {
+            "ticket1121Offer1007": "$.offers[0].offerId"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.offers", "lengthAtLeast": 1 },
+              { "path": "$.offers[0].offerId", "notEmpty": true },
+              { "path": "$.offers[0].productId", "equals": 1007 },
+              { "path": "$.offers[0].price.amount", "equals": 84 }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1121-offer-1008",
+          "title": "5/5 - nacenit produkt 1008",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/offers",
+            "body": {
+              "productId": 1008,
+              "amount": 1,
+              "validSince": "{{nowPlus2Minutes}}",
+              "zones": []
+            }
+          },
+          "extract": {
+            "ticket1121Offer1008": "$.offers[0].offerId"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.offers", "lengthAtLeast": 1 },
+              { "path": "$.offers[0].offerId", "notEmpty": true },
+              { "path": "$.offers[0].productId", "equals": 1008 },
+              { "path": "$.offers[0].price.amount", "equals": 96 }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1121-booking",
+          "title": "Vytvořit jeden booking z pěti offers",
+          "description": "Před opravou backend odesílal první token do OfferId a zbylé čtyři do OfferIds; Ticket Service pak první token ignoroval. Po opravě jde všech pět tokenů pouze v OfferIds.",
+          "requiresContext": [
+            "ticket1121Offer1004",
+            "ticket1121Offer1005",
+            "ticket1121Offer1006",
+            "ticket1121Offer1007",
+            "ticket1121Offer1008"
+          ],
+          "fields": [
+            {
+              "name": "bookingKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/bookings",
+            "headers": {
+              "Idempotency-Key": "{{form.bookingKey}}"
+            },
+            "body": {
+              "offerIds": [
+                "{{context.ticket1121Offer1004}}",
+                "{{context.ticket1121Offer1005}}",
+                "{{context.ticket1121Offer1006}}",
+                "{{context.ticket1121Offer1007}}",
+                "{{context.ticket1121Offer1008}}"
+              ],
+              "amount": 5,
+              "activateAfterPayment": false,
+              "sendConfirmationEmail": false
+            }
+          },
+          "extract": {
+            "ticket1121BookingId": "$.bookingId"
+          },
+          "expected": {
+            "status": 200,
+            "warnings": [
+              {
+                "appMessage": "Regrese #1121 potvrzena už v bookingu: 5 požadovaných → 4 booknuté.",
+                "message": "Ticket Service vrátil čtyři BookedOffers. Přesně podle hlášení chybí první nabídka; pokračujte k platbě pro ověření celého projevu.",
+                "when": [
+                  { "path": "$.bookedOffers.length", "equals": 4 }
+                ]
+              },
+              {
+                "appMessage": "Regrese #1121 potvrzena cenou bookingu: očekáváno 360 Kč, vráceno 312 Kč.",
+                "message": "Booking neobsahuje první nabídku za 48 Kč.",
+                "when": [
+                  { "path": "$.provisionalPrice.amount", "equals": 312 }
+                ]
+              }
+            ],
+            "assertions": [
+              { "path": "$.bookingId", "notEmpty": true },
+              {
+                "path": "$.bookedOffers",
+                "lengthEquals": 5,
+                "message": "Oprava #1121 není účinná: booking neobsahuje přesně všech pět offers."
+              },
+              {
+                "path": "$.provisionalPrice.amount",
+                "equals": 360,
+                "message": "Cena bookingu neodpovídá součtu 48 + 60 + 72 + 84 + 96 Kč."
+              },
+              { "path": "$.bookedOffers", "containsItem": { "productId": 1004 } },
+              { "path": "$.bookedOffers", "containsItem": { "productId": 1005 } },
+              { "path": "$.bookedOffers", "containsItem": { "productId": 1006 } },
+              { "path": "$.bookedOffers", "containsItem": { "productId": 1007 } },
+              { "path": "$.bookedOffers", "containsItem": { "productId": 1008 } }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1121-payment-initiate",
+          "title": "Zahájit jednu platbu za celý booking",
+          "requiresContext": [
+            "ticket1121BookingId"
+          ],
+          "fields": [
+            {
+              "name": "returnUrl",
+              "label": "Návratová URL",
+              "type": "url",
+              "value": "http://localhost:5096/analysis/html/GwResponsePage.html?flow=task-1121-multi-offer",
+              "help": "Lokální návratová stránka Klikátka."
+            },
+            {
+              "name": "paymentKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "headers": {
+              "Idempotency-Key": "{{form.paymentKey}}"
+            },
+            "body": {
+              "bookingId": "{{context.ticket1121BookingId}}",
+              "returnUrlFromPaymentGateway": "{{form.returnUrl}}",
+              "language": "cs",
+              "saveCard": false
+            }
+          },
+          "extract": {
+            "ticket1121PaymentId": "$.paymentId",
+            "ticket1121PaymentUrl": "$.paymentUrl"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.paymentId", "notEmpty": true },
+              { "path": "$.paymentUrl", "notEmpty": true }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1121-open-payment",
+          "title": "Dokončit platbu na testovací bráně",
+          "description": "Otevře URL vrácenou BE PidLitacka. Zaplaťte booking jednou testovací kartou.",
+          "requiresContext": [
+            "ticket1121PaymentId",
+            "ticket1121PaymentUrl"
+          ],
+          "customAction": "showPaymentGatewayLink",
+          "paymentGateway": {
+            "paymentId": "{{context.ticket1121PaymentId}}",
+            "url": "{{context.ticket1121PaymentUrl}}"
+          },
+          "workflowStopAfter": {
+            "message": "Dokončete jednu platbu kartou za celý booking pěti jízdenek.",
+            "preserveResult": true,
+            "instructions": [
+              "Klikněte na otevření platební brány.",
+              "Na INT lze použít testovací kartu 4000007000010006, platnost 11/30 a CVC 111.",
+              "Po úspěšném návratu se vraťte do Klikátka a pokračujte kontrolou bookingu."
+            ]
+          }
+        },
+        {
+          "id": "ticket-1121-booking-fulfilled",
+          "title": "Ověřit zaplacení a vydání jízdenek",
+          "description": "Automaticky čeká na autoritativní stav FULFILLED/PAID a kontroluje počet BookedOffers, cenu a fulfillmenty této objednávky.",
+          "requiresContext": [
+            "ticket1121BookingId",
+            "ticket1121PaymentId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.ticket1121BookingId}}"
+          },
+          "expected": {
+            "status": 200,
+            "warnings": [
+              {
+                "appMessage": "Platba nebo emise jízdenek stále probíhá.",
+                "message": "Nejde o chybu. Klikátko kontrolu automaticky zopakuje.",
+                "blockAdvance": true,
+                "autoRetry": {
+                  "delaySeconds": 5,
+                  "maxAttempts": 72,
+                  "label": "Čekám na zaplacení a vydání jízdenek"
+                },
+                "when": [
+                  { "path": "$.paymentState", "equals": "IN_PROGRESS" }
+                ]
+              },
+              {
+                "appMessage": "Regrese #1121 je potvrzena i po platbě: booking obsahuje jen čtyři nabídky.",
+                "message": "Pokračujte poslední kontrolou zásobníku, která určí konkrétní chybějící produkt.",
+                "when": [
+                  { "path": "$.bookedOffers.length", "equals": 4 }
+                ]
+              },
+              {
+                "appMessage": "Regrese #1121 je potvrzena i po platbě: vznikly jen čtyři fulfillmenty.",
+                "message": "Pokračujte poslední kontrolou zásobníku, která určí konkrétní chybějící produkt.",
+                "when": [
+                  { "path": "$.fulfillments.length", "equals": 4 }
+                ]
+              }
+            ],
+            "assertions": [
+              { "path": "$.bookingId", "equals": "{{context.ticket1121BookingId}}" },
+              { "path": "$.status", "equals": "FULFILLED" },
+              { "path": "$.paymentState", "equals": "PAID" },
+              { "path": "$.confirmedPrice.amount", "equals": 360 },
+              {
+                "path": "$.bookedOffers",
+                "lengthEquals": 5,
+                "message": "Zaplacený booking neobsahuje všech pět nabídek."
+              },
+              {
+                "path": "$.fulfillments",
+                "lengthEquals": 5,
+                "message": "Po platbě nevzniklo přesně pět fulfillmentů."
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1121-list-purchased-tickets",
+          "title": "Ověřit všech pět jízdenek v zásobníku",
+          "description": "Opakuje původní GET /v1/client/tickets a každou položku váže zároveň na nový bookingId i očekávaný produkt.",
+          "requiresContext": [
+            "ticket1121BookingId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "bookingId": "{{context.ticket1121BookingId}}",
+                  "productId": 1004
+                },
+                "message": "Regrese #1121 potvrzena: v zásobníku chybí první produkt 1004 z právě zaplaceného bookingu."
+              },
+              { "path": "$.items", "containsItem": { "bookingId": "{{context.ticket1121BookingId}}", "productId": 1005 } },
+              { "path": "$.items", "containsItem": { "bookingId": "{{context.ticket1121BookingId}}", "productId": 1006 } },
+              { "path": "$.items", "containsItem": { "bookingId": "{{context.ticket1121BookingId}}", "productId": 1007 } },
+              { "path": "$.items", "containsItem": { "bookingId": "{{context.ticket1121BookingId}}", "productId": 1008 } }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

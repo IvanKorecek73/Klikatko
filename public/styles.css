@@ -1728,6 +1728,74 @@ button:disabled {
   color: var(--error);
 }
 
+.auto-retry-countdown {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 12px;
+  border: 1px solid rgba(176, 111, 0, 0.3);
+  border-radius: 8px;
+  padding: 11px 12px;
+  background: #fff8e8;
+  color: var(--ink);
+}
+
+.auto-retry-countdown-main {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-weight: 700;
+}
+
+.auto-retry-countdown-main strong {
+  min-width: 1.4em;
+  color: var(--warn);
+  font-size: 28px;
+  line-height: 1;
+  text-align: right;
+}
+
+.auto-retry-countdown-main em {
+  color: var(--muted);
+  font-size: 13px;
+  font-style: normal;
+}
+
+.auto-retry-countdown-detail {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.auto-retry-countdown button {
+  grid-column: 2;
+  grid-row: 1;
+  border-color: var(--line);
+  padding: 7px 9px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.auto-retry-countdown.cancelled,
+.auto-retry-countdown.exhausted {
+  border-color: var(--line);
+  background: var(--soft);
+}
+
+@media (max-width: 760px) {
+  .auto-retry-countdown {
+    grid-template-columns: 1fr;
+  }
+
+  .auto-retry-countdown button {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}
+
 .workflow-pause-result {
   border: 1px solid rgba(176, 111, 0, 0.28);
   border-left-width: 5px;
@@ -1745,8 +1813,26 @@ button:disabled {
 .workflow-pause-next {
   border-top: 1px solid rgba(176, 111, 0, 0.22);
   color: var(--ink);
+  display: grid;
   font-size: 13px;
+  gap: 8px;
   padding-top: 10px;
+}
+
+.workflow-mobile-continue {
+  width: 100%;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+
+.workflow-mobile-continue:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.workflow-mobile-continue.ready {
+  background: var(--ok);
 }
 
 .presentation-emulator-actions {
@@ -1759,6 +1845,29 @@ button:disabled {
 .presentation-emulator-actions button {
   background: var(--accent);
   color: #fff;
+}
+
+.presentation-emulator-pace {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.presentation-emulator-pace select {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 28px 6px 9px;
+  background: #fff;
+  color: var(--ink);
+}
+
+.presentation-emulator-pace select:disabled {
+  cursor: progress;
+  opacity: 0.65;
 }
 
 .presentation-emulator-actions button.ready {
@@ -1810,7 +1919,7 @@ button:disabled {
   font-size: 13px;
 }
 
-.workflow-pause-inline div {
+.workflow-pause-inline > div {
   border-top: 1px solid rgba(176, 111, 0, 0.22);
   font-size: 13px;
   padding-top: 9px;

@@ -1,0 +1,995 @@
+{
+  "version": 1,
+  "name": "Task 1111 - uložení karty při nákupu jízdenky",
+  "description": "Regresní ověření save → use → delete životního cyklu platební karty při dvou nákupech jízdenek výhradně přes veřejné API BE PidLitacka.",
+  "scenarios": [
+    {
+      "id": "pidlitacka-ticket-save-and-use-card",
+      "title": "Jízdenky - uložit a znovu použít kartu",
+      "description": "Koupí první jízdenku kartou se saveCard=true, ověří vznik uložené karty a stejnou kartou zaplatí druhou jízdenku.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "prewarmReturnUrl": true,
+      "tags": [
+        "tickets",
+        "purchase",
+        "payment-card",
+        "saved-cards",
+        "regression",
+        "task-1111",
+        "manual"
+      ],
+      "app": {
+        "section": "tickets",
+        "title": "Jízdenky",
+        "subtitle": "Uložení a opakované použití karty"
+      },
+      "instructions": [
+        "Použijte vyhrazený testovací účet bez aktivních uložených karet. První krok záměrně vyžaduje prázdný seznam, aby výsledek nemohla zamaskovat starší karta.",
+        "Oba nákupy vzniknou přes veřejné endpointy BE PidLitacka. Klikátko v tomto scénáři nevolá Ticket Service přímo.",
+        "Výchozí produkt 101 je 30minutová jízdenka z lokálního Tickets seedu pro zóny P a 0. Product ID lze před prvním naceněním změnit.",
+        "První platbu dokončete testovací kartou na platební bráně. Požadavek už obsahuje saveCard=true.",
+        "Po návratu opakujte kontrolu první objednávky, dokud není paymentState PAID. Toto načtení současně umožní backendu dokončit předání tokenu z Tickets do úložiště karet PID Lítačky.",
+        "Nově uloženou kartu vyberte v seznamu. Druhá platba posílá pouze její veřejné savedPaymentCardId; token zůstává uvnitř backendu.",
+        "Pokud GD Pay vyžádá fingerprint nebo 3DS challenge, otevřete vrácenou URL a pokračujte process krokem, dokud druhá objednávka není zaplacená.",
+        "Na konci scénář vytvořenou kartu soft-deleteuje, aby šel na čistém účtu zopakovat. Přerušený běh lze uklidit samostatným cleanup scénářem v tomto packu."
+      ],
+      "steps": [
+        {
+          "id": "ticket-1111-cards-before",
+          "title": "Ověřit prázdný seznam uložených karet",
+          "description": "Jednoznačný regresní test začíná na účtu bez aktivní uložené karty.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/saved-cards"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "equals": [],
+                "message": "Účet už obsahuje uloženou kartu. Použijte čistý testovací účet nebo starou testovací kartu nejprve odstraňte cleanup scénářem."
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1111-first-offer",
+          "title": "1/2 - nacenit první jízdenku",
+          "fields": [
+            {
+              "name": "productId",
+              "label": "Product ID",
+              "type": "number",
+              "value": 101,
+              "help": "Lokální Tickets seed: 30minutová jízdenka pro zóny P a 0."
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/offers",
+            "body": {
+              "productId": "{{form.productId}}",
+              "amount": 1,
+              "validSince": "{{nowPlus2Minutes}}",
+              "zones": [
+                "P",
+                "0"
+              ]
+            }
+          },
+          "remember": {
+            "ticket1111ProductId": "{{form.productId}}"
+          },
+          "extract": {
+            "ticket1111FirstOfferId": "$.offers[0].offerId"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.offers",
+                "lengthAtLeast": 1
+              },
+              {
+                "path": "$.offers[0].offerId",
+                "notEmpty": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1111-first-booking",
+          "title": "1/2 - vytvořit první objednávku",
+          "requiresContext": [
+            "ticket1111FirstOfferId"
+          ],
+          "fields": [
+            {
+              "name": "bookingKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/bookings",
+            "headers": {
+              "Idempotency-Key": "{{form.bookingKey}}"
+            },
+            "body": {
+              "offerIds": [
+                "{{context.ticket1111FirstOfferId}}"
+              ],
+              "amount": 1,
+              "activateAfterPayment": false,
+              "sendConfirmationEmail": false
+            }
+          },
+          "extract": {
+            "ticket1111FirstBookingId": "$.bookingId"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.bookingId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.bookedOffers[0].amount",
+                "equals": 1
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1111-first-payment",
+          "title": "1/2 - zahájit platbu s uložením karty",
+          "description": "Zahájí kartovou platbu přes BE PidLitacka s explicitním saveCard=true.",
+          "requiresContext": [
+            "ticket1111FirstBookingId"
+          ],
+          "fields": [
+            {
+              "name": "returnUrl",
+              "label": "Návratová URL",
+              "type": "url",
+              "value": "http://localhost:5096/analysis/html/GwResponsePage.html?flow=task-1111-ticket-saved-card",
+              "help": "Lokální návratová stránka Klikátka; PID Lítačka ji po zpracování callbacku otevře v prohlížeči."
+            },
+            {
+              "name": "paymentKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "headers": {
+              "Idempotency-Key": "{{form.paymentKey}}"
+            },
+            "body": {
+              "bookingId": "{{context.ticket1111FirstBookingId}}",
+              "returnUrlFromPaymentGateway": "{{form.returnUrl}}",
+              "language": "cs",
+              "saveCard": true
+            }
+          },
+          "extract": {
+            "ticket1111FirstPaymentId": "$.paymentId",
+            "ticket1111FirstPaymentUrl": "$.paymentUrl"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.paymentId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.paymentUrl",
+                "notEmpty": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1111-open-first-payment",
+          "title": "1/2 - otevřít platební bránu",
+          "description": "Otevře URL vrácenou BE PidLitacka. Na bráně dokončete úspěšnou platbu testovací kartou.",
+          "requiresContext": [
+            "ticket1111FirstPaymentId",
+            "ticket1111FirstPaymentUrl"
+          ],
+          "customAction": "showPaymentGatewayLink",
+          "paymentGateway": {
+            "paymentId": "{{context.ticket1111FirstPaymentId}}",
+            "url": "{{context.ticket1111FirstPaymentUrl}}"
+          },
+          "workflowStopAfter": {
+            "message": "Dokončete první platbu kartou na platební bráně.",
+            "preserveResult": true,
+            "instructions": [
+              "Klikněte na Otevřít 3DS fingerprint.",
+              "Na INT lze použít testovací kartu 4000007000010006, platnost 11/30 a CVC 111.",
+              "Dokončete úspěšnou platbu; uložení už bylo vyžádáno pomocí saveCard=true.",
+              "Po návratu se vraťte do Klikátka a pokračujte kontrolou objednávky."
+            ]
+          }
+        },
+        {
+          "id": "ticket-1111-first-booking-paid",
+          "title": "1/2 - ověřit zaplacení a předání karty",
+          "description": "Načtení placené objednávky spustí bezpečnou rekonciliaci registrace karty mezi Tickets a BE PidLitacka. Při mezistavu krok zopakujte.",
+          "requiresContext": [
+            "ticket1111FirstBookingId",
+            "ticket1111FirstPaymentId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.ticket1111FirstBookingId}}"
+          },
+          "expected": {
+            "status": 200,
+            "warnings": [
+              {
+                "appMessage": "Stav platby čeká na potvrzení v Tickets.",
+                "message": "Nejde o chybu. Klikátko kontrolu automaticky zopakuje po krátkém odpočtu.",
+                "blockAdvance": true,
+                "autoRetry": {
+                  "delaySeconds": 5,
+                  "maxAttempts": 72,
+                  "label": "Čekám na potvrzení první platby"
+                },
+                "when": [
+                  {
+                    "path": "$.paymentState",
+                    "equals": "IN_PROGRESS"
+                  }
+                ]
+              }
+            ],
+            "assertions": [
+              {
+                "path": "$.bookingId",
+                "equals": "{{context.ticket1111FirstBookingId}}"
+              },
+              {
+                "path": "$.paymentState",
+                "equals": "PAID",
+                "message": "První objednávka ještě není zaplacená. Počkejte a krok zopakujte."
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1111-select-saved-card",
+          "title": "Vybrat kartu uloženou první platbou",
+          "description": "Protože scénář začal prázdným seznamem, aktivní karta musí pocházet z právě dokončeného nákupu jízdenky.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/saved-cards"
+          },
+          "selection": {
+            "sourcePath": "$",
+            "filter": {
+              "status": "Active"
+            },
+            "buttonLabel": "Použít pro druhou jízdenku",
+            "selectedButtonLabel": "Testovací karta vybrána",
+            "emptyTitle": "Karta nebyla uložena",
+            "emptyText": "Po úspěšné první platbě není dostupná žádná aktivní uložená karta.",
+            "store": {
+              "ticket1111SavedCardId": "$.id",
+              "ticket1111SavedCardMaskedPan": "$.maskedPan",
+              "ticket1111SavedCardExpirationMonth": "$.expirationMonth",
+              "ticket1111SavedCardExpirationYear": "$.expirationYear"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "lengthAtLeast": 1,
+                "message": "Po úspěšném nákupu se v účtu neobjevila uložená karta."
+              },
+              {
+                "path": "$",
+                "containsItem": {
+                  "status": "Active"
+                },
+                "message": "Seznam neobsahuje žádnou aktivní uloženou kartu."
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1111-second-offer",
+          "title": "2/2 - nacenit druhou jízdenku",
+          "requiresContext": [
+            "ticket1111SavedCardId"
+          ],
+          "fields": [
+            {
+              "name": "productId",
+              "label": "Produkt jízdenky",
+              "type": "number",
+              "value": 101
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/offers",
+            "body": {
+              "productId": "{{form.productId}}",
+              "amount": 1,
+              "validSince": "{{nowPlus2Minutes}}",
+              "zones": [
+                "P",
+                "0"
+              ]
+            }
+          },
+          "extract": {
+            "ticket1111SecondOfferId": "$.offers[0].offerId"
+          },
+          "remember": {
+            "ticket1111ProductId": "{{form.productId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.offers",
+                "lengthAtLeast": 1
+              },
+              {
+                "path": "$.offers[0].offerId",
+                "notEmpty": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1111-second-booking",
+          "title": "2/2 - vytvořit druhou objednávku",
+          "requiresContext": [
+            "ticket1111SecondOfferId"
+          ],
+          "fields": [
+            {
+              "name": "bookingKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/bookings",
+            "headers": {
+              "Idempotency-Key": "{{form.bookingKey}}"
+            },
+            "body": {
+              "offerIds": [
+                "{{context.ticket1111SecondOfferId}}"
+              ],
+              "amount": 1,
+              "activateAfterPayment": false,
+              "sendConfirmationEmail": false
+            }
+          },
+          "extract": {
+            "ticket1111SecondBookingId": "$.bookingId"
+          },
+          "remember": {
+            "ticket1111SecondPaymentId": "",
+            "ticket1111SecondPaymentStatus": "",
+            "ticket1111SecondPaymentInProgress": "",
+            "ticket1111FingerprintUrl": "",
+            "ticket1111AuthenticateUrl": ""
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.bookingId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.bookedOffers[0].amount",
+                "equals": 1
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1111-saved-card-initiate",
+          "title": "2/2 - zaplatit uloženou kartou",
+          "description": "BE PidLitacka přijímá veřejné ID karty, ověří vlastnictví a až interně předá její token do Tickets.",
+          "requiresContext": [
+            "ticket1111SecondBookingId",
+            "ticket1111SavedCardId"
+          ],
+          "warningWhen": [
+            {
+              "when": [
+                {
+                  "contextExists": "ticket1111SecondPaymentId"
+                }
+              ],
+              "appMessage": "Platba už byla zahájena.",
+              "message": "Iniciaci se stejným Idempotency-Key nelze opakovat.",
+              "detail": "Klikněte na Další a pokračujte fingerprintem nebo zpracováním již založené platby."
+            }
+          ],
+          "fields": [
+            {
+              "name": "paymentKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/saved-card/{{context.ticket1111SecondBookingId}}/initiate",
+            "headers": {
+              "Idempotency-Key": "{{form.paymentKey}}"
+            },
+            "body": {
+              "isSdkUsed": false,
+              "additionalBrowserData": {
+                "acceptHeader": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "javaEnabled": "{{browser.javaEnabled}}",
+                "language": "{{browser.language}}",
+                "colorDepth": "{{browser.colorDepth}}",
+                "screenWidth": "{{browser.screenWidth}}",
+                "screenHeight": "{{browser.screenHeight}}",
+                "timezone": "{{browser.timezone}}",
+                "userAgent": "{{browser.userAgent}}",
+                "challengeWindowSize": "05",
+                "javascriptEnabled": "{{browser.javascriptEnabled}}"
+              },
+              "additionalSdkData": null,
+              "language": "cs",
+              "savedPaymentCardId": "{{context.ticket1111SavedCardId}}"
+            }
+          },
+          "extract": {
+            "ticket1111SecondPaymentId": "$.paymentId",
+            "ticket1111SecondPaymentStatus": "$.status",
+            "ticket1111SecondPaymentInProgress": "$.paymentInProgress",
+            "ticket1111FingerprintUrl": "$.actions.fingerprintAction.browserFingerprintSubAction.url",
+            "ticket1111AuthenticateUrl": "$.actions.authenticateAction.browserChallengeAuthSubAction.url"
+          },
+          "expected": {
+            "status": 200,
+            "warnings": [
+              {
+                "appMessage": "Fingerprint je připravený – iniciaci už neopakujte.",
+                "message": "Klikněte na Další a pokračujte krokem Otevřít 3DS fingerprint.",
+                "when": [
+                  {
+                    "path": "$.fingerprintRequired",
+                    "equals": true
+                  }
+                ]
+              },
+              {
+                "appMessage": "3DS ověření je připravené – iniciaci už neopakujte.",
+                "message": "Klikněte na Další a pokračujte krokem Otevřít 3DS challenge.",
+                "when": [
+                  {
+                    "path": "$.authenticateRequired",
+                    "equals": true
+                  }
+                ]
+              }
+            ],
+            "assertions": [
+              {
+                "path": "$.paymentId",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(paid|in_progress)$",
+                "message": "Platba uloženou kartou byla odmítnuta už při iniciaci."
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1111-open-fingerprint",
+          "title": "Otevřít 3DS fingerprint",
+          "description": "Otevře fingerprint URL, pokud ji GD Pay při platbě uloženou kartou vyžádal.",
+          "requiresContext": [
+            "ticket1111FingerprintUrl"
+          ],
+          "skipWhen": {
+            "contextMissing": "ticket1111FingerprintUrl"
+          },
+          "customAction": "showPaymentGatewayLink",
+          "paymentGateway": {
+            "paymentId": "{{context.ticket1111SecondPaymentId}}",
+            "url": "{{context.ticket1111FingerprintUrl}}",
+            "actionKind": "fingerprint"
+          },
+          "workflowStopAfter": {
+            "message": "Nechte fingerprint URL dokončit přesměrování a vraťte se do Klikátka.",
+            "preserveResult": true,
+            "instructions": [
+              "Klikněte na Otevřít 3DS fingerprint.",
+              "Po dokončení fingerprintu se vraťte do Klikátka.",
+              "Pokračujte process krokem."
+            ]
+          }
+        },
+        {
+          "id": "ticket-1111-process-after-fingerprint",
+          "title": "Pokračovat v platbě po fingerprintu",
+          "description": "Krok lze opakovat, dokud odpověď nevrátí 3DS challenge nebo terminální stav paid.",
+          "requiresContext": [
+            "ticket1111SecondBookingId",
+            "ticket1111SecondPaymentId",
+            "ticket1111SavedCardId"
+          ],
+          "skipWhen": {
+            "contextEquals": {
+              "key": "ticket1111SecondPaymentInProgress",
+              "value": false
+            }
+          },
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/{{context.ticket1111SecondBookingId}}/payments/{{context.ticket1111SecondPaymentId}}/process",
+            "body": {
+              "paymentMethod": "SavedCard",
+              "savedPaymentCardId": "{{context.ticket1111SavedCardId}}",
+              "additionalBrowserData": {
+                "acceptHeader": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "javaEnabled": "{{browser.javaEnabled}}",
+                "language": "{{browser.language}}",
+                "colorDepth": "{{browser.colorDepth}}",
+                "screenWidth": "{{browser.screenWidth}}",
+                "screenHeight": "{{browser.screenHeight}}",
+                "timezone": "{{browser.timezone}}",
+                "userAgent": "{{browser.userAgent}}",
+                "challengeWindowSize": "05",
+                "javascriptEnabled": "{{browser.javascriptEnabled}}"
+              },
+              "additionalSdkData": null
+            }
+          },
+          "extract": {
+            "ticket1111SecondPaymentStatus": "$.status",
+            "ticket1111SecondPaymentInProgress": "$.paymentInProgress",
+            "ticket1111AuthenticateUrl": "$.actions.authenticateAction.browserChallengeAuthSubAction.url"
+          },
+          "expected": {
+            "status": 200,
+            "warnings": [
+              {
+                "appMessage": "GD Pay požaduje 3DS ověření.",
+                "message": "Klikněte na Další a otevřete 3DS challenge; tento Process teď neopakujte.",
+                "when": [
+                  {
+                    "path": "$.authenticateRequired",
+                    "equals": true
+                  }
+                ]
+              },
+              {
+                "appMessage": "Platba je stále ve zpracování.",
+                "message": "Challenge ještě není připravená. Klikátko tento krok automaticky zopakuje po krátkém odpočtu.",
+                "blockAdvance": true,
+                "autoRetry": {
+                  "delaySeconds": 5,
+                  "maxAttempts": 18,
+                  "label": "Čekám na 3DS challenge"
+                },
+                "when": [
+                  {
+                    "path": "$.paymentInProgress",
+                    "equals": true
+                  },
+                  {
+                    "path": "$.authenticateRequired",
+                    "equals": false
+                  }
+                ]
+              },
+              {
+                "appMessage": "GD Pay už platbu dále nezpracovává.",
+                "message": "Tento Process už neopakujte. Klikněte na Další a ověřte autoritativní stav objednávky.",
+                "when": [
+                  {
+                    "path": "$.paymentInProgress",
+                    "equals": false
+                  },
+                  {
+                    "path": "$.status",
+                    "equals": "IN_PROGRESS"
+                  }
+                ]
+              }
+            ],
+            "assertions": [
+              {
+                "path": "$.paymentId",
+                "equals": "{{context.ticket1111SecondPaymentId}}"
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(paid|in_progress)$"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1111-open-authenticate",
+          "title": "Otevřít 3DS challenge",
+          "description": "Otevře challenge URL, pokud ji GD Pay při platbě uloženou kartou vyžádal.",
+          "requiresContext": [
+            "ticket1111AuthenticateUrl"
+          ],
+          "skipWhen": {
+            "contextMissing": "ticket1111AuthenticateUrl"
+          },
+          "customAction": "showPaymentGatewayLink",
+          "paymentGateway": {
+            "paymentId": "{{context.ticket1111SecondPaymentId}}",
+            "url": "{{context.ticket1111AuthenticateUrl}}",
+            "actionKind": "challenge"
+          },
+          "workflowStopAfter": {
+            "message": "Dokončete 3DS ověření uložené karty.",
+            "preserveResult": true,
+            "instructions": [
+              "Klikněte na Otevřít 3DS challenge.",
+              "Dokončete testovací 3DS challenge.",
+              "Po návratu pokračujte finalizačním process krokem."
+            ]
+          }
+        },
+        {
+          "id": "ticket-1111-process-final",
+          "title": "Finalizovat platbu uloženou kartou",
+          "description": "Po 3DS ověření opakujte krok, dokud odpověď nevrátí paid a paymentInProgress=false.",
+          "requiresContext": [
+            "ticket1111SecondBookingId",
+            "ticket1111SecondPaymentId",
+            "ticket1111SavedCardId"
+          ],
+          "skipWhen": {
+            "contextEquals": {
+              "key": "ticket1111SecondPaymentInProgress",
+              "value": false
+            }
+          },
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/{{context.ticket1111SecondBookingId}}/payments/{{context.ticket1111SecondPaymentId}}/process",
+            "body": {
+              "paymentMethod": "SavedCard",
+              "savedPaymentCardId": "{{context.ticket1111SavedCardId}}",
+              "additionalBrowserData": {
+                "acceptHeader": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "javaEnabled": "{{browser.javaEnabled}}",
+                "language": "{{browser.language}}",
+                "colorDepth": "{{browser.colorDepth}}",
+                "screenWidth": "{{browser.screenWidth}}",
+                "screenHeight": "{{browser.screenHeight}}",
+                "timezone": "{{browser.timezone}}",
+                "userAgent": "{{browser.userAgent}}",
+                "challengeWindowSize": "05",
+                "javascriptEnabled": "{{browser.javascriptEnabled}}"
+              },
+              "additionalSdkData": null
+            }
+          },
+          "extract": {
+            "ticket1111SecondPaymentStatus": "$.status",
+            "ticket1111SecondPaymentInProgress": "$.paymentInProgress",
+            "ticket1111AuthenticateUrl": "$.actions.authenticateAction.browserChallengeAuthSubAction.url"
+          },
+          "expected": {
+            "status": 200,
+            "warnings": [
+              {
+                "appMessage": "GD Pay nyní požaduje 3DS challenge.",
+                "message": "Klikněte na Zpět, otevřete nově dostupnou 3DS challenge a potom se vraťte k finalizaci.",
+                "blockAdvance": true,
+                "when": [
+                  {
+                    "path": "$.authenticateRequired",
+                    "equals": true
+                  }
+                ]
+              },
+              {
+                "appMessage": "GD Pay už platbu dále nezpracovává.",
+                "message": "Tento Process už neopakujte. Klikněte na Další a ověřte autoritativní stav objednávky.",
+                "when": [
+                  {
+                    "path": "$.paymentInProgress",
+                    "equals": false
+                  },
+                  {
+                    "path": "$.status",
+                    "equals": "IN_PROGRESS"
+                  }
+                ]
+              },
+              {
+                "appMessage": "Platba ještě není dokončená.",
+                "message": "Počkejte a tento krok zopakujte.",
+                "blockAdvance": true,
+                "when": [
+                  {
+                    "path": "$.paymentInProgress",
+                    "equals": true
+                  },
+                  {
+                    "path": "$.authenticateRequired",
+                    "equals": false
+                  }
+                ]
+              }
+            ],
+            "assertions": [
+              {
+                "path": "$.paymentId",
+                "equals": "{{context.ticket1111SecondPaymentId}}"
+              },
+              {
+                "path": "$.status",
+                "equals": "PAID",
+                "message": "Druhá platba uloženou kartou musí skončit stavem paid."
+              },
+              {
+                "path": "$.paymentInProgress",
+                "equals": false
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1111-second-booking-paid",
+          "title": "2/2 - ověřit zaplacení druhé objednávky",
+          "description": "Autoritativní kontrola potvrzuje, že uložená karta skutečně zaplatila druhou jízdenku.",
+          "requiresContext": [
+            "ticket1111SecondBookingId",
+            "ticket1111SecondPaymentId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.ticket1111SecondBookingId}}"
+          },
+          "expected": {
+            "status": 200,
+            "warnings": [
+              {
+                "appMessage": "Platba je stále ve zpracování.",
+                "message": "Ještě nejde o chybu. Počkejte na zpracování GD Pay a kontrolu zopakujte.",
+                "blockAdvance": true,
+                "when": [
+                  {
+                    "path": "$.paymentState",
+                    "equals": "IN_PROGRESS"
+                  }
+                ]
+              }
+            ],
+            "assertions": [
+              {
+                "path": "$.bookingId",
+                "equals": "{{context.ticket1111SecondBookingId}}"
+              },
+              {
+                "path": "$.paymentState",
+                "equals": "PAID",
+                "message": "Druhá objednávka nebyla zaplacena. Pokud je platba zrušená nebo odmítnutá, čekání ani opakování této kontroly už nepomůže."
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1111-delete-card",
+          "title": "Odstranit vytvořenou testovací kartu",
+          "description": "Soft-deleteuje přesně kartu vytvořenou první platbou, aby šel test zopakovat.",
+          "requiresContext": [
+            "ticket1111SavedCardId"
+          ],
+          "request": {
+            "method": "DELETE",
+            "path": "/v1/accounts/me/saved-cards/{{context.ticket1111SavedCardId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.id",
+                "equals": "{{context.ticket1111SavedCardId}}"
+              },
+              {
+                "path": "$.status",
+                "equals": "Deleted"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1111-verify-cleanup",
+          "title": "Ověřit čistý účet po testu",
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/saved-cards"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "equals": [],
+                "message": "Po cleanupu zůstala na testovacím účtu aktivní uložená karta."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-ticket-use-existing-card",
+      "title": "Jízdenky - zaplatit již uloženou kartou",
+      "description": "Samostatný průchod druhou částí testu. Vybere existující kartu, koupí jednu jízdenku a zaplatí ji přes veřejné API BE PidLitacka.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "tickets",
+        "purchase",
+        "saved-cards",
+        "3ds",
+        "task-1111",
+        "manual"
+      ],
+      "steps": [
+        {
+          "id": "ticket-1111-existing-select-card",
+          "title": "Vybrat existující uloženou kartu",
+          "description": "Vyberte aktivní kartu, kterou má nový nákup jízdenky použít.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/saved-cards"
+          },
+          "selection": {
+            "sourcePath": "$",
+            "buttonLabel": "Použít kartu",
+            "emptyTitle": "Žádná aktivní karta",
+            "emptyText": "Účet neobsahuje uloženou kartu. Nejdříve spusťte úplný save-and-use scénář.",
+            "store": {
+              "ticket1111SavedCardId": "$.id",
+              "ticket1111SavedCardMaskedPan": "$.maskedPan",
+              "ticket1111SavedCardExpirationMonth": "$.expirationMonth",
+              "ticket1111SavedCardExpirationYear": "$.expirationYear"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$",
+                "containsItem": {
+                  "status": "Active"
+                },
+                "message": "Seznam neobsahuje žádnou aktivní uloženou kartu."
+              }
+            ]
+          }
+        }
+      ],
+      "appendStepsFrom": {
+        "scenarioId": "pidlitacka-ticket-save-and-use-card",
+        "startStepId": "ticket-1111-second-offer",
+        "endStepId": "ticket-1111-second-booking-paid"
+      }
+    },
+    {
+      "id": "pidlitacka-ticket-1111-card-cleanup",
+      "title": "Jízdenky - odstranit testovací uloženou kartu",
+      "description": "Samostatný cleanup pro případ, že byl hlavní save → use → delete průchod přerušen.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "tickets",
+        "saved-cards",
+        "cleanup",
+        "task-1111",
+        "manual"
+      ],
+      "app": {
+        "section": "tickets",
+        "title": "Jízdenky",
+        "subtitle": "Cleanup testovací karty"
+      },
+      "instructions": [
+        "Vyberte pouze kartu vytvořenou testovacím scénářem tasku 1111 podle maskovaného PAN a expirace.",
+        "DELETE provede lokální soft-delete v BE PidLitacka; token na GD Pay nerevokuje."
+      ],
+      "steps": [
+        {
+          "id": "ticket-1111-cleanup-select",
+          "title": "Vybrat kartu k odstranění",
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/saved-cards"
+          },
+          "selection": {
+            "sourcePath": "$",
+            "filter": {
+              "status": "Active"
+            },
+            "buttonLabel": "Vybrat k odstranění",
+            "selectedButtonLabel": "Karta vybrána",
+            "emptyTitle": "Žádná aktivní karta",
+            "emptyText": "Účet neobsahuje kartu, kterou by bylo potřeba uklidit.",
+            "store": {
+              "ticket1111CleanupCardId": "$.id",
+              "ticket1111CleanupMaskedPan": "$.maskedPan",
+              "ticket1111CleanupExpirationMonth": "$.expirationMonth",
+              "ticket1111CleanupExpirationYear": "$.expirationYear"
+            }
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "ticket-1111-cleanup-delete",
+          "title": "Soft-deleteovat vybranou kartu",
+          "requiresContext": [
+            "ticket1111CleanupCardId"
+          ],
+          "request": {
+            "method": "DELETE",
+            "path": "/v1/accounts/me/saved-cards/{{context.ticket1111CleanupCardId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.id",
+                "equals": "{{context.ticket1111CleanupCardId}}"
+              },
+              {
+                "path": "$.status",
+                "equals": "Deleted"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1111-cleanup-list-after",
+          "title": "Načíst zbývající aktivní karty",
+          "request": {
+            "method": "GET",
+            "path": "/v1/accounts/me/saved-cards"
+          },
+          "expected": {
+            "status": 200
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -45,6 +45,13 @@ test("workflow engine handles presentation items before API scenario execution",
   assert.ok(presentationBranch < scenarioBranch);
   assert.match(appSource, /presentationPendingItemIndex/);
   assert.match(appSource, /showPresentationWorkflowPauseResult/);
+  assert.match(appSource, /id="presentationEmulatorPace"/);
+  assert.match(appSource, /Maximální \(bez umělých prodlev\)/);
+  assert.match(appSource, /pace,/);
+  assert.match(appSource, /data-workflow-continue/);
+  assert.match(appSource, /function bindWorkflowContinueButtons/);
+  assert.match(appSource, /hasEmulatorActions \? "disabled"/);
+  assert.match(appSource, /continueButton\.disabled = false/);
 });
 
 test("emulator subscenarios separate reusable login from embedded card filling", () => {

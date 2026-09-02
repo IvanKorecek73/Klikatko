@@ -33,6 +33,18 @@
       "file": "tickets.json"
     },
     {
+      "id": "pidlitacka-task-1111-ticket-saved-card",
+      "name": "PidLitacka - task 1111: uložit a použít kartu u jízdenek",
+      "description": "Regresní nákup dvou jízdenek přes BE PidLitacka: první platba kartu uloží a druhá ji znovu použije.",
+      "file": "task-1111-ticket-saved-card.json"
+    },
+    {
+      "id": "pidlitacka-task-1121-multi-offer-purchase",
+      "name": "PidLitacka - task 1121: multi-offer nákup 5 jízdenek",
+      "description": "Reprodukční a regresní průchod chyby 5 → 4: pět různých offers, jeden booking, jedna platba a ověření pěti fulfillmentů.",
+      "file": "task-1121-multi-offer-purchase.json"
+    },
+    {
       "id": "pidlitacka-coupon-payment-diagnostics",
       "name": "PidLitacka - diagnostika plateb kupónů",
       "description": "Dočasné řízené průchody platební bránou a porovnání stavů objednávky a kupónu.",

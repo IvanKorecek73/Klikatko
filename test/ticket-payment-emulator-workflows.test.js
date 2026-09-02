@@ -96,7 +96,7 @@ test("both workflows begin by restarting the app into a reusable root state", ()
   }
 });
 
-test("saved-profile login enters the password and uses fast pacing for logout confirmation", () => {
+test("saved-profile login enters the password and keeps logout confirmation explicit", () => {
   const login = getSubscenario("pidlitacka-login-saved-profile");
   const passwordInput = login.actions.find(
     action => action.type === "inputText" && action.value === "{{password}}"
@@ -114,6 +114,27 @@ test("saved-profile login enters the password and uses fast pacing for logout co
   assert.equal(confirmation.waitAfterMs, 700);
 });
 
+test("saved-profile login verifies the email-to-password transition and retries a missed tap", () => {
+  const login = getSubscenario("pidlitacka-login-saved-profile");
+  const emailInput = login.actions.find(
+    action => action.type === "inputText" && action.value === "{{email}}"
+  );
+  const continueAction = login.actions.find(
+    action => action.type === "tapNode" && action.contentDescription === "Pokračovat"
+  );
+  const submitAction = login.actions.find(
+    action => action.type === "tapNode" && action.contentDescription === "Přihlásit se"
+  );
+
+  assert.equal(emailInput.expectedValue, "{{email}}");
+  assert.equal(emailInput.retryCount, 1);
+  assert.deepEqual(continueAction.waitFor, { contentDescription: "Heslo" });
+  assert.equal(continueAction.transitionTimeoutMs, 3000);
+  assert.equal(continueAction.retryCount, 1);
+  assert.deepEqual(submitAction.waitFor, { contentDescription: "Vyhledávání" });
+  assert.equal(submitAction.transitionTimeoutMs, 15000);
+});
+
 test("ticket navigation and product selection use semantic labels instead of coordinates", () => {
   const open = getSubscenario("pidlitacka-open-ticket-purchase");
   const select = getSubscenario("pidlitacka-select-prague-30-minute-ticket");
@@ -125,9 +146,37 @@ test("ticket navigation and product selection use semantic labels instead of coo
     ["Jízdné", "Koupit jízdenku"]
   );
   assert.equal(open.actions[0].exact, false);
-  assert.equal(select.actions[1].contentDescription, "30 min");
-  assert.equal(select.actions[1].exact, false);
-  assert.equal(select.actions[2].contentDescription, "Způsob platby");
+  assert.deepEqual(open.actions[0].waitFor, { contentDescription: "Platné jízdné", exact: false });
+  assert.equal(open.actions[1].type, "swipe");
+  assert.equal(open.actions[1].repeat, 60);
+  assert.deepEqual(open.actions[1].until, {
+    contentDescription: "Koupit jízdenku",
+    clickable: true
+  });
+  assert.deepEqual(open.actions[2].waitFor, { contentDescription: "Nákup jízdenek" });
+  assert.equal(select.actions[1].type, "ifNode");
+  assert.equal(select.actions[1].contentDescription, "Dospělý");
+  assert.notEqual(select.actions[1].exact, false);
+  assert.equal(select.actions[1].actions[0].type, "tapNode");
+  assert.equal(select.actions[1].actions[0].contentDescription, "Dospělý");
+  assert.notEqual(select.actions[1].actions[0].exact, false);
+  assert.equal(select.actions[1].actions[0].waitFor.selected, true);
+  assert.notEqual(select.actions[1].actions[0].waitFor.exact, false);
+  assert.equal(select.actions[2].type, "swipe");
+  assert.equal(select.actions[2].repeat, 20);
+  assert.equal(select.actions[3].type, "swipe");
+  assert.deepEqual(select.actions[3].until, {
+    contentDescription: "Praha\nDospělý\n30 min",
+    exact: false,
+    clickable: true
+  });
+  assert.equal(select.actions[4].contentDescription, "Praha\nDospělý\n30 min");
+  assert.equal(select.actions[4].exact, false);
+  assert.deepEqual(select.actions[4].waitFor, {
+    contentDescription: "Nová karta",
+    exact: false
+  });
+  assert.equal(select.actions[5].contentDescription, "Zaplatit");
   assert.ok([...open.actions, ...select.actions].every(action => action.type !== "tap"));
 });
 
@@ -139,13 +188,35 @@ test("save-card workflow enables persistence before opening and submitting the g
   const submit = getItem(workflow, "ticket-save-card-submit-gateway");
   const verify = getItem(workflow, "ticket-save-card-verify");
 
-  assert.equal(enable.emulator.actions[0].contentDescription, "Způsob platby");
+  assert.deepEqual(enable.emulator.actions[0].contentDescriptions, ["Nová karta", "0006"]);
+  assert.deepEqual(enable.emulator.actions[0].waitFor, {
+    contentDescription: "Uložit kartu pro příště",
+    exact: false
+  });
   assert.ok(enable.emulator.actions.some(action => action.contentDescription === "Uložit kartu pro příště"));
   assert.equal(initiate.emulator.actions[0].contentDescription, "Zaplatit");
+  assert.deepEqual(initiate.emulator.actions[0].waitFor, {
+    className: "android.widget.EditText",
+    occurrence: 2
+  });
+  assert.equal(initiate.emulator.actions[0].transitionTimeoutMs, 30000);
   assert.equal(initiate.emulator.actions[1].className, "android.widget.EditText");
   assert.equal(initiate.emulator.actions[1].occurrence, 2);
   assert.equal(fill.emulator.subscenarioId, "gdpay-fill-test-card");
+  const fillScenario = getSubscenario("gdpay-fill-test-card");
+  assert.deepEqual(fillScenario.actions.map(action => action.resourceId), ["cardnumber", "expiry", "cvc"]);
+  assert.equal(fillScenario.actions[0].keyByKey, true);
+  assert.equal(fillScenario.actions[0].expectedValue, "{{cardNumber}}");
+  assert.equal(fillScenario.actions[1].expectedValue, "11/30");
+  assert.equal(fillScenario.actions[1].keyByKey, true);
+  assert.equal(fillScenario.actions[2].expectedValue, "{{cvc}}");
+  assert.equal(fillScenario.actions[2].tapHorizontalRatio, 0.35);
   assert.match(submit.emulator.confirm, /vytvoří další jízdenku/i);
+  assert.deepEqual(submit.emulator.actions[0].waitFor, {
+    contentDescription: "Jízdné",
+    exact: false
+  });
+  assert.equal(submit.emulator.actions[0].transitionTimeoutMs, 30000);
   assert.ok(verify.emulator.actions.some(action => action.contentDescription === "0006"));
   assert.match(verify.instructions.join(" "), /První běh na čistém účtu/i);
 });
@@ -165,7 +236,7 @@ test("saved-card workflow asserts card 0006 before initiating the opaque-token p
 
   assert.ok(assertIndex >= 0);
   assert.ok(tapIndex > assertIndex);
-  assert.equal(select.emulator.actions[0].contentDescription, "Způsob platby");
+  assert.deepEqual(select.emulator.actions[0].contentDescriptions, ["Nová karta", "0006"]);
   assert.equal(initiate.emulator.actions[0].contentDescription, "Zaplatit");
   assert.match(initiate.emulator.confirm, /uloženou kartou/i);
   assert.match(initiate.expected.join(" "), /HTTP 400/i);

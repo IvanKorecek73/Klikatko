@@ -7,8 +7,29 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_DEVICE_ID = "emulator-5554";
 const MAX_ACTIONS = 24;
 const MAX_BODY_BYTES = 64 * 1024;
-const REMOTE_UI_DUMP = "/sdcard/klikatko-window.xml";
 const SAFE_KEY_EVENTS = new Set(["BACK", "HOME", "ENTER", "ESCAPE", "TAB", "DPAD_UP", "DPAD_DOWN", "DPAD_LEFT", "DPAD_RIGHT"]);
+const EMULATOR_PACE_PROFILES = Object.freeze({
+  natural: Object.freeze({
+    hoverMs: 160,
+    touchMs: 240,
+    waitAfterMs: 0,
+    waitScale: 0,
+    waitAfterLimitMs: 0,
+    nodeTimeoutMs: 8000,
+    nodePollMs: 0,
+    swipeScale: 0.25
+  }),
+  fast: Object.freeze({
+    hoverMs: 120,
+    touchMs: 200,
+    waitAfterMs: 0,
+    waitScale: 0,
+    waitAfterLimitMs: 0,
+    nodeTimeoutMs: 8000,
+    nodePollMs: 0,
+    swipeScale: 0.25
+  })
+});
 
 function resolveAdbPath() {
   const configured = String(process.env.ANDROID_ADB_PATH || "").trim();
@@ -58,6 +79,7 @@ async function getEmulatorStatus(deviceId = DEFAULT_DEVICE_ID) {
 
 async function executeEmulatorActions(payload = {}) {
   const deviceId = normalizeDeviceId(payload.deviceId);
+  const pace = normalizeEmulatorPace(payload.pace);
   const actions = Array.isArray(payload.actions) ? payload.actions : [];
   const actionCount = countConfiguredActions(actions);
 
@@ -68,26 +90,40 @@ async function executeEmulatorActions(payload = {}) {
   await runAdb(["-s", deviceId, "get-state"]);
   await configurePresentationTouches(deviceId, payload.showTouches !== false);
 
+  const executionContext = {
+    nodes: null,
+    lastKnownNodes: null,
+    pointer: { x: 540, y: 1200 },
+    presentationEnabled: payload.showTouches !== false
+  };
   const results = [];
   for (let index = 0; index < actions.length; index += 1) {
-    const result = await executeAction(deviceId, actions[index], index);
+    const result = await executeAction(deviceId, actions[index], index, pace, executionContext);
     results.push(result);
   }
 
-  const nodes = await dumpVisibleNodes(deviceId);
+  const nodes = await getVisibleNodes(deviceId, executionContext);
   return {
     ok: true,
     deviceId,
+    pace,
     actions: results,
     currentLabels: summarizeNodes(nodes)
   };
 }
 
-async function executeAction(deviceId, action, index) {
+async function executeAction(
+  deviceId,
+  action,
+  index,
+  pace = "natural",
+  executionContext = { nodes: null, lastKnownNodes: null }
+) {
   const type = String(action?.type || "").trim();
 
   if (type === "restartApp") {
     const packageName = normalizeAppPackageName(action.packageName);
+    invalidateVisibleNodes(executionContext);
     await runAdb(["-s", deviceId, "shell", "am", "force-stop", packageName]);
     await runAdb([
       "-s", deviceId,
@@ -103,13 +139,14 @@ async function executeAction(deviceId, action, index) {
     const readyLabel = await waitForAnyContentDescription(
       deviceId,
       readyContentDescriptions,
-      clampInteger(action.timeoutMs, 3000, 30000, 15000)
+      clampInteger(action.timeoutMs, 3000, 30000, 15000),
+      executionContext
     );
     return { index, type, packageName, readyLabel };
   }
 
   if (type === "ifNode") {
-    const nodes = await dumpVisibleNodes(deviceId);
+    const nodes = await getVisibleNodes(deviceId, executionContext);
     const match = findNode(nodes, action);
     if (!match) {
       return { index, type, matched: false, actions: [] };
@@ -118,7 +155,7 @@ async function executeAction(deviceId, action, index) {
     const nestedActions = Array.isArray(action.actions) ? action.actions : [];
     const results = [];
     for (let nestedIndex = 0; nestedIndex < nestedActions.length; nestedIndex += 1) {
-      results.push(await executeAction(deviceId, nestedActions[nestedIndex], nestedIndex));
+      results.push(await executeAction(deviceId, nestedActions[nestedIndex], nestedIndex, pace, executionContext));
     }
 
     return {
@@ -131,14 +168,16 @@ async function executeAction(deviceId, action, index) {
   }
 
   if (type === "wait") {
-    const durationMs = clampInteger(action.durationMs, 0, 5000, 500);
+    const durationMs = getPacedWaitMs(action.durationMs, pace, 500);
     await delay(durationMs);
+    invalidateVisibleNodes(executionContext);
     return { index, type, durationMs };
   }
 
   if (type === "back") {
     await runAdb(["-s", deviceId, "shell", "input", "keyevent", "BACK"]);
-    await delay(clampInteger(action.waitAfterMs, 0, 5000, 500));
+    await delay(getPacedWaitMs(action.waitAfterMs, pace, 500));
+    invalidateVisibleNodes(executionContext);
     return { index, type };
   }
 
@@ -148,27 +187,70 @@ async function executeAction(deviceId, action, index) {
       throw new Error(`Nepovolená klávesa v akci ${index + 1}: ${key || "prázdná"}.`);
     }
     await runAdb(["-s", deviceId, "shell", "input", "keyevent", key]);
-    await delay(clampInteger(action.waitAfterMs, 0, 5000, 350));
+    await delay(getPacedWaitMs(action.waitAfterMs, pace, 350));
+    invalidateVisibleNodes(executionContext);
     return { index, type, key };
   }
 
   if (type === "tap") {
     const x = clampInteger(action.x, 0, 10000);
     const y = clampInteger(action.y, 0, 10000);
-    await presentationTap(deviceId, x, y, action);
+    await presentationTap(deviceId, x, y, action, pace, executionContext);
+    invalidateVisibleNodes(executionContext);
     return { index, type, x, y };
   }
 
   if (type === "tapNode" || type === "assertNode") {
-    const nodes = await dumpVisibleNodes(deviceId);
-    const match = findNode(nodes, action);
+    const waitForMatcher = type === "tapNode"
+      ? normalizeWaitForMatcher(action.waitFor, action.transitionTimeoutMs)
+      : null;
+    let match = await waitForNode(deviceId, action, pace, executionContext, {
+      allowLastKnown: Boolean(waitForMatcher)
+    });
     if (!match) {
       throw new Error(`Prvek pro akci ${index + 1} nebyl nalezen: ${describeMatcher(action)}.`);
     }
 
     if (type === "tapNode") {
-      const point = centerOfBounds(match.bounds);
-      await presentationTap(deviceId, point.x, point.y, action);
+      const maximumAttempts = waitForMatcher
+        ? 1 + clampInteger(action.retryCount, 0, 3, 0)
+        : 1;
+      let transitionMatch = null;
+
+      for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+        const point = centerOfBounds(match.bounds);
+        await presentationTap(deviceId, point.x, point.y, action, pace, executionContext);
+        invalidateVisibleNodes(executionContext);
+
+        if (!waitForMatcher) {
+          break;
+        }
+
+        transitionMatch = await waitForNode(deviceId, waitForMatcher, pace, executionContext);
+        if (transitionMatch) {
+          return {
+            index,
+            type,
+            matchedText: match.contentDescription || match.text,
+            bounds: match.bounds,
+            attempts: attempt,
+            waitForMatchedText: transitionMatch.contentDescription || transitionMatch.text
+          };
+        }
+
+        if (attempt < maximumAttempts) {
+          match = await waitForNode(deviceId, { ...action, timeoutMs: 0 }, pace, executionContext);
+          if (!match) {
+            break;
+          }
+        }
+      }
+
+      if (waitForMatcher && !transitionMatch) {
+        throw new Error(
+          `Po kliknutí na ${describeMatcher(action)} se neobjevil očekávaný prvek: ${describeMatcher(waitForMatcher)}.`
+        );
+      }
     }
 
     return {
@@ -185,26 +267,64 @@ async function executeAction(deviceId, action, index) {
       throw new Error(`Text v akci ${index + 1} musí mít 1 až 200 znaků.`);
     }
 
-    if (action.text || action.contentDescription || action.className) {
-      const nodes = await dumpVisibleNodes(deviceId);
-      const match = findNode(nodes, action);
-      if (!match) {
-        throw new Error(`Pole pro akci ${index + 1} nebylo nalezeno: ${describeMatcher(action)}.`);
+    const expectedValue = action.expectedValue === undefined ? null : String(action.expectedValue);
+    const maximumAttempts = expectedValue === null
+      ? 1
+      : 1 + clampInteger(action.retryCount, 0, 3, 1);
+    let actualValue = null;
+
+    for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+      let matchedField = null;
+      if (action.text || action.contentDescription || action.className || action.resourceId) {
+        matchedField = await waitForNode(deviceId, action, pace, executionContext);
+        if (!matchedField) {
+          throw new Error(`Pole pro akci ${index + 1} nebylo nalezeno: ${describeMatcher(action)}.`);
+        }
+        const point = pointWithinBounds(matchedField.bounds, action.tapHorizontalRatio);
+        await presentationTap(deviceId, point.x, point.y, { ...action, waitAfterMs: 250 }, pace, executionContext);
+        invalidateVisibleNodes(executionContext);
       }
-      const point = centerOfBounds(match.bounds);
-      await presentationTap(deviceId, point.x, point.y, { ...action, waitAfterMs: 250 });
+
+      if (action.clear !== false) {
+        await runAdb(["-s", deviceId, "shell", "input", "keycombination", "KEYCODE_CTRL_LEFT", "KEYCODE_A"]);
+        await runAdb(["-s", deviceId, "shell", "input", "keyevent", "KEYCODE_DEL"]);
+        const remainingCharacterCount = Array.from(String(matchedField?.text || "")).length;
+        if (remainingCharacterCount > 0) {
+          await runAdb(["-s", deviceId, "shell", "input", "keyevent", "KEYCODE_MOVE_END"]);
+          for (const batch of buildDeleteKeyBatches(remainingCharacterCount)) {
+            await runAdb(["-s", deviceId, "shell", "input", "keyevent", ...batch]);
+          }
+        }
+      }
+      if (action.keyByKey === true) {
+        await typeAdbTextKeyByKey(deviceId, value, action.keyDelayMs);
+      } else {
+        await typeAdbText(deviceId, value);
+      }
+      await delay(getPacedWaitMs(action.waitAfterMs, pace, 350));
+      invalidateVisibleNodes(executionContext);
+
+      if (expectedValue === null) {
+        break;
+      }
+
+      const nodes = await getVisibleNodes(deviceId, executionContext, { refresh: true });
+      const field = findNode(nodes, fieldMatcher(action));
+      actualValue = field?.text ?? null;
+      if (actualValue === expectedValue) {
+        break;
+      }
+      invalidateVisibleNodes(executionContext);
     }
 
-    if (action.clear !== false) {
-      await runAdb(["-s", deviceId, "shell", "input", "keycombination", "KEYCODE_CTRL_LEFT", "KEYCODE_A"]);
-      await runAdb(["-s", deviceId, "shell", "input", "keyevent", "KEYCODE_DEL"]);
+    if (expectedValue !== null && actualValue !== expectedValue) {
+      const detail = action.sensitive === true ? "" : ` Očekáváno ${expectedValue}, nalezeno ${actualValue ?? "nic"}.`;
+      throw new Error(`Pole pro akci ${index + 1} po vyplnění neobsahuje očekávanou hodnotu.${detail}`);
     }
-    await typeAdbText(deviceId, value);
-    await delay(clampInteger(action.waitAfterMs, 0, 5000, 350));
     return {
       index,
       type,
-      field: action.contentDescription || action.text || "focused",
+      field: action.resourceId || action.contentDescription || action.text || "focused",
       value: action.sensitive === true ? "***" : value
     };
   }
@@ -214,10 +334,45 @@ async function executeAction(deviceId, action, index) {
     const y1 = clampInteger(action.y1, 0, 10000);
     const x2 = clampInteger(action.x2, 0, 10000);
     const y2 = clampInteger(action.y2, 0, 10000);
-    const durationMs = clampInteger(action.durationMs, 250, 3000, 850);
-    await runAdb(["-s", deviceId, "shell", "input", "touchscreen", "swipe", String(x1), String(y1), String(x2), String(y2), String(durationMs)]);
-    await delay(clampInteger(action.waitAfterMs, 0, 5000, 500));
-    return { index, type, x1, y1, x2, y2, durationMs };
+    const durationMs = getPacedSwipeDurationMs(action.durationMs, pace);
+    const repeat = normalizeSwipeRepeat(action.repeat);
+    const untilMatcher = action.until && typeof action.until === "object" && !Array.isArray(action.until)
+      ? action.until
+      : null;
+    const checkEvery = clampInteger(action.checkEvery, 1, 12, 6);
+    let untilMatch = null;
+    let performedSwipes = 0;
+    for (let iteration = 0; iteration < repeat; iteration += 1) {
+      await animatePresentationPointer(deviceId, executionContext, x1, y1, pace);
+      await runAdb(["-s", deviceId, "shell", "input", "touchscreen", "swipe", String(x1), String(y1), String(x2), String(y2), String(durationMs)]);
+      executionContext.pointer = { x: x2, y: y2 };
+      performedSwipes += 1;
+      const shouldCheck = untilMatcher && ((iteration + 1) % checkEvery === 0 || iteration + 1 === repeat);
+      if (shouldCheck) {
+        invalidateVisibleNodes(executionContext);
+        untilMatch = findNode(await getVisibleNodes(deviceId, executionContext, { refresh: true }), untilMatcher);
+        if (untilMatch) {
+          break;
+        }
+      }
+    }
+    await delay(getPacedWaitMs(action.waitAfterMs, pace, 500));
+    invalidateVisibleNodes(executionContext);
+    if (untilMatcher && !untilMatch) {
+      throw new Error(`Po odrolování se neobjevil očekávaný prvek: ${describeMatcher(untilMatcher)}.`);
+    }
+    return {
+      index,
+      type,
+      x1,
+      y1,
+      x2,
+      y2,
+      durationMs,
+      repeat: performedSwipes,
+      maximumRepeats: repeat,
+      matchedText: untilMatch ? untilMatch.contentDescription || untilMatch.text : undefined
+    };
   }
 
   throw new Error(`Nepodporovaný typ emulator akce ${index + 1}: ${type || "prázdný"}.`);
@@ -230,7 +385,7 @@ function countConfiguredActions(actions) {
   }, 0);
 }
 
-async function waitForAnyContentDescription(deviceId, expectedLabels, timeoutMs) {
+async function waitForAnyContentDescription(deviceId, expectedLabels, timeoutMs, executionContext) {
   if (expectedLabels.length === 0) {
     await delay(Math.min(timeoutMs, 8000));
     return "";
@@ -239,14 +394,14 @@ async function waitForAnyContentDescription(deviceId, expectedLabels, timeoutMs)
   const deadline = Date.now() + timeoutMs;
   let currentLabels = [];
   do {
-    const nodes = await dumpVisibleNodes(deviceId);
+    const nodes = await getVisibleNodes(deviceId, executionContext, { refresh: true });
     currentLabels = summarizeNodes(nodes);
     const matched = currentLabels.find(actual => expectedLabels.some(expected =>
       actual.toLocaleLowerCase("cs-CZ").includes(expected.toLocaleLowerCase("cs-CZ"))));
     if (matched) {
       return matched;
     }
-    await delay(500);
+    await delay(0);
   } while (Date.now() < deadline);
 
   throw new Error(`Aplikace po restartu nezobrazila očekávanou výchozí obrazovku (${expectedLabels.join(" nebo ")}).`);
@@ -254,25 +409,127 @@ async function waitForAnyContentDescription(deviceId, expectedLabels, timeoutMs)
 
 async function configurePresentationTouches(deviceId, enabled) {
   await runAdb(["-s", deviceId, "shell", "settings", "put", "system", "show_touches", enabled ? "1" : "0"]);
-  await runAdb(["-s", deviceId, "shell", "settings", "put", "system", "pointer_location", "0"]);
+  await runAdb(["-s", deviceId, "shell", "settings", "put", "system", "pointer_location", enabled ? "1" : "0"]);
 }
 
-async function presentationTap(deviceId, x, y, action = {}) {
-  const { hoverMs, touchMs, waitAfterMs } = getPresentationTapTiming(action);
-  await runAdb(["-s", deviceId, "shell", "input", "mouse", "motionevent", "MOVE", String(x), String(y)]);
-  await delay(hoverMs);
+async function presentationTap(
+  deviceId,
+  x,
+  y,
+  action = {},
+  pace = "natural",
+  executionContext = { pointer: { x: 540, y: 1200 }, presentationEnabled: true }
+) {
+  const { hoverMs, touchMs, waitAfterMs } = getPresentationTapTiming(action, pace);
+  await animatePresentationPointer(deviceId, executionContext, x, y, pace, hoverMs);
   await runAdb(["-s", deviceId, "shell", "input", "touchscreen", "motionevent", "DOWN", String(x), String(y)]);
   await delay(touchMs);
   await runAdb(["-s", deviceId, "shell", "input", "touchscreen", "motionevent", "UP", String(x), String(y)]);
+  executionContext.pointer = { x, y };
   await delay(waitAfterMs);
 }
 
-function getPresentationTapTiming(action = {}) {
+async function animatePresentationPointer(deviceId, executionContext, x, y, pace = "natural", durationMs) {
+  if (executionContext?.presentationEnabled === false) {
+    return;
+  }
+
+  const profile = EMULATOR_PACE_PROFILES[normalizeEmulatorPace(pace)];
+  const from = executionContext?.pointer || { x: 540, y: 1200 };
+  const points = buildPointerMovePoints(from, { x, y });
+  const stepDelayMs = Math.max(0, Math.round((durationMs ?? profile.hoverMs) / points.length));
+  for (const point of points) {
+    await runAdb([
+      "-s", deviceId, "shell", "input", "mouse", "motionevent", "MOVE",
+      String(point.x), String(point.y)
+    ]);
+    await delay(stepDelayMs);
+  }
+  executionContext.pointer = { x, y };
+}
+
+function buildPointerMovePoints(from, to, steps = 6) {
+  const count = clampInteger(steps, 2, 12, 6);
+  return Array.from({ length: count }, (_, index) => {
+    const progress = (index + 1) / count;
+    return {
+      x: Math.round(from.x + (to.x - from.x) * progress),
+      y: Math.round(from.y + (to.y - from.y) * progress)
+    };
+  });
+}
+
+function getPresentationTapTiming(action = {}, pace = "natural") {
+  const normalizedPace = normalizeEmulatorPace(pace);
+  const profile = EMULATOR_PACE_PROFILES[normalizedPace];
   return {
-    hoverMs: clampInteger(action.hoverMs ?? action.holdMs, 120, 1200, 420),
-    touchMs: clampInteger(action.touchMs, 80, 500, 160),
-    waitAfterMs: clampInteger(action.waitAfterMs, 0, 5000, 650)
+    hoverMs: action.hoverMs === undefined && action.holdMs === undefined
+      ? profile.hoverMs
+      : clampInteger(action.hoverMs ?? action.holdMs, 80, 500, profile.hoverMs),
+    touchMs: action.touchMs === undefined
+      ? profile.touchMs
+      : clampInteger(action.touchMs, 100, 500, profile.touchMs),
+    waitAfterMs: action.waitAfterMs === undefined
+      ? profile.waitAfterMs
+      : getPacedWaitMs(action.waitAfterMs, normalizedPace, profile.waitAfterMs)
   };
+}
+
+function normalizeEmulatorPace(value) {
+  const pace = String(value || "natural").trim().toLowerCase();
+  return Object.hasOwn(EMULATOR_PACE_PROFILES, pace) ? pace : "natural";
+}
+
+function getPacedWaitMs(value, pace, fallbackMs) {
+  const profile = EMULATOR_PACE_PROFILES[normalizeEmulatorPace(pace)];
+  const configured = clampInteger(value, 0, 5000, fallbackMs);
+  return Math.min(profile.waitAfterLimitMs, Math.round(configured * profile.waitScale));
+}
+
+function getPacedSwipeDurationMs(value, pace) {
+  const profile = EMULATOR_PACE_PROFILES[normalizeEmulatorPace(pace)];
+  const configured = clampInteger(value, 100, 3000, 850);
+  return clampInteger(configured * profile.swipeScale, 100, 1200, 400);
+}
+
+function normalizeSwipeRepeat(value) {
+  return clampInteger(value, 1, 80, 1);
+}
+
+function buildDeleteKeyBatches(characterCount, batchSize = 80) {
+  const count = clampInteger(characterCount, 0, 200, 0);
+  const size = clampInteger(batchSize, 1, 100, 80);
+  const batches = [];
+  for (let offset = 0; offset < count; offset += size) {
+    batches.push(Array(Math.min(size, count - offset)).fill("KEYCODE_DEL"));
+  }
+  return batches;
+}
+
+async function waitForNode(deviceId, matcher, pace, executionContext, options = {}) {
+  const profile = EMULATOR_PACE_PROFILES[normalizeEmulatorPace(pace)];
+  const timeoutMs = clampInteger(matcher.timeoutMs, 0, 30000, profile.nodeTimeoutMs);
+  const deadline = Date.now() + timeoutMs;
+  if (options.allowLastKnown && !executionContext?.nodes && executionContext?.lastKnownNodes) {
+    const lastKnownMatch = findNode(executionContext.lastKnownNodes, matcher);
+    if (lastKnownMatch) {
+      return lastKnownMatch;
+    }
+  }
+  let refresh = executionContext?.nodes === null;
+
+  do {
+    const nodes = await getVisibleNodes(deviceId, executionContext, { refresh });
+    const match = findNode(nodes, matcher);
+    if (match) {
+      return match;
+    }
+    if (Date.now() >= deadline) {
+      return null;
+    }
+    refresh = true;
+    await delay(profile.nodePollMs);
+  } while (true);
 }
 
 async function typeAdbText(deviceId, value) {
@@ -288,6 +545,39 @@ async function typeAdbText(deviceId, value) {
       await runAdb(["-s", deviceId, "shell", "input", "keyevent", token.key]);
     }
   }
+}
+
+async function typeAdbTextKeyByKey(deviceId, value, keyDelayMs) {
+  const intervalMs = clampInteger(keyDelayMs, 80, 1000, 350);
+  const characters = [...String(value || "")];
+  const keys = characters.map(keyEventForCharacter);
+  if (keys.every(Boolean)) {
+    await runAdb([
+      "-s", deviceId, "shell", "input", "keyevent", "--delay", String(intervalMs), ...keys
+    ]);
+    await delay(intervalMs);
+    return;
+  }
+
+  for (let index = 0; index < characters.length; index += 1) {
+    const key = keys[index];
+    if (key) {
+      await runAdb(["-s", deviceId, "shell", "input", "keyevent", key]);
+    } else {
+      await typeAdbText(deviceId, characters[index]);
+    }
+    await delay(intervalMs);
+  }
+}
+
+function keyEventForCharacter(character) {
+  if (/^[0-9]$/.test(character)) {
+    return `KEYCODE_${character}`;
+  }
+  if (/^[A-Za-z]$/.test(character)) {
+    return `KEYCODE_${character.toUpperCase()}`;
+  }
+  return null;
 }
 
 function tokenizeAdbText(value) {
@@ -329,9 +619,40 @@ function tokenizeAdbText(value) {
 }
 
 async function dumpVisibleNodes(deviceId) {
-  await runAdb(["-s", deviceId, "shell", "uiautomator", "dump", REMOTE_UI_DUMP], { timeoutMs: 15000 });
-  const xml = await runAdb(["-s", deviceId, "exec-out", "sh", "-c", `cat ${REMOTE_UI_DUMP}`]);
+  const xml = await runAdb(["-s", deviceId, "exec-out", "uiautomator", "dump", "/dev/tty"], { timeoutMs: 15000 });
   return parseUiNodes(xml);
+}
+
+async function getVisibleNodes(deviceId, executionContext, options = {}) {
+  if (!options.refresh && executionContext?.nodes) {
+    return executionContext.nodes;
+  }
+
+  const nodes = await dumpVisibleNodes(deviceId);
+  if (executionContext) {
+    executionContext.nodes = nodes;
+    executionContext.lastKnownNodes = nodes;
+  }
+  return nodes;
+}
+
+function invalidateVisibleNodes(executionContext) {
+  if (executionContext) {
+    executionContext.nodes = null;
+  }
+}
+
+function normalizeWaitForMatcher(value, transitionTimeoutMs) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return {
+    ...value,
+    timeoutMs: transitionTimeoutMs === undefined
+      ? clampInteger(value.timeoutMs, 0, 30000, 3000)
+      : clampInteger(transitionTimeoutMs, 0, 30000, 3000)
+  };
 }
 
 function parseUiNodes(xml) {
@@ -355,11 +676,14 @@ function parseUiNodes(xml) {
     nodes.push({
       text: attributes.text || "",
       contentDescription: attributes["content-desc"] || "",
+      resourceId: attributes["resource-id"] || "",
+      hint: attributes.hint || "",
       className: attributes.class || "",
       clickable: attributes.clickable === "true",
       enabled: attributes.enabled !== "false",
       focusable: attributes.focusable === "true",
       focused: attributes.focused === "true",
+      selected: attributes.selected === "true",
       bounds: {
         left: Number(boundsMatch[1]),
         top: Number(boundsMatch[2]),
@@ -375,9 +699,17 @@ function parseUiNodes(xml) {
 function findNode(nodes, matcher = {}) {
   const expectedText = String(matcher.text || "").trim();
   const expectedDescription = String(matcher.contentDescription || "").trim();
+  const expectedDescriptions = [
+    expectedDescription,
+    ...(Array.isArray(matcher.contentDescriptions) ? matcher.contentDescriptions : [])
+  ]
+    .map(value => String(value || "").trim())
+    .filter(Boolean)
+    .slice(0, 10);
   const expectedClassName = String(matcher.className || "").trim();
-  if (!expectedText && !expectedDescription && !expectedClassName) {
-    throw new Error("Akce vyžaduje text, contentDescription nebo className.");
+  const expectedResourceId = String(matcher.resourceId || "").trim();
+  if (!expectedText && expectedDescriptions.length === 0 && !expectedClassName && !expectedResourceId) {
+    throw new Error("Akce vyžaduje text, contentDescription, className nebo resourceId.");
   }
 
   const exact = matcher.exact !== false;
@@ -391,13 +723,21 @@ function findNode(nodes, matcher = {}) {
     if (expectedClassName && node.className !== expectedClassName) {
       return false;
     }
-    if (!expectedText && !expectedDescription) {
+    if (expectedResourceId && node.resourceId !== expectedResourceId) {
+      return false;
+    }
+    if (typeof matcher.selected === "boolean" && node.selected !== matcher.selected) {
+      return false;
+    }
+    if (!expectedText && expectedDescriptions.length === 0) {
       return true;
     }
 
-    const actual = expectedDescription ? node.contentDescription : node.text;
-    const expected = expectedDescription || expectedText;
-    return exact ? actual === expected : actual.toLocaleLowerCase("cs-CZ").includes(expected.toLocaleLowerCase("cs-CZ"));
+    const actual = expectedDescriptions.length > 0 ? node.contentDescription : node.text;
+    const expectedValues = expectedDescriptions.length > 0 ? expectedDescriptions : [expectedText];
+    return expectedValues.some(expected => exact
+      ? actual === expected
+      : actual.toLocaleLowerCase("cs-CZ").includes(expected.toLocaleLowerCase("cs-CZ")));
   });
 
   return matches[clampInteger(matcher.occurrence, 0, 100, 0)] || null;
@@ -417,9 +757,29 @@ function centerOfBounds(bounds) {
   };
 }
 
+function pointWithinBounds(bounds, horizontalRatio) {
+  const ratio = clampNumber(horizontalRatio, 0.1, 0.9, 0.5);
+  return {
+    x: Math.round(bounds.left + ((bounds.right - bounds.left) * ratio)),
+    y: Math.round((bounds.top + bounds.bottom) / 2)
+  };
+}
+
+function fieldMatcher(action) {
+  return {
+    className: action.className,
+    resourceId: action.resourceId,
+    occurrence: action.occurrence
+  };
+}
+
 function describeMatcher(action) {
-  return action.contentDescription
+  return action.resourceId
+    ? `resourceId=${action.resourceId}`
+    : action.contentDescription
     ? `contentDescription=${action.contentDescription}`
+    : Array.isArray(action.contentDescriptions)
+      ? `contentDescription=${action.contentDescriptions.join(" nebo ")}`
     : action.text
       ? `text=${action.text}`
       : `className=${action.className}`;
@@ -448,6 +808,14 @@ function clampInteger(value, minimum, maximum, fallback = minimum) {
     return fallback;
   }
   return Math.min(maximum, Math.max(minimum, Math.round(numeric)));
+}
+
+function clampNumber(value, minimum, maximum, fallback = minimum) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+  return Math.min(maximum, Math.max(minimum, numeric));
 }
 
 function decodeXml(value) {
@@ -530,13 +898,18 @@ async function handleEmulatorBridgeRequest(request, response) {
 }
 
 module.exports = {
+  buildDeleteKeyBatches,
+  buildPointerMovePoints,
   countConfiguredActions,
   executeEmulatorActions,
   findNode,
   getPresentationTapTiming,
   getEmulatorStatus,
   handleEmulatorBridgeRequest,
+  normalizeEmulatorPace,
   normalizeAppPackageName,
+  normalizeSwipeRepeat,
+  keyEventForCharacter,
   parseUiNodes,
   tokenizeAdbText
 };

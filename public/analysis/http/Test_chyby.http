@@ -1,0 +1,10 @@
+@baseUrl = https://pidl2-backend.int.pidlitacka.cz
+@accessToken = SEM_VLOZTE_ACCESS_TOKEN
+@ticketId = ab9b1e0d-e997-4083-9697-369d80d6994c
+@deviceId = 54627224-de45-4e09-931c-0f75e380de35
+
+### Detail jízdenky pro diagnostiku aktivace
+GET {{baseUrl}}/v1/client/tickets/{{ticketId}}
+Authorization: Bearer {{accessToken}}
+X-Device-Id: {{deviceId}}
+Accept: application/json

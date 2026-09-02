@@ -39,6 +39,7 @@ const state = {
   workflowStopRequested: false,
   workflowLastReport: null,
   selectedWorkflowEnvironmentProfileId: localStorage.getItem("demoHarness.workflowEnvironmentProfile") || "",
+  emulatorPace: localStorage.getItem("demoHarness.emulatorPace") === "fast" ? "fast" : "natural",
   harnessMeta: null,
   localConfig: null,
   authSession: null,
@@ -57,12 +58,16 @@ const state = {
   displayedResult: null,
   activeSelection: null,
   resultCountdownTimer: null,
+  autoRetryTimer: null,
+  autoRetryToken: 0,
+  autoRetryCounts: {},
   eventHandlersBound: false
 };
 
 const NEW_AUTH_PROFILE_ID = "__new_auth_profile__";
 const LAST_SELECTION_STORAGE_KEY = "demoHarness.lastSelection.v1";
 const WORKFLOW_ENVIRONMENT_PROFILE_STORAGE_KEY = "demoHarness.workflowEnvironmentProfile";
+const EMULATOR_PACE_STORAGE_KEY = "demoHarness.emulatorPace";
 const IDENTITY_MOS_ENVIRONMENT_STORAGE_KEY = "demoHarness.identityMosEnvironment";
 const IDENTITY_DEVICE_FIELD_NAMES = new Set([
   "deviceId",
@@ -253,7 +258,7 @@ function bindEventHandlers() {
 
   state.eventHandlersBound = true;
 
-  elements.runStep.addEventListener("click", runCurrentStep);
+  elements.runStep.addEventListener("click", () => runCurrentStep());
   elements.previousStep.addEventListener("click", previousStep);
   elements.nextStep.addEventListener("click", nextStep);
   elements.resetScenario.addEventListener("click", resetCurrentScenario);
@@ -777,7 +782,7 @@ async function loadScenarioPack(packId, options = {}) {
 
   state.currentPackId = pack.id;
   elements.scenarioPack.value = pack.id;
-  state.catalog = await fetchJson(resolvePackUrl(pack.file));
+  state.catalog = expandReferencedScenarioSteps(await fetchJson(resolvePackUrl(pack.file)));
   state.scenario = null;
   state.stepIndex = 0;
   state.context = {};
@@ -2969,6 +2974,45 @@ async function executeAuthLogin() {
   if (state.scenario) {
     renderStep({ preserveValues: true });
   }
+}
+
+function expandReferencedScenarioSteps(catalog) {
+  const scenarios = catalog?.scenarios || [];
+  const scenariosById = new Map(scenarios.map(scenario => [scenario.id, scenario]));
+  const expandedScenarios = scenarios.map(scenario => {
+    const reference = scenario.appendStepsFrom;
+    if (!reference) {
+      return scenario;
+    }
+
+    const source = scenariosById.get(reference.scenarioId);
+    if (!source) {
+      throw new Error(`Unknown source scenario: ${reference.scenarioId}`);
+    }
+
+    const sourceSteps = source.steps || [];
+    const startIndex = reference.startStepId
+      ? sourceSteps.findIndex(step => step.id === reference.startStepId)
+      : 0;
+    const endIndex = reference.endStepId
+      ? sourceSteps.findIndex(step => step.id === reference.endStepId)
+      : sourceSteps.length - 1;
+
+    if (startIndex < 0 || endIndex < startIndex) {
+      throw new Error(`Invalid step range in source scenario: ${reference.scenarioId}`);
+    }
+
+    const referencedSteps = sourceSteps
+      .slice(startIndex, endIndex + 1)
+      .map(step => JSON.parse(JSON.stringify(step)));
+
+    return {
+      ...scenario,
+      steps: [...(scenario.steps || []), ...referencedSteps]
+    };
+  });
+
+  return { ...catalog, scenarios: expandedScenarios };
 }
 
 function resolveWorkflowIndex(index) {
@@ -5517,6 +5561,7 @@ function openWorkflowItemForm(item) {
 }
 
 function selectScenario(scenarioId, options = {}) {
+  cancelAutoRetry({ announce: false });
   const preserveLog = options.preserveLog === true;
   const suppressLog = options.suppressLog === true;
   state.scenario = state.catalog.scenarios.find(scenario => scenario.id === scenarioId);
@@ -5535,6 +5580,7 @@ function selectScenario(scenarioId, options = {}) {
   state.stepResults = {};
   state.displayedResult = null;
   state.activeSelection = null;
+  state.autoRetryCounts = {};
   if (!preserveLog) {
     state.log = [];
   }
@@ -5579,6 +5625,7 @@ function prewarmGatewayReturnIfNeeded(scenario) {
 }
 
 function selectFreeForm(formId, options = {}) {
+  cancelAutoRetry({ announce: false });
   const preserveLog = options.preserveLog === true;
   const suppressLog = options.suppressLog === true;
   const form = state.forms.find(item => item.id === formId);
@@ -5605,6 +5652,7 @@ function selectFreeForm(formId, options = {}) {
   state.stepResults = {};
   state.displayedResult = null;
   state.activeSelection = null;
+  state.autoRetryCounts = {};
   if (!preserveLog) {
     state.log = [];
   }
@@ -6857,6 +6905,7 @@ function shouldTrackDirty(field) {
   return !requiresManualInput(state.scenario);
 }
 async function runCurrentStep() {
+  cancelAutoRetry({ announce: false });
   const step = currentStep();
   const runningStepIndex = state.stepIndex;
 
@@ -6938,6 +6987,7 @@ async function runCurrentStep() {
   }
 
   clearStepResultsFrom(runningStepIndex);
+  state.lastStepResult = null;
   elements.runStep.disabled = true;
   elements.runStep.textContent = "Pracuji...";
   elements.previousStep.disabled = true;
@@ -6947,6 +6997,7 @@ async function runCurrentStep() {
   elements.nextStep.classList.remove("ready");
   showResult("warn", "Pracuji na požadavku...");
   let request = null;
+  let pendingAutoRetry = null;
 
   try {
     if (step.customAction) {
@@ -7015,6 +7066,11 @@ async function runCurrentStep() {
     prepareSelection(step, body, response.status);
     state.lastStepResult = result;
     state.stepResults[runningStepIndex] = result;
+    pendingAutoRetry = result.autoRetry || null;
+
+    if (!pendingAutoRetry) {
+      delete state.autoRetryCounts[getAutoRetryKey(step, runningStepIndex)];
+    }
 
     addLog(result.level, `${step.title} -> HTTP ${response.status}`, {
       request: {
@@ -7061,6 +7117,10 @@ async function runCurrentStep() {
       elements.runStep.disabled = false;
       elements.runStep.textContent = "Zopakovat krok";
       elements.previousStep.disabled = !state.scenario || findPreviousRunnableStepIndex(state.stepIndex) === null;
+
+      if (pendingAutoRetry && state.stepIndex === runningStepIndex) {
+        scheduleAutoRetry(step, runningStepIndex, pendingAutoRetry);
+      }
     }
   }
 }
@@ -7228,6 +7288,27 @@ async function runCustomStep(step, runningStepIndex) {
   if (step.customAction === "showPaymentGatewayLink") {
     const paymentUrl = resolveTemplate(step.paymentGateway?.url || "", { fieldValues: state.values }).trim();
     const paymentId = resolveTemplate(step.paymentGateway?.paymentId || "", { fieldValues: state.values }).trim();
+    const actionKind = step.paymentGateway?.actionKind || "payment";
+    const actionCopy = actionKind === "fingerprint"
+      ? {
+          appMessage: "3DS fingerprint je připraven k otevření.",
+          message: "Klikněte na Otevřít 3DS fingerprint a nechte technický krok doběhnout.",
+          method: "3ds-fingerprint",
+          logLabel: "3DS fingerprint"
+        }
+      : actionKind === "challenge"
+        ? {
+            appMessage: "3DS ověření je připravené k otevření.",
+            message: "Klikněte na Otevřít 3DS challenge a dokončete ověření držitele karty.",
+            method: "3ds-challenge",
+            logLabel: "3DS challenge"
+          }
+        : {
+            appMessage: "Platební brána je připravena k otevření.",
+            message: "Klikněte na Otevřít platební bránu a dokončete testovací platbu.",
+            method: "card",
+            logLabel: "platební bránu"
+          };
 
     if (!/^https?:\/\/[^\s]+$/i.test(paymentUrl)) {
       throw new Error("Odkaz na platební bránu v kontextu chybí nebo není platná HTTP(S) URL.");
@@ -7237,17 +7318,18 @@ async function runCustomStep(step, runningStepIndex) {
       paymentId,
       paymentUrl,
       status: "IN_PROGRESS",
-      method: "card"
+      method: actionCopy.method,
+      actionKind
     };
     const result = {
       level: "ok",
-      appMessage: "Platební brána je připravena k otevření.",
-      messages: ["Klikněte na Otevřít platební bránu a dokončete testovací platbu."]
+      appMessage: actionCopy.appMessage,
+      messages: [actionCopy.message]
     };
 
     state.lastStepResult = result;
     state.stepResults[runningStepIndex] = result;
-    addLog("ok", `${step.title} -> odkaz na platební bránu`, {
+    addLog("ok", `${step.title} -> odkaz na ${actionCopy.logLabel}`, {
       request: { action: step.customAction },
       response: body,
       expected: step.expected || null,
@@ -9491,10 +9573,19 @@ function showPresentationWorkflowPauseResult(level, message, item) {
     ${hasEmulatorActions ? `
       <div class="toolbar presentation-emulator-actions">
         <button type="button" id="runPresentationEmulatorAction">${escapeHtml(emulatorActionLabel)}</button>
+        <label class="presentation-emulator-pace" for="presentationEmulatorPace">
+          Tempo
+          <select id="presentationEmulatorPace">
+            <option value="fast" selected>Maximální (bez umělých prodlev)</option>
+          </select>
+        </label>
         <span id="presentationEmulatorStatus" role="status" aria-live="polite">Emulátor nemusí mít focus.</span>
       </div>
     ` : ""}
-    <div class="workflow-pause-next">Až je krok odprezentovaný, klikněte na <strong>Pokračovat ve workflow</strong>.</div>
+    <div class="workflow-pause-next">
+      <span>Až je krok odprezentovaný, pokračujte dalším krokem.</span>
+      <button type="button" class="workflow-mobile-continue" data-workflow-continue ${hasEmulatorActions ? "disabled" : ""}>Pokračovat ve workflow</button>
+    </div>
   `;
   elements.nextStep.disabled = true;
   elements.runStep.disabled = true;
@@ -9507,14 +9598,26 @@ function showPresentationWorkflowPauseResult(level, message, item) {
   elements.nextStep.classList.remove("ready");
 
   const emulatorButton = document.getElementById("runPresentationEmulatorAction");
+  const emulatorPace = document.getElementById("presentationEmulatorPace");
+  if (emulatorPace) {
+    emulatorPace.addEventListener("change", () => {
+      state.emulatorPace = emulatorPace.value === "fast" ? "fast" : "natural";
+      localStorage.setItem(EMULATOR_PACE_STORAGE_KEY, state.emulatorPace);
+    });
+  }
   if (emulatorButton) {
     emulatorButton.addEventListener("click", () => runPresentationWorkflowItemInEmulator(item, emulatorButton));
   }
+  bindWorkflowContinueButtons(elements.resultCard);
 }
 
 async function runPresentationWorkflowItemInEmulator(item, button) {
   let emulator;
   const status = document.getElementById("presentationEmulatorStatus");
+  const paceSelect = document.getElementById("presentationEmulatorPace");
+  const continueButton = elements.resultCard.querySelector("[data-workflow-continue]");
+  const pace = "fast";
+  const paceLabel = "maximální";
 
   try {
     emulator = resolvePresentationEmulatorExecution(item);
@@ -9537,11 +9640,14 @@ async function runPresentationWorkflowItemInEmulator(item, button) {
   }
 
   button.disabled = true;
+  if (paceSelect) {
+    paceSelect.disabled = true;
+  }
   button.classList.remove("error");
   button.textContent = "Provádím...";
   if (status) {
     status.classList.remove("error");
-    status.textContent = "Klikátko ovládá emulátor přes lokální ADB...";
+    status.textContent = `Klikátko ovládá emulátor přes lokální ADB (${paceLabel} tempo)...`;
   }
 
   try {
@@ -9551,6 +9657,7 @@ async function runPresentationWorkflowItemInEmulator(item, button) {
       body: JSON.stringify({
         deviceId: emulator.deviceId || "emulator-5554",
         showTouches: emulator.showTouches !== false,
+        pace,
         actions: emulator.actions || []
       })
     });
@@ -9561,19 +9668,31 @@ async function runPresentationWorkflowItemInEmulator(item, button) {
 
     button.textContent = "Provedeno v emulátoru";
     button.classList.add("ready");
+    if (continueButton) {
+      continueButton.disabled = false;
+      continueButton.classList.add("ready");
+    }
     if (status) {
       const labels = (payload.currentLabels || []).slice(0, 4).join(" · ");
       status.textContent = labels ? `Hotovo. Na obrazovce: ${labels}` : "Akce byla provedena a ověřena.";
     }
     addLog("ok", "Presentation emulator action completed", {
       workflowItemId: item.id,
+      pace,
       actions: payload.actions,
       currentLabels: payload.currentLabels
     });
   } catch (error) {
     button.disabled = false;
+    if (paceSelect) {
+      paceSelect.disabled = false;
+    }
     button.classList.add("error");
     button.textContent = emulator.label || "Zkusit znovu v emulátoru";
+    if (continueButton) {
+      continueButton.disabled = true;
+      continueButton.classList.remove("ready");
+    }
     if (status) {
       status.classList.add("error");
       status.textContent = error instanceof Error ? error.message : String(error);
@@ -9680,8 +9799,12 @@ function showWorkflowPauseResult(level, message, lines = []) {
     <strong class="result-title">Workflow pozastaveno</strong>
     <div class="result-message">${escapeHtml(message)}</div>
     ${lines.length > 0 ? `<ul class="workflow-pause-lines">${lines.map(line => `<li>${escapeHtml(line)}</li>`).join("")}</ul>` : ""}
-    <div class="workflow-pause-next">Po dokončení ruční akce klikněte na <strong>Pokračovat ve workflow</strong>.</div>
+    <div class="workflow-pause-next">
+      <span>Po dokončení ruční akce pokračujte dalším krokem.</span>
+      <button type="button" class="workflow-mobile-continue" data-workflow-continue>Pokračovat ve workflow</button>
+    </div>
   `;
+  bindWorkflowContinueButtons(elements.resultCard);
 }
 
 function showWorkflowPauseNoticeInCurrentResult(level, message, lines = []) {
@@ -9698,9 +9821,28 @@ function showWorkflowPauseNoticeInCurrentResult(level, message, lines = []) {
     <strong>Workflow pozastaveno</strong>
     <p>${escapeHtml(message)}</p>
     ${lines.length > 0 ? `<ul>${lines.map(line => `<li>${escapeHtml(line)}</li>`).join("")}</ul>` : ""}
-    <div>Po dokončení ruční akce klikněte na <strong>Pokračovat ve workflow</strong>.</div>
+    <div class="workflow-pause-next">
+      <span>Po dokončení ruční akce pokračujte dalším krokem.</span>
+      <button type="button" class="workflow-mobile-continue" data-workflow-continue>Pokračovat ve workflow</button>
+    </div>
   `;
   elements.resultCard.prepend(notice);
+  bindWorkflowContinueButtons(notice);
+}
+
+function bindWorkflowContinueButtons(container) {
+  for (const button of container.querySelectorAll("[data-workflow-continue]")) {
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        await continueWorkflowRun();
+      } finally {
+        if (button.isConnected && state.workflowRun?.status === "paused") {
+          button.disabled = false;
+        }
+      }
+    });
+  }
 }
 
 function finishWorkflow(workflow) {
@@ -10702,12 +10844,14 @@ function evaluateStep(step, status, body) {
   }
 
   if (warnings.length > 0 && failures.length === 0) {
+    const autoRetryWarning = warnings.find(warning => warning.autoRetry);
     messages.push(...warnings.map(warning => warning.message || "Krok je ve validním mezistavu a je potřeba jej zopakovat."));
     return {
       level: "warn",
       appMessage: warnings[0].appMessage || warnings[0].message || makeAppMessage(body, status, "warn"),
       messages,
-      blockAdvance: warnings.some(warning => warning.blockAdvance)
+      blockAdvance: warnings.some(warning => warning.blockAdvance),
+      autoRetry: autoRetryWarning?.autoRetry || null
     };
   }
 
@@ -11054,6 +11198,10 @@ function makeAppMessage(body, status, level) {
 function applyExtracts(step, body, status) {
   state.context.lastStatus = status;
 
+  if (status >= 400 && step.extractOnError !== true) {
+    return;
+  }
+
   for (const [name, selector] of Object.entries(step.extract || {})) {
     state.context[name] = getPath(body, selector);
   }
@@ -11071,6 +11219,7 @@ function nextStep() {
     return;
   }
 
+  cancelAutoRetry({ announce: false });
   state.stepIndex += 1;
   renderStep();
 }
@@ -11117,6 +11266,8 @@ function previousStep() {
   if (!state.scenario) {
     return;
   }
+
+  cancelAutoRetry({ announce: false });
 
   const previousIndex = findPreviousRunnableStepIndex(state.stepIndex);
 
@@ -11705,6 +11856,7 @@ function buildResultHtml(level, message, body = null, step = currentStep()) {
   return `
     <strong class="result-title">${escapeHtml(title)}</strong>
     <div class="result-message"${shouldShowResultCountdown(level, message, body, step) ? ' data-result-countdown="30"' : ""}>${escapeHtml(message)}</div>
+    ${buildAutoRetryCountdownHtml(state.lastStepResult?.autoRetry)}
     ${rows.length > 0 ? `<div class="result-grid">${rows.map(row => `
       <div class="result-row">
         <span>${escapeHtml(row.label)}</span>
@@ -11758,6 +11910,137 @@ function startResultCountdownIfNeeded(message) {
 
     update();
   }, 1000);
+}
+
+function buildAutoRetryCountdownHtml(config) {
+  if (!config) {
+    return "";
+  }
+
+  const delaySeconds = clampAutoRetryNumber(config.delaySeconds, 5, 1, 60);
+  const label = String(config.label || "Automatické opakování kroku");
+
+  return `
+    <div class="auto-retry-countdown" data-auto-retry-panel role="status" aria-live="polite">
+      <div class="auto-retry-countdown-main">
+        <span>${escapeHtml(label)}</span>
+        <strong data-auto-retry-seconds>${delaySeconds}</strong>
+        <em>s</em>
+      </div>
+      <div class="auto-retry-countdown-detail" data-auto-retry-detail>Čekám na další pokus…</div>
+      <button type="button" data-auto-retry-cancel>Zrušit automatické opakování</button>
+    </div>
+  `;
+}
+
+function clampAutoRetryNumber(value, fallback, minimum, maximum) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed)
+    ? Math.min(maximum, Math.max(minimum, Math.trunc(parsed)))
+    : fallback;
+}
+
+function getAutoRetryKey(step, stepIndex = state.stepIndex) {
+  return `${state.scenario?.id || "scenario"}:${step?.id || stepIndex}`;
+}
+
+function scheduleAutoRetry(step, stepIndex, config) {
+  cancelAutoRetry({ announce: false });
+
+  const delaySeconds = clampAutoRetryNumber(config.delaySeconds, 5, 1, 60);
+  const maxAttempts = clampAutoRetryNumber(config.maxAttempts, 18, 1, 60);
+  const key = getAutoRetryKey(step, stepIndex);
+  const attempt = (state.autoRetryCounts[key] || 0) + 1;
+  const panel = elements.resultCard.querySelector("[data-auto-retry-panel]");
+
+  if (attempt > maxAttempts) {
+    if (panel) {
+      panel.classList.add("exhausted");
+      panel.querySelector("[data-auto-retry-seconds]").textContent = "–";
+      panel.querySelector("[data-auto-retry-detail]").textContent =
+        `Automatické opakování skončilo po ${maxAttempts} pokusech. Krok lze spustit ručně.`;
+      panel.querySelector("[data-auto-retry-cancel]").hidden = true;
+    }
+    addLog("warn", `${step.title} automatic retry limit reached`, {
+      attempts: maxAttempts,
+      delaySeconds
+    });
+    return;
+  }
+
+  state.autoRetryCounts[key] = attempt;
+  const token = ++state.autoRetryToken;
+  let remainingSeconds = delaySeconds;
+  const secondsElement = panel?.querySelector("[data-auto-retry-seconds]");
+  const detailElement = panel?.querySelector("[data-auto-retry-detail]");
+
+  const update = () => {
+    if (secondsElement) {
+      secondsElement.textContent = String(remainingSeconds);
+    }
+    if (detailElement) {
+      detailElement.textContent = `Automatický pokus ${attempt} z ${maxAttempts} proběhne za ${remainingSeconds} s.`;
+    }
+    elements.runStep.disabled = true;
+    elements.runStep.textContent = `Automaticky za ${remainingSeconds} s`;
+  };
+
+  update();
+  state.autoRetryTimer = window.setInterval(() => {
+    if (token !== state.autoRetryToken || state.stepIndex !== stepIndex || currentStep()?.id !== step.id) {
+      cancelAutoRetry({ announce: false });
+      return;
+    }
+
+    remainingSeconds -= 1;
+    if (remainingSeconds > 0) {
+      update();
+      return;
+    }
+
+    window.clearInterval(state.autoRetryTimer);
+    state.autoRetryTimer = null;
+    if (secondsElement) {
+      secondsElement.textContent = "0";
+    }
+    if (detailElement) {
+      detailElement.textContent = `Spouštím automatický pokus ${attempt} z ${maxAttempts}…`;
+    }
+    elements.runStep.textContent = "Spouštím automaticky…";
+    void runCurrentStep();
+  }, 1000);
+}
+
+function cancelAutoRetry(options = {}) {
+  const announce = options.announce !== false;
+  const wasScheduled = Boolean(state.autoRetryTimer);
+
+  if (state.autoRetryTimer) {
+    window.clearInterval(state.autoRetryTimer);
+    state.autoRetryTimer = null;
+  }
+  state.autoRetryToken += 1;
+
+  if (!wasScheduled) {
+    return;
+  }
+
+  const panel = elements.resultCard.querySelector("[data-auto-retry-panel]");
+  if (panel) {
+    panel.classList.add("cancelled");
+    panel.querySelector("[data-auto-retry-seconds]").textContent = "–";
+    panel.querySelector("[data-auto-retry-detail]").textContent = "Automatické opakování bylo zrušeno.";
+    panel.querySelector("[data-auto-retry-cancel]").hidden = true;
+  }
+
+  elements.runStep.disabled = false;
+  elements.runStep.textContent = "Zopakovat krok";
+
+  if (announce) {
+    addLog("warn", "Automatické opakování kroku zrušeno", {
+      stepId: currentStep()?.id || null
+    });
+  }
 }
 
 function buildAppCardsHtml(body, step = currentStep()) {
@@ -12523,11 +12806,29 @@ function renderSavedCardPaymentCardHtml(body) {
 }
 
 function renderTicketPaymentCardHtml(body) {
+  const copy = body.actionKind === "fingerprint"
+    ? {
+        title: "Technický 3DS fingerprint",
+        description: "Nejde o zadání karty. Otevřete technickou URL a nechte ji automaticky doběhnout.",
+        linkLabel: "Otevřít 3DS fingerprint"
+      }
+    : body.actionKind === "challenge"
+      ? {
+          title: "Ověření držitele karty",
+          description: "Otevřete 3DS challenge a dokončete ověření požadované bankou.",
+          linkLabel: "Otevřít 3DS challenge"
+        }
+      : {
+          title: "Platba čeká na dokončení",
+          description: "Otevřete platební bránu, dokončete testovací platbu a teprve potom pokračujte pollingem.",
+          linkLabel: "Otevřít platební bránu"
+        };
+
   return `
     <div class="app-card-list">
       <article class="app-card">
-        <strong>Platba čeká na dokončení</strong>
-        <p>Otevřete platební bránu, dokončete testovací platbu a teprve potom pokračujte pollingem.</p>
+        <strong>${escapeHtml(copy.title)}</strong>
+        <p>${escapeHtml(copy.description)}</p>
         <div class="app-card-meta">
           ${renderAppChip(body.status || "IN_PROGRESS")}
           ${renderAppChip(body.method || "card")}
@@ -12536,7 +12837,7 @@ function renderTicketPaymentCardHtml(body) {
           <div class="app-detail-row"><span>Payment ID</span><span>${escapeHtml(body.paymentId)}</span></div>
         </div>
         <div class="app-card-actions">
-          <a class="app-card-link" href="${escapeHtml(body.paymentUrl)}" target="_blank" rel="noopener">Otevřít platební bránu</a>
+          <a class="app-card-link" href="${escapeHtml(body.paymentUrl)}" target="_blank" rel="noopener">${escapeHtml(copy.linkLabel)}</a>
         </div>
       </article>
     </div>
@@ -14835,6 +15136,10 @@ function bindResultCardActions() {
       applySelection(Number(button.dataset.selectionIndex));
     });
   });
+
+  elements.resultCard.querySelector("[data-auto-retry-cancel]")?.addEventListener("click", () => {
+    cancelAutoRetry();
+  });
 }
 
 function applySelection(index) {
@@ -15882,6 +16187,11 @@ function resolveObject(value, fieldValues, step) {
   }
 
   if (typeof value === "string") {
+    const runtimeValue = resolveRuntimeTemplateValue(value);
+    if (runtimeValue.matched) {
+      return runtimeValue.value;
+    }
+
     const formFieldMatch = value.match(/^\{\{form\.([a-zA-Z0-9_]+)\}\}$/);
     const formField = formFieldMatch
       ? (step.fields || []).find(field => field.name === formFieldMatch[1])
@@ -15978,6 +16288,7 @@ function resolveTemplate(template, { fieldValues, requestContext = null }) {
     .replaceAll("{{nowPlus2Minutes}}", new Date(Date.now() + 2 * 60 * 1000).toISOString())
     .replaceAll("{{today}}", new Date().toISOString().slice(0, 10))
     .replaceAll("{{todayPlus365}}", new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
+    .replace(/\{\{browser\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => String(getBrowserRuntimeValue(name) ?? ""))
     .replace(/\{\{stpTimestamp\}\}/g, () => String(requestContext?.timestamp ?? Math.floor(Date.now() / 1000)))
     .replace(/\{\{stpSignature:([a-zA-Z0-9_.]+)\}\}/g, (_, secretRef) => {
       const secret = resolveTemplateReference(secretRef, fieldValues);
@@ -15995,6 +16306,32 @@ function resolveTemplate(template, { fieldValues, requestContext = null }) {
     .replace(/\{\{secret\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => state.secrets[name] ?? "")
     .replace(/\{\{session\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => state.authSession?.[name] ?? "")
     .replace(/\{\{auth\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => state.authFormValues?.[name] ?? "");
+}
+
+function resolveRuntimeTemplateValue(template) {
+  const match = String(template).match(/^\{\{browser\.([a-zA-Z0-9_]+)\}\}$/);
+  return match
+    ? { matched: true, value: getBrowserRuntimeValue(match[1]) }
+    : { matched: false, value: undefined };
+}
+
+function getBrowserRuntimeValue(name) {
+  const browserNavigator = typeof navigator === "undefined" ? null : navigator;
+  const browserScreen = typeof screen === "undefined" ? null : screen;
+  const values = {
+    userAgent: browserNavigator?.userAgent || "",
+    language: browserNavigator?.language || "en-US",
+    javaEnabled: typeof browserNavigator?.javaEnabled === "function"
+      ? Boolean(browserNavigator.javaEnabled())
+      : false,
+    colorDepth: Number(browserScreen?.colorDepth || 24),
+    screenWidth: Number(browserScreen?.width || 0),
+    screenHeight: Number(browserScreen?.height || 0),
+    timezone: new Date().getTimezoneOffset(),
+    javascriptEnabled: true
+  };
+
+  return Object.prototype.hasOwnProperty.call(values, name) ? values[name] : undefined;
 }
 
 function resolveTemplateReference(reference, fieldValues) {
