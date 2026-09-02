@@ -89,8 +89,6 @@
               "type": "tapNode",
               "contentDescription": "Odhlásit se",
               "clickable": true,
-              "hoverMs": 140,
-              "touchMs": 100,
               "waitAfterMs": 700
             }
           ]
@@ -161,31 +159,33 @@
       },
       "actions": [
         {
-          "type": "inputText",
-          "resourceId": "cardnumber",
-          "value": "{{cardNumber}}",
-          "expectedValue": "{{cardNumber}}",
-          "sensitive": true,
-          "retryCount": 2
-        },
-        {
-          "type": "inputText",
-          "resourceId": "expiry",
-          "value": "{{expiry}}",
-          "expectedValue": "08/28",
-          "clear": false,
-          "sensitive": true,
-          "retryCount": 2
-        },
-        {
-          "type": "inputText",
-          "resourceId": "cvc",
-          "value": "{{cvc}}",
-          "expectedValue": "{{cvc}}",
-          "clear": false,
-          "tapHorizontalRatio": 0.35,
-          "sensitive": true,
-          "retryCount": 2
+          "type": "inputTextGroup",
+          "fields": [
+            {
+              "resourceId": "cardnumber",
+              "value": "{{cardNumber}}",
+              "expectedValue": "{{cardNumber}}",
+              "sensitive": true,
+              "retryCount": 2
+            },
+            {
+              "resourceId": "expiry",
+              "value": "{{expiry}}",
+              "expectedValue": "08/28",
+              "clear": false,
+              "sensitive": true,
+              "retryCount": 2
+            },
+            {
+              "resourceId": "cvc",
+              "value": "{{cvc}}",
+              "expectedValue": "{{cvc}}",
+              "clear": false,
+              "tapHorizontalRatio": 0.35,
+              "sensitive": true,
+              "retryCount": 2
+            }
+          ]
         }
       ]
     },
@@ -1652,7 +1652,6 @@
                 "type": "inputText",
                 "resourceId": "otp",
                 "value": "1234",
-                "expectedValue": "1234",
                 "sensitive": true
               },
               {

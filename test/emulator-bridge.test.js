@@ -4,11 +4,9 @@ const path = require("node:path");
 const test = require("node:test");
 const {
   buildDeleteKeyBatches,
-  buildPointerMovePoints,
   countConfiguredActions,
   extractTicketPaymentInitiationFromLog,
   findNode,
-  getPresentationTapTiming,
   keyEventForCharacter,
   normalizeEmulatorPace,
   normalizeAppPackageName,
@@ -104,49 +102,14 @@ test("emulator bridge bounds repeated swipes used to reveal off-screen controls"
   assert.equal(normalizeSwipeRepeat(0), 1);
 });
 
-test("presentation taps keep a short visible pointer and touch without post-click delays", () => {
-  assert.deepEqual(getPresentationTapTiming(), {
-    hoverMs: 160,
-    touchMs: 240,
-    waitAfterMs: 0
-  });
-  assert.deepEqual(getPresentationTapTiming({
-    hoverMs: 140,
-    touchMs: 100,
-    waitAfterMs: 700
-  }), {
-    hoverMs: 140,
-    touchMs: 100,
-    waitAfterMs: 0
-  });
-  assert.deepEqual(getPresentationTapTiming({}, "fast"), {
-    hoverMs: 120,
-    touchMs: 200,
-    waitAfterMs: 0
-  });
-  assert.deepEqual(getPresentationTapTiming({ waitAfterMs: 700 }, "fast"), {
-    hoverMs: 120,
-    touchMs: 200,
-    waitAfterMs: 0
-  });
-});
-
-test("presentation pointer interpolates a visible path and lands exactly on the target", () => {
-  assert.deepEqual(buildPointerMovePoints({ x: 0, y: 0 }, { x: 60, y: 120 }, 3), [
-    { x: 20, y: 40 },
-    { x: 40, y: 80 },
-    { x: 60, y: 120 }
-  ]);
-});
-
-test("emulator pace input falls back safely and presentation clicks expose pointer movement", () => {
+test("emulator pace input falls back safely and presentation clicks use one direct tap", () => {
   assert.equal(normalizeEmulatorPace("natural"), "natural");
   assert.equal(normalizeEmulatorPace("FAST"), "fast");
   assert.equal(normalizeEmulatorPace("unexpected"), "natural");
-  assert.match(bridgeSource, /"input", "mouse", "motionevent", "MOVE"/);
-  assert.match(bridgeSource, /"input", "touchscreen", "motionevent", "DOWN"/);
-  assert.match(bridgeSource, /"input", "touchscreen", "motionevent", "UP"/);
-  assert.match(bridgeSource, /"pointer_location", enabled \? "1" : "0"/);
+  assert.doesNotMatch(bridgeSource, /"input", "mouse", "motionevent", "MOVE"/);
+  assert.match(bridgeSource, /"input", "tap", String\(x\), String\(y\)/);
+  assert.match(bridgeSource, /"pointer_location", "0"/);
+  assert.match(bridgeSource, /type === "inputTextGroup"/);
 });
 
 test("emulator bridge accepts only safe Android application package names", () => {

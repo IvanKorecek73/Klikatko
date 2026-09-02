@@ -9643,7 +9643,6 @@ async function openHybridPaymentInDesktop(button) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           deviceId: "emulator-5554",
-          showTouches: true,
           pace: "fast",
           actions: [{ type: "captureTicketCardPayment", timeoutMs: 3000 }]
         })
@@ -9790,7 +9789,6 @@ async function runPresentationWorkflowItemInEmulator(item, button) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         deviceId: emulator.deviceId || "emulator-5554",
-        showTouches: emulator.showTouches !== false,
         pace,
         actions: emulator.actions || []
       })

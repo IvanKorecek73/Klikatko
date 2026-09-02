@@ -12,8 +12,6 @@ const TICKET_PAYMENT_CALLBACK_SCHEME = "pid-litacka-payment:";
 const TICKET_PAYMENT_CALLBACK_HOST = "ticket";
 const EMULATOR_PACE_PROFILES = Object.freeze({
   natural: Object.freeze({
-    hoverMs: 160,
-    touchMs: 240,
     waitAfterMs: 0,
     waitScale: 0,
     waitAfterLimitMs: 0,
@@ -22,8 +20,6 @@ const EMULATOR_PACE_PROFILES = Object.freeze({
     swipeScale: 0.25
   }),
   fast: Object.freeze({
-    hoverMs: 120,
-    touchMs: 200,
     waitAfterMs: 0,
     waitScale: 0,
     waitAfterLimitMs: 0,
@@ -90,13 +86,11 @@ async function executeEmulatorActions(payload = {}) {
   }
 
   await runAdb(["-s", deviceId, "get-state"]);
-  await configurePresentationTouches(deviceId, payload.showTouches !== false);
+  await configurePresentationTouches(deviceId);
 
   const executionContext = {
     nodes: null,
-    lastKnownNodes: null,
-    pointer: { x: 540, y: 1200 },
-    presentationEnabled: payload.showTouches !== false
+    lastKnownNodes: null
   };
   const results = [];
   for (let index = 0; index < actions.length; index += 1) {
@@ -331,6 +325,77 @@ async function executeAction(
     };
   }
 
+  if (type === "inputTextGroup") {
+    const fields = Array.isArray(action.fields) ? action.fields : [];
+    if (fields.length < 2 || fields.length > 8) {
+      throw new Error(`Skupina polí v akci ${index + 1} musí obsahovat 2 až 8 položek.`);
+    }
+
+    const firstField = fields[0];
+    const firstMatch = await waitForNode(deviceId, firstField, pace, executionContext);
+    if (!firstMatch) {
+      throw new Error(`První pole pro akci ${index + 1} nebylo nalezeno: ${describeMatcher(firstField)}.`);
+    }
+
+    const firstPoint = pointWithinBounds(firstMatch.bounds, firstField.tapHorizontalRatio);
+    await presentationTap(deviceId, firstPoint.x, firstPoint.y, firstField, pace, executionContext);
+    await delay(clampInteger(action.focusSettleMs, 0, 2000, 200));
+
+    for (let fieldIndex = 0; fieldIndex < fields.length; fieldIndex += 1) {
+      const field = fields[fieldIndex];
+      const value = String(field.value ?? "");
+      if (value.length === 0 || value.length > 200) {
+        throw new Error(`Text v poli ${fieldIndex + 1} akce ${index + 1} musí mít 1 až 200 znaků.`);
+      }
+
+      if (fieldIndex > 0) {
+        await runAdb(["-s", deviceId, "shell", "input", "keyevent", "TAB"]);
+        await delay(clampInteger(action.tabSettleMs, 0, 1000, 75));
+      }
+
+      if (field.clear !== false) {
+        await runAdb(["-s", deviceId, "shell", "input", "keycombination", "KEYCODE_CTRL_LEFT", "KEYCODE_A"]);
+        await runAdb(["-s", deviceId, "shell", "input", "keyevent", "KEYCODE_DEL"]);
+      }
+      if (field.keyByKey === true) {
+        await typeAdbTextKeyByKey(deviceId, value, field.keyDelayMs);
+      } else {
+        await typeAdbText(deviceId, value);
+      }
+    }
+
+    invalidateVisibleNodes(executionContext);
+    const verifiedNodes = await getVisibleNodes(deviceId, executionContext, { refresh: true });
+    const mismatches = fields.filter(field => {
+      if (field.expectedValue === undefined) {
+        return false;
+      }
+      const actualValue = findNode(verifiedNodes, fieldMatcher(field))?.text ?? null;
+      return actualValue !== String(field.expectedValue);
+    });
+
+    // Some hosted payment fields advance focus automatically. If that makes
+    // the fast TAB path skip a field, retry only the mismatched fields with
+    // the slower selector-based input instead of slowing every successful run.
+    for (const field of mismatches) {
+      await executeAction(deviceId, {
+        ...field,
+        type: "inputText",
+        clear: true
+      }, index, pace, executionContext);
+    }
+
+    return {
+      index,
+      type,
+      fields: fields.map(field => ({
+        field: field.resourceId || field.contentDescription || field.text || "focused",
+        value: field.sensitive === true ? "***" : String(field.value)
+      })),
+      fallbackCount: mismatches.length
+    };
+  }
+
   if (type === "inputText") {
     const value = String(action.value ?? "");
     if (value.length === 0 || value.length > 200) {
@@ -418,9 +483,7 @@ async function executeAction(
     let untilMatch = null;
     let performedSwipes = 0;
     for (let iteration = 0; iteration < repeat; iteration += 1) {
-      await animatePresentationPointer(deviceId, executionContext, x1, y1, pace);
       await runAdb(["-s", deviceId, "shell", "input", "touchscreen", "swipe", String(x1), String(y1), String(x2), String(y2), String(durationMs)]);
-      executionContext.pointer = { x: x2, y: y2 };
       performedSwipes += 1;
       const shouldCheck = untilMatcher && ((iteration + 1) % checkEvery === 0 || iteration + 1 === repeat);
       if (shouldCheck) {
@@ -482,9 +545,9 @@ async function waitForAnyContentDescription(deviceId, expectedLabels, timeoutMs,
   throw new Error(`Aplikace po restartu nezobrazila očekávanou výchozí obrazovku (${expectedLabels.join(" nebo ")}).`);
 }
 
-async function configurePresentationTouches(deviceId, enabled) {
-  await runAdb(["-s", deviceId, "shell", "settings", "put", "system", "show_touches", enabled ? "1" : "0"]);
-  await runAdb(["-s", deviceId, "shell", "settings", "put", "system", "pointer_location", enabled ? "1" : "0"]);
+async function configurePresentationTouches(deviceId) {
+  await runAdb(["-s", deviceId, "shell", "settings", "put", "system", "show_touches", "0"]);
+  await runAdb(["-s", deviceId, "shell", "settings", "put", "system", "pointer_location", "0"]);
 }
 
 async function presentationTap(
@@ -493,61 +556,11 @@ async function presentationTap(
   y,
   action = {},
   pace = "natural",
-  executionContext = { pointer: { x: 540, y: 1200 }, presentationEnabled: true }
+  executionContext = { nodes: null, lastKnownNodes: null }
 ) {
-  const { hoverMs, touchMs, waitAfterMs } = getPresentationTapTiming(action, pace);
-  await animatePresentationPointer(deviceId, executionContext, x, y, pace, hoverMs);
-  await runAdb(["-s", deviceId, "shell", "input", "touchscreen", "motionevent", "DOWN", String(x), String(y)]);
-  await delay(touchMs);
-  await runAdb(["-s", deviceId, "shell", "input", "touchscreen", "motionevent", "UP", String(x), String(y)]);
-  executionContext.pointer = { x, y };
+  const waitAfterMs = getPacedWaitMs(action.waitAfterMs, pace, 0);
+  await runAdb(["-s", deviceId, "shell", "input", "tap", String(x), String(y)]);
   await delay(waitAfterMs);
-}
-
-async function animatePresentationPointer(deviceId, executionContext, x, y, pace = "natural", durationMs) {
-  if (executionContext?.presentationEnabled === false) {
-    return;
-  }
-
-  const profile = EMULATOR_PACE_PROFILES[normalizeEmulatorPace(pace)];
-  const from = executionContext?.pointer || { x: 540, y: 1200 };
-  const points = buildPointerMovePoints(from, { x, y });
-  const stepDelayMs = Math.max(0, Math.round((durationMs ?? profile.hoverMs) / points.length));
-  for (const point of points) {
-    await runAdb([
-      "-s", deviceId, "shell", "input", "mouse", "motionevent", "MOVE",
-      String(point.x), String(point.y)
-    ]);
-    await delay(stepDelayMs);
-  }
-  executionContext.pointer = { x, y };
-}
-
-function buildPointerMovePoints(from, to, steps = 6) {
-  const count = clampInteger(steps, 2, 12, 6);
-  return Array.from({ length: count }, (_, index) => {
-    const progress = (index + 1) / count;
-    return {
-      x: Math.round(from.x + (to.x - from.x) * progress),
-      y: Math.round(from.y + (to.y - from.y) * progress)
-    };
-  });
-}
-
-function getPresentationTapTiming(action = {}, pace = "natural") {
-  const normalizedPace = normalizeEmulatorPace(pace);
-  const profile = EMULATOR_PACE_PROFILES[normalizedPace];
-  return {
-    hoverMs: action.hoverMs === undefined && action.holdMs === undefined
-      ? profile.hoverMs
-      : clampInteger(action.hoverMs ?? action.holdMs, 80, 500, profile.hoverMs),
-    touchMs: action.touchMs === undefined
-      ? profile.touchMs
-      : clampInteger(action.touchMs, 100, 500, profile.touchMs),
-    waitAfterMs: action.waitAfterMs === undefined
-      ? profile.waitAfterMs
-      : getPacedWaitMs(action.waitAfterMs, normalizedPace, profile.waitAfterMs)
-  };
 }
 
 function normalizeEmulatorPace(value) {
@@ -1035,12 +1048,10 @@ async function handleEmulatorBridgeRequest(request, response) {
 
 module.exports = {
   buildDeleteKeyBatches,
-  buildPointerMovePoints,
   countConfiguredActions,
   executeEmulatorActions,
   extractTicketPaymentInitiationFromLog,
   findNode,
-  getPresentationTapTiming,
   getEmulatorStatus,
   handleEmulatorBridgeRequest,
   normalizeEmulatorPace,

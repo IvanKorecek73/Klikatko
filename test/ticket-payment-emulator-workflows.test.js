@@ -109,8 +109,8 @@ test("saved-profile login enters the password and keeps logout confirmation expl
 
   assert.ok(passwordInput);
   assert.equal(passwordInput.sensitive, true);
-  assert.equal(confirmation.hoverMs, 140);
-  assert.equal(confirmation.touchMs, 100);
+  assert.equal(confirmation.hoverMs, undefined);
+  assert.equal(confirmation.touchMs, undefined);
   assert.equal(confirmation.waitAfterMs, 700);
 });
 
@@ -204,13 +204,15 @@ test("save-card workflow enables persistence before opening and submitting the g
   assert.equal(initiate.emulator.actions[1].occurrence, 2);
   assert.equal(fill.emulator.subscenarioId, "gdpay-fill-test-card");
   const fillScenario = getSubscenario("gdpay-fill-test-card");
-  assert.deepEqual(fillScenario.actions.map(action => action.resourceId), ["cardnumber", "expiry", "cvc"]);
-  assert.notEqual(fillScenario.actions[0].keyByKey, true);
-  assert.equal(fillScenario.actions[0].expectedValue, "{{cardNumber}}");
-  assert.equal(fillScenario.actions[1].expectedValue, "08/28");
-  assert.notEqual(fillScenario.actions[1].keyByKey, true);
-  assert.equal(fillScenario.actions[2].expectedValue, "{{cvc}}");
-  assert.equal(fillScenario.actions[2].tapHorizontalRatio, 0.35);
+  assert.equal(fillScenario.actions.length, 1);
+  assert.equal(fillScenario.actions[0].type, "inputTextGroup");
+  assert.deepEqual(fillScenario.actions[0].fields.map(field => field.resourceId), ["cardnumber", "expiry", "cvc"]);
+  assert.notEqual(fillScenario.actions[0].fields[0].keyByKey, true);
+  assert.equal(fillScenario.actions[0].fields[0].expectedValue, "{{cardNumber}}");
+  assert.equal(fillScenario.actions[0].fields[1].expectedValue, "08/28");
+  assert.notEqual(fillScenario.actions[0].fields[1].keyByKey, true);
+  assert.equal(fillScenario.actions[0].fields[2].expectedValue, "{{cvc}}");
+  assert.equal(fillScenario.actions[0].fields[2].tapHorizontalRatio, 0.35);
   assert.match(submit.emulator.confirm, /vytvoří další jízdenku/i);
   assert.equal(submit.emulator.actions[0].type, "hideKeyboard");
   assert.deepEqual(submit.emulator.actions[1].waitFor, {
@@ -256,6 +258,7 @@ test("saved-card workflow asserts card 0006 before initiating the opaque-token p
   ]);
   assert.equal(verify.emulator.actions[0].resourceId, "otp");
   assert.equal(verify.emulator.actions[0].value, "1234");
+  assert.equal(verify.emulator.actions[0].expectedValue, undefined);
   assert.equal(verify.emulator.actions[2].resourceId, "sendOtp");
   assert.deepEqual(verify.emulator.actions[2].waitFor, {
     text: "Unauthorized",
