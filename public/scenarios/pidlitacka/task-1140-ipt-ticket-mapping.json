@@ -1,0 +1,143 @@
+{
+  "version": 1,
+  "name": "PidLitacka - task 1140: mapování IPT → Tickets",
+  "description": "Lokální E2E ověření mapování produktu z vyhledané trasy na koupenou jízdenku a nákupní produkt.",
+  "scenarios": [
+    {
+      "id": "pidlitacka-task-1140-resolve-and-activate",
+      "title": "IPT 867 → Tickets 1002 → aktivace",
+      "description": "Připraví AVAILABLE jízdenku produktu 1002, vyřeší IPT produkt 867 a nalezený fulfillment aktivuje.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": false,
+      "tags": ["tickets", "task-1140", "task-1007", "ipt-mapping", "activation", "local-fixture"],
+      "app": {
+        "section": "tickets",
+        "title": "Jízdné",
+        "subtitle": "Aktivace jízdenky doporučené vyhledanou trasou"
+      },
+      "instructions": [
+        "Scénář navazuje na GitLab task #1140 a ověřuje mapovací část UC #1007.",
+        "Scénář je určen pouze pro LOCAL prostředí s izolovanou databází Tickets.",
+        "Fixture připraví koupenou a dosud neaktivovanou jízdenku Tickets 1002 pro aktuální identitu.",
+        "Resolver musí pro IPT 867 vrátit tuto jízdenku jako kandidáta a současně produkt 1002 jako aktuální cíl pro nový nákup.",
+        "Aktivace kandidáta následně vede přes veřejné API BE PidLitacka do Ticket Service."
+      ],
+      "steps": [
+        {
+          "id": "ticket-1140-create-mapped-fixture",
+          "title": "Připravit koupenou jízdenku Tickets 1002",
+          "description": "V izolované lokální databázi vytvoří pro přihlášeného uživatele fulfillment ve stavu AVAILABLE.",
+          "request": {
+            "method": "POST",
+            "path": "/__harness/fixtures/task-960",
+            "headers": { "X-Klikatko-Local-Fixture": "task-960" },
+            "body": {
+              "userId": "{{session.identityId}}",
+              "variant": "mapped",
+              "count": 1
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.count", "equals": 1 },
+              { "path": "$.items[0].status", "equals": "AVAILABLE" },
+              { "path": "$.items[0].productId", "equals": 1002 }
+            ]
+          },
+          "extract": { "ticket1140FulfillmentId": "$.items[0].fulfillmentId" }
+        },
+        {
+          "id": "ticket-1140-resolve-recommendation",
+          "title": "Napárovat IPT produkt na Tickets",
+          "description": "Ověří kandidáta pro použití již koupené jízdenky i aktuální produkt pro případný nový nákup.",
+          "requiresContext": ["ticket1140FulfillmentId"],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/route-recommendations/resolve",
+            "body": { "iptProductIds": [867] }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.items[0].iptProductId", "equals": 867 },
+              { "path": "$.items[0].activationResult", "equals": "MAPPED" },
+              { "path": "$.items[0].availableCount", "atLeast": 1 },
+              {
+                "path": "$.items[0].activationCandidates",
+                "containsItem": {
+                  "fulfillmentId": "{{context.ticket1140FulfillmentId}}",
+                  "ticketProductId": 1002
+                },
+                "message": "Resolver nenašel připravenou jízdenku Tickets 1002 pro IPT produkt 867."
+              },
+              { "path": "$.items[0].purchaseResult", "equals": "MAPPED" },
+              { "path": "$.items[0].purchaseProductId", "equals": 1002 }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1140-register-device",
+          "title": "Připravit zařízení pro aktivaci",
+          "description": "Zaregistruje aktuální instalaci v Ticket Service.",
+          "fields": [
+            { "name": "deviceIdentifier", "label": "Identifikátor instalace", "value": "{{auth.deviceId}}", "hidden": true },
+            { "name": "deviceModel", "label": "Model zařízení", "value": "{{auth.model}}", "hidden": true },
+            { "name": "platform", "label": "Platforma", "value": "{{auth.platform}}", "hidden": true },
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "headers": { "Idempotency-Key": "{{form.idempotencyKey}}" },
+            "body": {
+              "deviceIdentifier": "{{form.deviceIdentifier}}",
+              "deviceModel": "{{form.deviceModel}}",
+              "platform": "{{form.platform}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              { "path": "$.deviceId", "notEmpty": true },
+              { "path": "$.deviceIdentifier", "equals": "{{form.deviceIdentifier}}" }
+            ]
+          },
+          "extract": { "ticket1140DeviceId": "$.deviceId" }
+        },
+        {
+          "id": "ticket-1140-activate-candidate",
+          "title": "Aktivovat nalezenou jízdenku",
+          "description": "Předá fulfillment nalezený resolverem stávajícímu aktivačnímu endpointu.",
+          "requiresContext": ["ticket1140FulfillmentId", "ticket1140DeviceId"],
+          "fields": [
+            { "name": "idempotencyKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.ticket1140FulfillmentId}}",
+            "headers": { "Idempotency-Key": "{{form.idempotencyKey}}" },
+            "body": {
+              "zones": null,
+              "validSince": null,
+              "deviceId": "{{context.ticket1140DeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.fulfillmentId", "equals": "{{context.ticket1140FulfillmentId}}" },
+              { "sourcePath": "$.status", "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$", "message": "Tickets nevrátil aktivovaný stav." },
+              { "path": "$.deviceId", "equals": "{{context.ticket1140DeviceId}}" },
+              { "path": "$.validSince", "notEmpty": true },
+              { "path": "$.validUntil", "notEmpty": true },
+              { "path": "$.activationProtection", "atLeast": 0 },
+              { "path": "$.etd", "notEmpty": true }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

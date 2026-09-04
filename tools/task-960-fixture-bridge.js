@@ -108,8 +108,8 @@ function validatePayload(payload) {
     throw createHttpError(400, "InvalidFixtureUser", "Fixture userId must be the identityId UUID of the logged-in LOCAL user.");
   }
 
-  if (!new Set(["fixed", "zonal"]).has(variant)) {
-    throw createHttpError(400, "InvalidFixtureVariant", "Fixture variant must be fixed or zonal.");
+  if (!new Set(["fixed", "zonal", "mapped"]).has(variant)) {
+    throw createHttpError(400, "InvalidFixtureVariant", "Fixture variant must be fixed, zonal, or mapped.");
   }
 
   if (!Number.isInteger(count) || count < 1 || count > 2) {
@@ -123,7 +123,7 @@ async function createFixtures(payload, options) {
   const fixtureDirectory = path.resolve(
     options.fixtureDirectory
       || process.env.TASK_960_FIXTURE_DIR
-      || path.join(__dirname, "..", "..", "pid-litacka-2.0-smoke-960", "fixture"));
+      || path.join(__dirname, "task-960-fixture"));
   const scriptPath = path.join(fixtureDirectory, "New-AvailableFulfillment.ps1");
 
   if (!fs.existsSync(scriptPath)) {

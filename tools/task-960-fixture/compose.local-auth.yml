@@ -1,0 +1,27 @@
+services:
+  postgres:
+    ports: !override
+      - "55432:5432"
+
+  rabbitmq:
+    ports: !override
+      - "55672:5672"
+      - "55673:15672"
+
+  valkey:
+    ports: !override
+      - "56379:6379"
+
+  api:
+    environment:
+      Application__TicketActivationProtectionDelay: "60"
+      Auth__Issuers__0__Name: pidl2-local
+      Auth__Issuers__0__Authority: http://host.docker.internal:5065
+      Auth__Issuers__0__Issuer: http://host.docker.internal:5065
+      Auth__Issuers__0__Audience: https://oict.cz/
+      Auth__Issuers__0__RequireHttpsMetadata: "false"
+      Auth__Issuers__0__SubjectClaim: identity_id
+      Auth__Issuers__0__ValidAlgorithms__0: ES256
+      Auth__Issuers__0__ClockSkewSeconds: "30"
+    ports: !override
+      - "18080:8080"

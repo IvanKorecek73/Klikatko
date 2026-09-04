@@ -30,6 +30,16 @@ test("validatePayload accepts only the bounded task 960 fixture contract", () =>
     error => error.statusCode === 400 && error.code === "InvalidFixtureCount");
 });
 
+test("validatePayload accepts the task 1140 mapped product fixture", () => {
+  const userId = "11111111-2222-3333-4444-555555555555";
+
+  assert.deepEqual(validatePayload({ userId, variant: "mapped", count: 1 }), {
+    userId,
+    variant: "mapped",
+    count: 1
+  });
+});
+
 test("parseFixtureOutput ignores build logs and returns the final AVAILABLE fulfillment", () => {
   const result = parseFixtureOutput([
     "Restore completed.",

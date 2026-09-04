@@ -51,6 +51,12 @@
       "file": "feature-960-aktivace-jizdenky.json"
     },
     {
+      "id": "pidlitacka-task-1140-ipt-ticket-mapping",
+      "name": "PidLitacka - task 1140: mapování IPT → Tickets",
+      "description": "Lokální E2E ověření mapování IPT produktu na koupenou jízdenku a aktuální produkt pro nákup.",
+      "file": "task-1140-ipt-ticket-mapping.json"
+    },
+    {
       "id": "pidlitacka-feature-966",
       "name": "PidLitacka - task 966: oblíbené jízdenky",
       "description": "Funkční scénář přidání, idempotentního opakování, výběru a odebrání oblíbené jízdenky přes BE PidLitacka.",
