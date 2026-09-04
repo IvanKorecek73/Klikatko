@@ -41,3 +41,11 @@ produktového specialisty a případné úpravy produktů v Tickets BackOffice.
 
 Produkční implementace automatickou synchronizaci nepřebírá. PoC slouží jako
 archivovaný nástroj pro kontrolu a případné budoucí přegenerování seedu.
+
+## Navazující regresní scénář
+
+[`../../public/scenarios/pidlitacka/task-1140-ipt-ticket-mapping.json`](../../public/scenarios/pidlitacka/task-1140-ipt-ticket-mapping.json)
+ověřuje přes lokální BE a Tickets tok `IPT 867 → Tickets 1002 → aktivace`.
+Používá verzovanou fixture z [`../task-960-fixture/`](../task-960-fixture/).
+Scénář začíná známým IPT `typeId`; neověřuje vznik `ptTicket` v odpovědi IPT ani
+samostatný problém `userFareInfo`/CP 31.
