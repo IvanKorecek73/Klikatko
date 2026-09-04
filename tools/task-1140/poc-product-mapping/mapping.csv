@@ -1,0 +1,2 @@
+iptProductId,ticketsProductId,usage,status,note
+867,1002,BOTH,PROPOSED,Known test case; must be confirmed by the generated comparison report
