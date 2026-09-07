@@ -20,8 +20,24 @@ Výstupy vzniknou v `report/`:
 - `report.json` — úplný strojově čitelný výsledek;
 - `summary.md` — stručné počty a nejčastější rozdíly;
 - `suggested-mapping.csv` — nejlepší automaticky nalezený kandidát pro každý IPT produkt. Je to pracovní návrh, nikoli schválené mapování.
+- `seed-candidate.csv` — minimální třísloupcový podklad z použitelných nebo
+  ručně schválených vazeb; schválená vazba čekající na opravu dat v něm je
+  záměrně zahrnuta.
 
-Ručně potvrzované vazby patří do `mapping.csv`. Sloupec `usage` přijímá `ACTIVATE_EXISTING`, `PURCHASE_NEW` nebo `BOTH`. Sloupec `humanDecision` přijímá `UNDECIDED`, `APPROVED` nebo `REJECTED`; lidské zamítnutí přebije oba automatické verdikty na `MISMATCH`. Stejné IPT ID může mít více řádků pro starší aktivačně kompatibilní produkty; pro `PURCHASE_NEW` smí být po potvrzení pouze jeden aktuální cíl. Neúplné mapování nebrání spuštění PoC. Automatický kandidát se nikdy nepovažuje za autoritativní vazbu.
+Ručně potvrzované vazby patří do verzovaného `mapping-review-vN.csv`.
+Sloupec `usage` přijímá `ACTIVATE_EXISTING`, `PURCHASE_NEW` nebo `BOTH`.
+`humanDecision` přijímá `UNDECIDED`, `APPROVED`, `REJECTED` nebo `EXCLUDED`:
+
+- `APPROVED` potvrzuje identitu vazby, ale samo neskryje neopravené rozdíly dat;
+- `ignoredFields` obsahuje středníkem oddělené konkrétní byznysové výjimky,
+  které se po schválení sníží z chyby na varování;
+- `REJECTED` přebije oba automatické verdikty na `MISMATCH`;
+- `EXCLUDED` spolu s `usage=NONE` a prázdným Tickets ID označí IPT produkt mimo
+  rozsah #1007/#1008. Nejde o chybějící mapování a produkt nevstupuje do seedu.
+
+Stejné IPT ID může mít více řádků pro starší aktivačně kompatibilní
+produkty; pro `PURCHASE_NEW` smí být po potvrzení pouze jeden aktuální cíl.
+Automatický kandidát se nikdy nepovažuje za autoritativní vazbu.
 
 HTML porovná ručně zadané vazby. U dosud nenapárovaných produktů zobrazí stejné detailní porovnání nejlepšího automatického kandidáta označeného `SUGGESTED`, aby šel provést první průchod všech produktů bez předstírání, že jsou vazby schválené.
 
@@ -63,3 +79,23 @@ Po týmovém rozhodnutí se produkčně nebude implementovat automatická synchr
 Původní minimální výstup [seed/ipt-ticket-mapping-v1.csv](seed/ipt-ticket-mapping-v1.csv) obsahuje 51 efektivně použitelných dvojic z reportu v6. Preferovaná [v2](seed/ipt-ticket-mapping-v2.csv) přidává povinný příznak `isPurchaseTarget`: #1007 používá všechny řádky, #1008 jen aktuální nákupní cíl. Původ a kontrolní součty jsou v [seed/README.md](seed/README.md) a [SHA256SUMS.txt](SHA256SUMS.txt).
 
 Seed v2 je pracovní návrh čekající na kontrolu produktového specialisty a změny v Tickets BackOffice. Implementace schématu a resolveru na jeho finální podobě nesmí záviset; schéma a datové naplnění mají vzniknout ve dvou samostatných EF migracích.
+
+### Ruční revize v7
+
+`mapping-review-v7.csv` a `candidate-report-v7/` zachovávají rozhodnutí z
+7. 9. 2026. Seed podklad má 58 vazeb. Produkty IPT 883 a 901 jsou capping a jsou
+mimo rozsah. Vazba 814 → 1076 obsahuje schválenou výjimku `duration`. Vazby
+886 → 1054, 889 → 1074, 890 → 1061, 891 → 1062, 926 → 1002 a
+927 → 1074 jsou schválené, ale před použitím seedu vyžadují popsané opravy
+dat v Tickets.
+
+Kontrolní součty vstupního mapování, výstupů v7, generátoru a testů jsou v
+`SHA256SUMS-v7.txt`. Původní `SHA256SUMS.txt` zůstává historickým manifestem;
+jeho položky pro reporty v1–v6 jsou nadále platné. Hash generátoru, testů a
+dokumentace se změnil záměrně kvůli podpoře ruční revize v7.
+
+IPT 926 znamená jeden flexibilní třípásmový tarif. Tickets jej umí
+reprezentovat jedním produktem s povolenými zónami `P,0,B,1–13` a `ZoneCount=3`;
+není nutné zakládat dva produkty. Současný snapshot produktu 1002 tuto
+flexibilní konfiguraci nemá, proto report správně ponechává červený stav do
+opravy v Tickets.

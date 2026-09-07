@@ -93,6 +93,10 @@ function zones(value) {
     .sort((a, b) => a.localeCompare(b, 'cs', { numeric: true }));
 }
 
+function fieldList(value) {
+  return [...new Set(String(value ?? '').split(/[;|]/).map(x => x.trim()).filter(Boolean))];
+}
+
 function isoDate(value) {
   if (!value) return null;
   const match = String(value).match(/^\d{4}-\d{2}-\d{2}/);
@@ -252,31 +256,54 @@ function isUsable(verdict) {
   return verdict === 'MATCH' || verdict === 'WARNING';
 }
 
+function isSeedCandidate(entry) {
+  if (entry.pair.humanDecision === 'REJECTED') return false;
+  return entry.pair.humanDecision === 'APPROVED'
+    || (isUsable(entry.pair.activationVerdict) && isUsable(entry.pair.purchaseVerdict));
+}
+
 function applyHumanDecision(pair, mapping) {
   const humanDecision = String(mapping.humanDecision || 'UNDECIDED').trim().toUpperCase();
+  const ignoredFields = humanDecision === 'APPROVED' ? fieldList(mapping.ignoredFields) : [];
+  const comparisons = pair.comparisons.map(comparison => ignoredFields.includes(comparison.field) && comparison.rawResult !== 'MATCH'
+    ? {
+        ...comparison,
+        activationResult: comparison.activationResult === 'INFO' ? 'INFO' : 'WARNING',
+        purchaseResult: comparison.purchaseResult === 'INFO' ? 'INFO' : 'WARNING',
+        humanOverride: 'APPROVED_EXCEPTION'
+      }
+    : comparison);
+  const reviewedActivationVerdict = verdict(comparisons, 'activation');
+  const reviewedPurchaseVerdict = verdict(comparisons, 'purchase');
   return {
     ...pair,
     automaticActivationVerdict: pair.activationVerdict,
     automaticPurchaseVerdict: pair.purchaseVerdict,
+    comparisons,
     humanDecision,
-    activationVerdict: humanDecision === 'REJECTED' ? 'MISMATCH' : pair.activationVerdict,
-    purchaseVerdict: humanDecision === 'REJECTED' ? 'MISMATCH' : pair.purchaseVerdict
+    ignoredFields,
+    activationVerdict: humanDecision === 'REJECTED' ? 'MISMATCH' : reviewedActivationVerdict,
+    purchaseVerdict: humanDecision === 'REJECTED' ? 'MISMATCH' : reviewedPurchaseVerdict
   };
 }
 
 function html(report) {
   const cards = report.products.map(item => {
+    if (item.scopeExclusion) {
+      const note = item.scopeExclusion.note ? `<p><b>Důvod:</b> ${escapeHtml(item.scopeExclusion.note)}</p>` : '';
+      return `<details class="card excluded" data-state="excluded"><summary><b>IPT ${item.iptProductId}</b> — ${escapeHtml(item.name)} <span>MIMO ROZSAH #1007/#1008</span></summary>${note}<p>Produkt se nezapočítá mezi chybějící mapování a nevstupuje do seed podkladu.</p></details>`;
+    }
     const shownPairs = item.pairs.length ? item.pairs.map(x => ({ ...x, suggested: false })) : item.suggestedPair ? [{ pair: item.suggestedPair, mapping: null, suggested: true }] : [];
     const activationUsable = item.pairs.length > 0 && item.pairs.some(x => isUsable(x.pair.activationVerdict));
     const humanRejected = item.pairs.length > 0 && item.pairs.some(x => x.pair.humanDecision === 'REJECTED');
-    const badge = item.pairs.length ? item.pairs.map(x => `T${x.pair.ticketsProductId}: aktivace ${isUsable(x.pair.activationVerdict) ? 'POUŽITELNÁ' : 'NEPOUŽITELNÁ'}, nákup ${isUsable(x.pair.purchaseVerdict) ? 'POUŽITELNÝ' : 'NEPOUŽITELNÝ'}${x.pair.humanDecision === 'REJECTED' ? ', LIDSKY ZAMÍTNUTO' : ''}`).join(' · ') : 'UNMAPPED — zobrazen nejlepší kandidát';
+    const badge = item.pairs.length ? item.pairs.map(x => `T${x.pair.ticketsProductId}: aktivace ${isUsable(x.pair.activationVerdict) ? 'POUŽITELNÁ' : 'NEPOUŽITELNÁ'}, nákup ${isUsable(x.pair.purchaseVerdict) ? 'POUŽITELNÝ' : 'NEPOUŽITELNÝ'}${x.pair.humanDecision === 'REJECTED' ? ', LIDSKY ZAMÍTNUTO' : x.pair.humanDecision === 'APPROVED' ? ', VAZBA RUČNĚ SCHVÁLENA' : ''}`).join(' · ') : 'UNMAPPED — zobrazen nejlepší kandidát';
     const cls = activationUsable ? 'usable' : humanRejected ? 'rejected' : 'unusable';
     const suggestions = item.candidates.map(c => `${c.ticketsProductId} (${c.percentage} %) ${escapeHtml(c.name)}`).join('<br>');
     const pairBlocks = shownPairs.map(({ pair, mapping, suggested }) => {
       const comparisons = pair.comparisons.map(c => {
         const activationClass = `status-${c.activationResult.toLowerCase()}`;
         const purchaseClass = `status-${c.purchaseResult.toLowerCase()}`;
-        const suffix = c.rawResult === 'IPT_SUBSET_OF_TICKETS' ? ' — IPT ⊂ Tickets' : '';
+        const suffix = c.humanOverride === 'APPROVED_EXCEPTION' ? ' — ručně schválená výjimka' : c.rawResult === 'IPT_SUBSET_OF_TICKETS' ? ' — IPT ⊂ Tickets' : '';
         return `<tr><td>${escapeHtml(c.field)}</td><td>${escapeHtml(display(c.ipt))}</td><td>${escapeHtml(display(c.tickets))}</td><td class="${activationClass}">${c.activationResult}${suffix}</td><td class="${purchaseClass}">${c.purchaseResult}${suffix}</td></tr>`;
       }).join('');
       const humanDecision = pair.humanDecision ?? 'UNDECIDED';
@@ -284,20 +311,21 @@ function html(report) {
       const approved = humanDecision === 'APPROVED';
       const decisionLabel = rejected ? 'ZAMÍTNUTO' : approved ? 'SCHVÁLENO' : 'NEROZHODNUTO';
       const decisionClass = rejected ? 'status-mismatch' : approved ? 'status-match' : 'status-info';
-      const decisionResult = rejected ? 'MISMATCH — lidské rozhodnutí' : approved ? 'MATCH — lidské rozhodnutí' : 'INFO';
+      const decisionResult = rejected ? 'MISMATCH — lidské rozhodnutí' : approved ? 'SCHVÁLENÁ VAZBA' : 'INFO';
       const decisionRow = `<tr><td>humanDecision</td><td colspan="2">${decisionLabel}</td><td class="${decisionClass}">${decisionResult}</td><td class="${decisionClass}">${decisionResult}</td></tr>`;
-      const automaticNote = rejected ? ` · Automaticky: aktivace ${pair.automaticActivationVerdict}, nákup ${pair.automaticPurchaseVerdict}` : '';
-      return `<h3>${suggested ? 'SUGGESTED' : escapeHtml(mapping.usage)}: IPT ${pair.iptProductId} → Tickets ${pair.ticketsProductId}</h3><p><span class="pill">Aktivace: ${isUsable(pair.activationVerdict) ? 'POUŽITELNÁ' : 'NEPOUŽITELNÁ'} (${pair.activationVerdict})</span> <span class="pill">Nákup: ${isUsable(pair.purchaseVerdict) ? 'POUŽITELNÝ' : 'NEPOUŽITELNÝ'} (${pair.purchaseVerdict})</span>${mapping ? ` · Stav vazby: ${escapeHtml(mapping.status)}` : ''}${automaticNote}</p><table><thead><tr><th>Parametr</th><th>IPT</th><th>Tickets</th><th>Aktivace</th><th>Nákup</th></tr></thead><tbody>${decisionRow}${comparisons}</tbody></table><details><summary>Všechna původní data</summary><div class="raw"><pre>${escapeHtml(JSON.stringify(pair.iptRaw, null, 2))}</pre><pre>${escapeHtml(JSON.stringify(pair.ticketsRaw, null, 2))}</pre></div></details>`;
+      const automaticNote = rejected || pair.ignoredFields?.length ? ` · Automaticky před lidským rozhodnutím: aktivace ${pair.automaticActivationVerdict}, nákup ${pair.automaticPurchaseVerdict}` : '';
+      const reviewNote = mapping?.note ? `<p class="review-note"><b>Poznámka ruční revize:</b> ${escapeHtml(mapping.note)}</p>` : '';
+      return `<h3>${suggested ? 'SUGGESTED' : escapeHtml(mapping.usage)}: IPT ${pair.iptProductId} → Tickets ${pair.ticketsProductId}</h3><p><span class="pill">Aktivace: ${isUsable(pair.activationVerdict) ? 'POUŽITELNÁ' : 'NEPOUŽITELNÁ'} (${pair.activationVerdict})</span> <span class="pill">Nákup: ${isUsable(pair.purchaseVerdict) ? 'POUŽITELNÝ' : 'NEPOUŽITELNÝ'} (${pair.purchaseVerdict})</span>${mapping ? ` · Stav vazby: ${escapeHtml(mapping.status)}` : ''}${automaticNote}</p>${reviewNote}<table><thead><tr><th>Parametr</th><th>IPT</th><th>Tickets</th><th>Aktivace</th><th>Nákup</th></tr></thead><tbody>${decisionRow}${comparisons}</tbody></table><details><summary>Všechna původní data</summary><div class="raw"><pre>${escapeHtml(JSON.stringify(pair.iptRaw, null, 2))}</pre><pre>${escapeHtml(JSON.stringify(pair.ticketsRaw, null, 2))}</pre></div></details>`;
     }).join('');
     return `<details class="card ${cls}" data-state="${cls}"><summary><b>IPT ${item.iptProductId}</b> — ${escapeHtml(item.name)} <span>${escapeHtml(badge)}</span></summary>
       <p><b>Ruční vazby:</b> ${item.pairs.length || 'žádné'}<br><b>Nejlepší kandidáti:</b><br>${suggestions}</p>${pairBlocks}</details>`;
   }).join('\n');
   return `<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Task #1140 — kontrola mapování</title><style>
-  body{font:15px system-ui;margin:0;background:#f5f6f8;color:#20242b}main{max-width:1320px;margin:auto;padding:24px}h1{margin-bottom:6px}.meta{color:#596273}.summary{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}.metric,.card{background:white;border:1px solid #d8dce3;border-radius:9px}.metric{padding:12px 18px}.toolbar{position:sticky;top:0;background:#f5f6f8;padding:10px 0;z-index:2}.card{margin:9px 0;padding:12px;border-left:9px solid}.card.usable{border-left-color:#087f3d}.card.unusable{border-left-color:#c81e1e}.card.rejected{border-left-color:#a34f00}summary{cursor:pointer}summary span{float:right;font-weight:700}.pill{display:inline-block;padding:5px 9px;border:1px solid #bcc3ce;border-radius:6px;background:#eef1f5;color:#303846;font-weight:800}table{border-collapse:collapse;width:100%;margin:12px 0}th,td{padding:7px;border:1px solid #d8dce3;text-align:left;vertical-align:top}td.status-match{background:#d8f3df;color:#146c35}td.status-warning{background:#fff1bd;color:#765500}td.status-info{background:#dceeff;color:#15598a}td.status-mismatch{background:#ffd6d6;color:#9a1717}.raw{display:grid;grid-template-columns:1fr 1fr;gap:10px}.raw pre{overflow:auto;background:#161a22;color:#e9edf4;padding:12px;border-radius:6px}@media(max-width:800px){.raw{grid-template-columns:1fr}summary span{float:none;display:block}}
+  body{font:15px system-ui;margin:0;background:#f5f6f8;color:#20242b}main{max-width:1320px;margin:auto;padding:24px}h1{margin-bottom:6px}.meta{color:#596273}.summary{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}.metric,.card{background:white;border:1px solid #d8dce3;border-radius:9px}.metric{padding:12px 18px}.toolbar{position:sticky;top:0;background:#f5f6f8;padding:10px 0;z-index:2}.card{margin:9px 0;padding:12px;border-left:9px solid}.card.usable{border-left-color:#087f3d}.card.unusable{border-left-color:#c81e1e}.card.rejected{border-left-color:#a34f00}.card.excluded{border-left-color:#687386;background:#f0f2f5}.review-note{padding:10px 12px;background:#fff7d6;border-left:4px solid #b98300}summary{cursor:pointer}summary span{float:right;font-weight:700}.pill{display:inline-block;padding:5px 9px;border:1px solid #bcc3ce;border-radius:6px;background:#eef1f5;color:#303846;font-weight:800}table{border-collapse:collapse;width:100%;margin:12px 0}th,td{padding:7px;border:1px solid #d8dce3;text-align:left;vertical-align:top}td.status-match{background:#d8f3df;color:#146c35}td.status-warning{background:#fff1bd;color:#765500}td.status-info{background:#dceeff;color:#15598a}td.status-mismatch{background:#ffd6d6;color:#9a1717}.raw{display:grid;grid-template-columns:1fr 1fr;gap:10px}.raw pre{overflow:auto;background:#161a22;color:#e9edf4;padding:12px;border-radius:6px}@media(max-width:800px){.raw{grid-template-columns:1fr}summary span{float:none;display:block}}
   </style></head><body><main><h1>PoC mapování IPT → Tickets</h1><div class="meta">Vygenerováno ${escapeHtml(report.generatedAt)} · IPT ${report.sources.ipt.count} produktů · Tickets ${report.sources.tickets.count} produktů</div>
-  <div class="summary"><div class="metric"><b>${report.summary.mappedProducts}</b><br>IPT produktů s vazbou</div><div class="metric"><b>${report.summary.mappedPairs}</b><br>ručních vazeb</div><div class="metric"><b>${report.summary.activationUsable}</b><br>použitelných pro aktivaci</div><div class="metric"><b>${report.summary.purchaseUsable}</b><br>použitelných pro nákup</div><div class="metric"><b>${report.summary.humanRejected}</b><br>lidsky zamítnutých vazeb</div></div>
-  <p><b>Levý okraj karty vyjadřuje celkový výsledek primárního UC #1007:</b> zelená = použitelná pro aktivaci i s varováními; červená = automaticky nepoužitelná kvůli rozporu srovnatelných hodnot nebo chybějícímu mapování; tmavě oranžová = kandidát byl zamítnut lidským rozhodnutím. V detailní tabulce mají položky obvyklé barvy podle závažnosti: shoda zeleně, varování žlutě, informace modře a chyba červeně. Pole bez protějšku je varování.</p>
-  <div class="toolbar"><label>Aktivace #1007 <select id="filter"><option value="all">vše</option><option value="usable">použitelné</option><option value="unusable">automaticky nepoužitelné</option><option value="rejected">lidsky zamítnuté</option></select></label></div>${cards}</main><script>document.querySelector('#filter').addEventListener('change',e=>document.querySelectorAll('.card').forEach(x=>x.hidden=e.target.value!=='all'&&x.dataset.state!==e.target.value));</script></body></html>`;
+  <div class="summary"><div class="metric"><b>${report.summary.mappedProducts}</b><br>IPT produktů s vazbou</div><div class="metric"><b>${report.summary.mappedPairs}</b><br>posouzených vazeb</div><div class="metric"><b>${report.summary.seedCandidateRows}</b><br>řádků seed podkladu</div><div class="metric"><b>${report.summary.humanApproved}</b><br>ručně schválených vazeb</div><div class="metric"><b>${report.summary.approvedPendingCorrection}</b><br>schválených, čeká na opravu dat</div><div class="metric"><b>${report.summary.excludedProducts}</b><br>produktů mimo rozsah UC</div><div class="metric"><b>${report.summary.activationUsable}</b><br>použitelných pro aktivaci</div><div class="metric"><b>${report.summary.purchaseUsable}</b><br>použitelných pro nákup</div><div class="metric"><b>${report.summary.humanRejected}</b><br>lidsky zamítnutých vazeb</div></div>
+  <p><b>Levý okraj karty vyjadřuje celkový výsledek primárního UC #1007:</b> zelená = použitelná pro aktivaci i s varováními; červená = aktuálně nepoužitelná kvůli rozporu dat nebo chybějícímu mapování; tmavě oranžová = kandidát byl zamítnut lidským rozhodnutím; šedá = produkt je rozhodnutím mimo rozsah #1007/#1008. Ruční schválení vazby samo neskryje chybu, která se ještě musí opravit v Tickets. V detailní tabulce mají položky obvyklé barvy podle závažnosti.</p>
+  <div class="toolbar"><label>Aktivace #1007 <select id="filter"><option value="all">vše</option><option value="usable">použitelné</option><option value="unusable">aktuálně nepoužitelné</option><option value="rejected">lidsky zamítnuté</option><option value="excluded">mimo rozsah UC</option></select></label></div>${cards}</main><script>document.querySelector('#filter').addEventListener('change',e=>document.querySelectorAll('.card').forEach(x=>x.hidden=e.target.value!=='all'&&x.dataset.state!==e.target.value));</script></body></html>`;
 }
 
 export function buildReport(iptRaw, ticketsRaw, mappings, sourceNames = {}) {
@@ -306,6 +334,7 @@ export function buildReport(iptRaw, ticketsRaw, mappings, sourceNames = {}) {
   const iptById = new Map(ipt.map(x => [x.id, x]));
   const ticketsById = new Map(tickets.map(x => [x.id, x]));
   const mappingByIpt = new Map();
+  const exclusionByIpt = new Map();
   const mappingKeys = new Set();
   const mappingErrors = [];
   for (const mapping of mappings) {
@@ -313,9 +342,18 @@ export function buildReport(iptRaw, ticketsRaw, mappings, sourceNames = {}) {
     const usage = mapping.usage || 'BOTH';
     const humanDecision = String(mapping.humanDecision || 'UNDECIDED').trim().toUpperCase();
     if (!iptById.has(iptId)) mappingErrors.push(`IPT product ${mapping.iptProductId} does not exist`);
+    if (humanDecision === 'EXCLUDED') {
+      if (ticketsId !== null) mappingErrors.push(`Excluded IPT product ${iptId} must not reference a Tickets product`);
+      if (usage !== 'NONE') mappingErrors.push(`Excluded IPT product ${iptId} must use NONE`);
+      if (exclusionByIpt.has(iptId)) mappingErrors.push(`Duplicate exclusion for IPT product ${iptId}`);
+      exclusionByIpt.set(iptId, { ...mapping, iptProductId: iptId, ticketsProductId: null, usage: 'NONE', humanDecision });
+      continue;
+    }
     if (!ticketsById.has(ticketsId)) mappingErrors.push(`Tickets product ${mapping.ticketsProductId} does not exist`);
     if (!['ACTIVATE_EXISTING', 'PURCHASE_NEW', 'BOTH'].includes(usage)) mappingErrors.push(`Unknown usage ${usage} for IPT product ${iptId}`);
     if (!['UNDECIDED', 'APPROVED', 'REJECTED'].includes(humanDecision)) mappingErrors.push(`Unknown human decision ${mapping.humanDecision} for IPT product ${iptId}`);
+    if (fieldList(mapping.ignoredFields).length && humanDecision !== 'APPROVED') mappingErrors.push(`Ignored fields require APPROVED for IPT product ${iptId}`);
+    for (const field of fieldList(mapping.ignoredFields)) if (![...purchaseFields, ...warningFields, ...infoFields].includes(field)) mappingErrors.push(`Unknown ignored field ${field} for IPT product ${iptId}`);
     const key = `${iptId}:${ticketsId}:${usage}`;
     if (mappingKeys.has(key)) mappingErrors.push(`Duplicate mapping ${key}`);
     mappingKeys.add(key);
@@ -323,31 +361,38 @@ export function buildReport(iptRaw, ticketsRaw, mappings, sourceNames = {}) {
     mappingByIpt.set(iptId, [...(mappingByIpt.get(iptId) ?? []), normalized]);
   }
   const products = ipt.map(source => {
+    const scopeExclusion = exclusionByIpt.get(source.id) ?? null;
     const productMappings = mappingByIpt.get(source.id) ?? [];
     const candidates = candidatesFor(source, tickets);
     const pairs = productMappings.map(mapping => ({ mapping, pair: ticketsById.has(mapping.ticketsProductId) ? applyHumanDecision(comparePair(source, ticketsById.get(mapping.ticketsProductId)), mapping) : null })).filter(x => x.pair);
-    const suggestedTarget = candidates[0] && ticketsById.get(candidates[0].ticketsProductId);
+    const suggestedTarget = !scopeExclusion && candidates[0] && ticketsById.get(candidates[0].ticketsProductId);
     return {
       iptProductId: source.id,
       name: source.name,
+      scopeExclusion,
       pairs,
       suggestedPair: suggestedTarget ? comparePair(source, suggestedTarget) : null,
       candidates
     };
   });
   const pairs = products.flatMap(x => x.pairs.map(y => y.pair));
+  const seedCandidates = products.flatMap(x => x.pairs).filter(isSeedCandidate);
   const count = (kind, value) => pairs.filter(x => x[kind] === value).length;
   return {
     generatedAt: new Date().toISOString(),
-    policy: { activationFields, purchaseFields, warningFields, infoFields, humanDecisions: ['UNDECIDED', 'APPROVED', 'REJECTED'], note: 'A missing counterpart is always a warning. VAT, excluded zones, capping eligibility and sale dates are warnings. IPT zones being a subset of Tickets zones is a warning; the reverse is blocking. Name is informational. Price is a warning for activation and blocking for a new purchase. A human REJECTED decision overrides both effective verdicts to MISMATCH.' },
+    policy: { activationFields, purchaseFields, warningFields, infoFields, humanDecisions: ['UNDECIDED', 'APPROVED', 'REJECTED', 'EXCLUDED'], note: 'A missing counterpart is always a warning. VAT, excluded zones, capping eligibility and sale dates are warnings. IPT zones being a subset of Tickets zones is a warning; the reverse is blocking. Name is informational. Price is a warning for activation and blocking for a new purchase. A human REJECTED decision overrides both effective verdicts to MISMATCH. An APPROVED decision confirms identity but preserves unresolved data mismatches; only explicitly listed ignoredFields become warnings. EXCLUDED removes an IPT product from the #1007/#1008 scope and seed.' },
     sources: { ipt: { file: sourceNames.ipt, count: ipt.length }, tickets: { file: sourceNames.tickets, count: tickets.length } },
     summary: {
       mappedProducts: products.filter(x => x.pairs.length).length,
       mappedPairs: pairs.length,
-      unmapped: products.filter(x => !x.pairs.length).length,
+      excludedProducts: products.filter(x => x.scopeExclusion).length,
+      unmapped: products.filter(x => !x.pairs.length && !x.scopeExclusion).length,
       activationUsable: pairs.filter(x => isUsable(x.activationVerdict)).length,
       purchaseUsable: pairs.filter(x => isUsable(x.purchaseVerdict)).length,
+      humanApproved: pairs.filter(x => x.humanDecision === 'APPROVED').length,
+      approvedPendingCorrection: pairs.filter(x => x.humanDecision === 'APPROVED' && (!isUsable(x.activationVerdict) || !isUsable(x.purchaseVerdict))).length,
       humanRejected: pairs.filter(x => x.humanDecision === 'REJECTED').length,
+      seedCandidateRows: seedCandidates.length,
       activation: Object.fromEntries(['MATCH', 'WARNING', 'REVIEW', 'MISMATCH'].map(v => [v, count('activationVerdict', v)])),
       purchase: Object.fromEntries(['MATCH', 'WARNING', 'REVIEW', 'MISMATCH'].map(v => [v, count('purchaseVerdict', v)])),
       mappingErrors
@@ -357,10 +402,23 @@ export function buildReport(iptRaw, ticketsRaw, mappings, sourceNames = {}) {
 }
 
 function suggestedCsv(report) {
-  const rows = [['iptProductId', 'ticketsProductId', 'usage', 'scorePercent', 'status', 'humanDecision', 'note']];
+  const rows = [['iptProductId', 'ticketsProductId', 'usage', 'scorePercent', 'status', 'humanDecision', 'ignoredFields', 'note']];
   for (const item of report.products) {
     const best = item.candidates[0];
-    rows.push([item.iptProductId, best?.ticketsProductId ?? '', 'BOTH', best?.percentage ?? '', 'PROPOSED_AUTOMATIC', 'UNDECIDED', best ? `Candidate: ${best.name}` : 'No candidate']);
+    rows.push([item.iptProductId, best?.ticketsProductId ?? '', 'BOTH', best?.percentage ?? '', 'PROPOSED_AUTOMATIC', 'UNDECIDED', '', best ? `Candidate: ${best.name}` : 'No candidate']);
+  }
+  return rows.map(row => row.map(csvCell).join(',')).join('\n') + '\n';
+}
+
+function seedCandidateCsv(report) {
+  const rows = [['iptProductId', 'ticketProductId', 'isPurchaseTarget']];
+  const purchaseTargets = new Set();
+  for (const item of report.products) for (const entry of item.pairs.filter(isSeedCandidate)) {
+    const isPurchaseTarget = entry.mapping.usage === 'BOTH' || entry.mapping.usage === 'PURCHASE_NEW';
+    if (isPurchaseTarget && purchaseTargets.has(item.iptProductId))
+      throw new Error(`Multiple purchase targets for IPT product ${item.iptProductId}`);
+    if (isPurchaseTarget) purchaseTargets.add(item.iptProductId);
+    rows.push([item.iptProductId, entry.pair.ticketsProductId, isPurchaseTarget ? 'True' : 'False']);
   }
   return rows.map(row => row.map(csvCell).join(',')).join('\n') + '\n';
 }
@@ -376,7 +434,9 @@ function summaryMarkdown(report) {
   const rows = values => Object.entries(values).sort((a, b) => b[1] - a[1]).map(([field, count]) => `| \`${field}\` | ${count} |`).join('\n') || '| — | 0 |';
   const low = report.products.filter(x => x.candidates[0]?.percentage < 80).map(x => `- IPT ${x.iptProductId} (${x.name}): Tickets ${x.candidates[0]?.ticketsProductId ?? '—'}, skóre ${x.candidates[0]?.percentage ?? 0} %`).join('\n') || '- žádné';
   const ties = report.products.filter(x => x.candidates[0] && x.candidates[0].percentage === x.candidates[1]?.percentage).map(x => `- IPT ${x.iptProductId}: shodné nejlepší skóre ${x.candidates[0].percentage} % pro Tickets ${x.candidates[0].ticketsProductId} a ${x.candidates[1].ticketsProductId}`).join('\n') || '- žádné';
-  return `# Souhrn PoC mapování IPT → Tickets\n\nVygenerováno: ${report.generatedAt}\n\n| Výsledek | Aktivace | Nový nákup |\n|---|---:|---:|\n| MATCH | ${report.summary.activation.MATCH} | ${report.summary.purchase.MATCH} |\n| WARNING | ${report.summary.activation.WARNING} | ${report.summary.purchase.WARNING} |\n| REVIEW | ${report.summary.activation.REVIEW} | ${report.summary.purchase.REVIEW} |\n| MISMATCH | ${report.summary.activation.MISMATCH} | ${report.summary.purchase.MISMATCH} |\n\n- IPT produktů: ${report.sources.ipt.count}\n- Tickets produktů: ${report.sources.tickets.count}\n- IPT produktů s ruční nebo vstupní vazbou: ${report.summary.mappedProducts}\n- Posouzených vazeb: ${report.summary.mappedPairs}\n- Použitelných pro aktivaci: ${report.summary.activationUsable}\n- Použitelných pro nový nákup: ${report.summary.purchaseUsable}\n- Lidsky zamítnutých vazeb: ${report.summary.humanRejected}\n- Bez vazby: ${report.summary.unmapped}\n\n## Nejčastější rozdíly\n\n| Pole | Počet vazeb |\n|---|---:|\n${rows(differences)}\n\n## Chybějící protějšky\n\n| Pole | Počet vazeb |\n|---|---:|\n${rows(missing)}\n\n## Automatické kandidáty se skóre pod 80 %\n\n${low}\n\n## Nerozhodné nejlepší skóre\n\n${ties}\n\nAutomatické skóre slouží pouze k výběru kandidáta pro ruční kontrolu. DPH, vyloučená pásma, zastropování a prodejní data jsou varování; název je informace. Pokud jsou zóny IPT podmnožinou zón Tickets, jde o varování; opačný vztah nebo jiný překryv blokuje použití. Lidské rozhodnutí REJECTED přebíjí automatické verdikty na MISMATCH.\n`;
+  const excluded = report.products.filter(x => x.scopeExclusion).map(x => `- IPT ${x.iptProductId} (${x.name}): ${x.scopeExclusion.note || 'mimo rozsah #1007/#1008'}`).join('\n') || '- žádné';
+  const pending = report.products.flatMap(x => x.pairs.filter(y => y.pair.humanDecision === 'APPROVED' && (!isUsable(y.pair.activationVerdict) || !isUsable(y.pair.purchaseVerdict))).map(y => `- IPT ${x.iptProductId} → Tickets ${y.pair.ticketsProductId}: ${y.mapping.note || 'schválená vazba čeká na opravu dat'}`)).join('\n') || '- žádné';
+  return `# Souhrn PoC mapování IPT → Tickets\n\nVygenerováno: ${report.generatedAt}\n\n| Výsledek | Aktivace | Nový nákup |\n|---|---:|---:|\n| MATCH | ${report.summary.activation.MATCH} | ${report.summary.purchase.MATCH} |\n| WARNING | ${report.summary.activation.WARNING} | ${report.summary.purchase.WARNING} |\n| REVIEW | ${report.summary.activation.REVIEW} | ${report.summary.purchase.REVIEW} |\n| MISMATCH | ${report.summary.activation.MISMATCH} | ${report.summary.purchase.MISMATCH} |\n\n- IPT produktů: ${report.sources.ipt.count}\n- Tickets produktů: ${report.sources.tickets.count}\n- IPT produktů s ruční nebo vstupní vazbou: ${report.summary.mappedProducts}\n- Posouzených vazeb: ${report.summary.mappedPairs}\n- Ručně schválených vazeb: ${report.summary.humanApproved}\n- Schválených vazeb čekajících na opravu dat: ${report.summary.approvedPendingCorrection}\n- Produktů mimo rozsah #1007/#1008: ${report.summary.excludedProducts}\n- Použitelných pro aktivaci: ${report.summary.activationUsable}\n- Použitelných pro nový nákup: ${report.summary.purchaseUsable}\n- Lidsky zamítnutých vazeb: ${report.summary.humanRejected}\n- Bez vazby: ${report.summary.unmapped}\n\n## Produkty mimo rozsah #1007/#1008\n\n${excluded}\n\n## Schválené vazby čekající na opravu dat\n\n${pending}\n\n## Nejčastější rozdíly\n\n| Pole | Počet vazeb |\n|---|---:|\n${rows(differences)}\n\n## Chybějící protějšky\n\n| Pole | Počet vazeb |\n|---|---:|\n${rows(missing)}\n\n## Automatické kandidáty se skóre pod 80 %\n\n${low}\n\n## Nerozhodné nejlepší skóre\n\n${ties}\n\nAutomatické skóre slouží pouze k výběru kandidáta pro ruční kontrolu. DPH, vyloučená pásma, zastropování a prodejní data jsou varování; název je informace. Pokud jsou zóny IPT podmnožinou zón Tickets, jde o varování; opačný vztah nebo jiný překryv blokuje použití. \`APPROVED\` potvrzuje identitu vazby, ale neskryje neopravená data; jen pole v \`ignoredFields\` jsou ruční výjimkou snížena na varování. \`EXCLUDED\` je mimo rozsah obou UC a seedu.\n`;
 }
 
 function main() {
@@ -388,6 +448,7 @@ function main() {
   fs.writeFileSync(path.join(options.out, 'report.html'), html(report));
   fs.writeFileSync(path.join(options.out, 'summary.md'), summaryMarkdown(report));
   fs.writeFileSync(path.join(options.out, 'suggested-mapping.csv'), suggestedCsv(report));
+  fs.writeFileSync(path.join(options.out, 'seed-candidate.csv'), seedCandidateCsv(report));
   console.log(JSON.stringify(report.summary, null, 2));
   if (options.strict && (report.summary.mappingErrors.length || report.summary.unmapped || report.summary.activation.REVIEW || report.summary.activation.MISMATCH || report.summary.purchase.REVIEW || report.summary.purchase.MISMATCH)) process.exitCode = 1;
 }

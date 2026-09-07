@@ -20,3 +20,12 @@ Preferovaný soubor `ipt-ticket-mapping-v2.csv` obsahuje `iptProductId,ticketPro
 - Výstupní CSV v2 SHA-256: 2BCACEDCE600F407925EA3FE8174202557CF79521A0B12B4EA1FB4FA61D1CF43
 
 Tabulka musí připustit více Tickets ProductId pro jedno IPT ProductId a současně vynutit nejvýše jeden nákupní cíl pro každé IPT ID. V první sadě je všech 51 dvojic aktuálních, proto mají všechny `isPurchaseTarget = true`.
+
+## Navazující revize v7
+
+Ruční kontrola je zachycena v `../mapping-review-v7.csv` a
+`../candidate-report-v7/`. Soubor `candidate-report-v7/seed-candidate.csv`
+obsahuje 58 vazeb a udržuje stejný třísloupcový kontrakt. Zahrnuje i šest
+schválených vazeb, jejichž produktová data se ještě musí opravit v Tickets.
+Proto zatím nebyl povýšen na `ipt-ticket-mapping-v3.csv`; finální v3 vznikne
+až po opravě dat a opakované kontrole reportu bez těchto blokujících rozdílů.

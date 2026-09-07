@@ -26,18 +26,23 @@ Z adresáře `poc-product-mapping`:
 node --test
 
 node src/index.mjs `
-  --mapping mapping-review-v6.csv `
+  --mapping mapping-review-v7.csv `
   --out candidate-report-regenerated
 ```
 
 Nový výstup používejte v novém adresáři. Zachované adresáře
-`candidate-report-v1-original` až `candidate-report-v6` se nepřepisují.
+`candidate-report-v1-original` až `candidate-report-v7` se nepřepisují.
 
 ## Stav dat
 
-Soubor `seed/ipt-ticket-mapping-v2.csv` obsahuje 51 pracovních vazeb se sloupcem
-`isPurchaseTarget`. Jde o návrh vzniklý z PoC, který čeká na finální kontrolu
-produktového specialisty a případné úpravy produktů v Tickets BackOffice.
+Report v7 zapracovává ruční revizi devíti IPT produktů. Capping produkty 883 a
+901 jsou výslovně mimo rozsah #1007/#1008. Sedm vazeb bylo ručně schváleno;
+u šesti z nich report nadále ukazuje rozdíly, které se musí opravit v Tickets.
+`candidate-report-v7/seed-candidate.csv` obsahuje 58 rozhodnutých vazeb. Jde o
+podklad pro budoucí seed; před nasazením je nutné opravit data a report zopakovat.
+
+Původní `seed/ipt-ticket-mapping-v2.csv` s 51 vazbami zůstává zachován jako
+historický podklad verze 6.
 
 Produkční implementace automatickou synchronizaci nepřebírá. PoC slouží jako
 archivovaný nástroj pro kontrolu a případné budoucí přegenerování seedu.

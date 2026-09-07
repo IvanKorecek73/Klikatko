@@ -115,3 +115,49 @@ test('a human rejection overrides an otherwise usable candidate', () => {
   assert.equal(pair.humanDecision, 'REJECTED');
   assert.equal(report.summary.humanRejected, 1);
 });
+
+test('an explicitly approved field exception is visible but no longer blocks the use cases', () => {
+  const changedDuration = ticket({ duration: 90 });
+  const report = buildReport([ipt.raw], { items: [changedDuration.raw] }, [
+    {
+      iptProductId: '867', ticketsProductId: '1002', usage: 'BOTH',
+      status: 'APPROVED_BUSINESS_EXCEPTION', humanDecision: 'APPROVED', ignoredFields: 'duration'
+    }
+  ]);
+  const pair = report.products[0].pairs[0].pair;
+  const duration = pair.comparisons.find(x => x.field === 'duration');
+  assert.equal(pair.automaticActivationVerdict, 'MISMATCH');
+  assert.equal(pair.activationVerdict, 'WARNING');
+  assert.equal(pair.purchaseVerdict, 'WARNING');
+  assert.equal(duration.humanOverride, 'APPROVED_EXCEPTION');
+  assert.equal(duration.activationResult, 'WARNING');
+});
+
+test('approving a mapping identity preserves a mismatch that still needs a data correction', () => {
+  const changedDuration = ticket({ duration: 90 });
+  const report = buildReport([ipt.raw], { items: [changedDuration.raw] }, [
+    {
+      iptProductId: '867', ticketsProductId: '1002', usage: 'BOTH',
+      status: 'APPROVED_PENDING_TICKETS_FIX', humanDecision: 'APPROVED'
+    }
+  ]);
+  const pair = report.products[0].pairs[0].pair;
+  assert.equal(pair.activationVerdict, 'MISMATCH');
+  assert.equal(pair.purchaseVerdict, 'MISMATCH');
+  assert.equal(report.summary.humanApproved, 1);
+  assert.equal(report.summary.approvedPendingCorrection, 1);
+});
+
+test('a product excluded from the use cases is neither mapped nor reported as missing', () => {
+  const report = buildReport([ipt.raw], { items: [ticket().raw] }, [
+    {
+      iptProductId: '867', ticketsProductId: '', usage: 'NONE',
+      status: 'EXCLUDED_FROM_UC', humanDecision: 'EXCLUDED', note: 'Capping'
+    }
+  ]);
+  assert.equal(report.summary.excludedProducts, 1);
+  assert.equal(report.summary.unmapped, 0);
+  assert.equal(report.summary.mappedProducts, 0);
+  assert.equal(report.summary.mappingErrors.length, 0);
+  assert.equal(report.products[0].scopeExclusion.note, 'Capping');
+});
