@@ -1,13 +1,13 @@
 # Souhrn PoC mapování IPT → Tickets
 
-Vygenerováno: 2026-09-07T09:57:03.767Z
+Vygenerováno: 2026-09-07T11:01:26.643Z
 
 | Výsledek | Aktivace | Nový nákup |
 |---|---:|---:|
 | MATCH | 0 | 0 |
-| WARNING | 52 | 52 |
+| WARNING | 58 | 58 |
 | REVIEW | 0 | 0 |
-| MISMATCH | 10 | 10 |
+| MISMATCH | 4 | 4 |
 
 - IPT produktů: 64
 - Tickets produktů: 76
@@ -16,8 +16,8 @@ Vygenerováno: 2026-09-07T09:57:03.767Z
 - Ručně schválených vazeb: 7
 - Schválených vazeb čekajících na opravu dat: 6
 - Produktů mimo rozsah #1007/#1008: 2
-- Použitelných pro aktivaci: 52
-- Použitelných pro nový nákup: 52
+- Použitelných pro aktivaci: 58
+- Použitelných pro nový nákup: 58
 - Lidsky zamítnutých vazeb: 4
 - Bez vazby: 0
 
@@ -28,12 +28,7 @@ Vygenerováno: 2026-09-07T09:57:03.767Z
 
 ## Schválené vazby čekající na opravu dat
 
-- IPT 886 → Tickets 1054: Ručně schválená vazba. Správná pásma jsou P,0,B,1,2,3,4; Tickets snapshot nyní postrádá P a B. Opravit produkt 1054 v Tickets před použitím seedu.
-- IPT 889 → Tickets 1074: Ručně schválená vazba. Maximální platnost je 180 min; v Tickets změnit duration produktu 1074 z 1440 na 180 minut před použitím seedu.
-- IPT 890 → Tickets 1061: Ručně schválená vazba. V Tickets narovnat zjištěné rozdíly produktu 1061: productSubTypeCode adult na group a duration 1680 na tarifní hodnotu 240 pro FROM_NEXT_MIDNIGHT.
-- IPT 891 → Tickets 1062: Ručně schválená vazba. V Tickets narovnat zjištěné rozdíly produktu 1062: productSubTypeCode adult na group a duration 1680 na tarifní hodnotu 240 pro FROM_NEXT_MIDNIGHT.
-- IPT 926 → Tickets 1002: Ručně schválená vazba. Jde o jeden flexibilní třípásmový produkt: varianta pro Prahu nebo tři navazující vnější pásma. Stávající model Tickets to umí jedním produktem; u 1002 nastavit povolená pásma P,0,B,1–13 a ZoneCount=3. Dva produkty nejsou pro současný model nutné.
-- IPT 927 → Tickets 1074: Ručně schválená vazba na stejný společný produkt jako zavazadlo. Platnost je dynamická, maximálně 180 min; v Tickets změnit duration produktu 1074 z 1440 na 180 minut před použitím seedu.
+- žádné
 
 ## Nejčastější rozdíly
 

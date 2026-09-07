@@ -36,8 +36,9 @@ Nový výstup používejte v novém adresáři. Zachované adresáře
 ## Stav dat
 
 Report v7 zapracovává ruční revizi devíti IPT produktů. Capping produkty 883 a
-901 jsou výslovně mimo rozsah #1007/#1008. Sedm vazeb bylo ručně schváleno;
-u šesti z nich report nadále ukazuje rozdíly, které se musí opravit v Tickets.
+901 jsou výslovně mimo rozsah #1007/#1008. Sedm vazeb bylo ručně schváleno
+a v reportu jsou proto zelené, použitelné a zařazené do mapování. U šesti z nich
+detail nadále ukazuje rozdíly, které se musí opravit v Tickets.
 `candidate-report-v7/seed-candidate.csv` obsahuje 58 rozhodnutých vazeb. Jde o
 podklad pro budoucí seed; před nasazením je nutné opravit data a report zopakovat.
 

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-07T09:57:03.767Z",
+  "generatedAt": "2026-09-07T11:01:26.643Z",
   "policy": {
     "activationFields": [
       "passengerType",
@@ -57,23 +57,23 @@
     "mappedPairs": 62,
     "excludedProducts": 2,
     "unmapped": 0,
-    "activationUsable": 52,
-    "purchaseUsable": 52,
+    "activationUsable": 58,
+    "purchaseUsable": 58,
     "humanApproved": 7,
     "approvedPendingCorrection": 6,
     "humanRejected": 4,
     "seedCandidateRows": 58,
     "activation": {
       "MATCH": 0,
-      "WARNING": 52,
+      "WARNING": 58,
       "REVIEW": 0,
-      "MISMATCH": 10
+      "MISMATCH": 4
     },
     "purchase": {
       "MATCH": 0,
-      "WARNING": 52,
+      "WARNING": 58,
       "REVIEW": 0,
-      "MISMATCH": 10
+      "MISMATCH": 4
     },
     "mappingErrors": []
   },
@@ -409,7 +409,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -1098,7 +1100,9 @@
             "humanDecision": "APPROVED",
             "ignoredFields": [
               "duration"
-            ]
+            ],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -1800,7 +1804,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -2438,7 +2444,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -2996,7 +3004,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -3633,7 +3643,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -4349,7 +4361,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -5065,7 +5079,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -5781,7 +5797,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -6497,7 +6515,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -7213,7 +7233,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -7929,7 +7951,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -8645,7 +8669,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -9361,7 +9387,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -10077,7 +10105,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -10793,7 +10823,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -11509,7 +11541,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -12225,7 +12259,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -12862,7 +12898,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -13473,7 +13511,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -14092,7 +14132,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -14463,8 +14505,8 @@
           "pair": {
             "iptProductId": 886,
             "ticketsProductId": 1054,
-            "activationVerdict": "MISMATCH",
-            "purchaseVerdict": "MISMATCH",
+            "activationVerdict": "WARNING",
+            "purchaseVerdict": "WARNING",
             "comparisons": [
               {
                 "field": "passengerType",
@@ -14725,7 +14767,9 @@
             "automaticActivationVerdict": "MISMATCH",
             "automaticPurchaseVerdict": "MISMATCH",
             "humanDecision": "APPROVED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "MISMATCH",
+            "dataPurchaseVerdict": "MISMATCH"
           }
         }
       ],
@@ -15361,7 +15405,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "MISMATCH",
             "humanDecision": "REJECTED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "MISMATCH"
           }
         }
       ],
@@ -16047,7 +16093,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -16421,8 +16469,8 @@
           "pair": {
             "iptProductId": 889,
             "ticketsProductId": 1074,
-            "activationVerdict": "MISMATCH",
-            "purchaseVerdict": "MISMATCH",
+            "activationVerdict": "WARNING",
+            "purchaseVerdict": "WARNING",
             "comparisons": [
               {
                 "field": "passengerType",
@@ -16730,7 +16778,9 @@
             "automaticActivationVerdict": "MISMATCH",
             "automaticPurchaseVerdict": "MISMATCH",
             "humanDecision": "APPROVED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "MISMATCH",
+            "dataPurchaseVerdict": "MISMATCH"
           }
         }
       ],
@@ -17101,8 +17151,8 @@
           "pair": {
             "iptProductId": 890,
             "ticketsProductId": 1061,
-            "activationVerdict": "MISMATCH",
-            "purchaseVerdict": "MISMATCH",
+            "activationVerdict": "WARNING",
+            "purchaseVerdict": "WARNING",
             "comparisons": [
               {
                 "field": "passengerType",
@@ -17413,7 +17463,9 @@
             "automaticActivationVerdict": "MISMATCH",
             "automaticPurchaseVerdict": "MISMATCH",
             "humanDecision": "APPROVED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "MISMATCH",
+            "dataPurchaseVerdict": "MISMATCH"
           }
         }
       ],
@@ -17787,8 +17839,8 @@
           "pair": {
             "iptProductId": 891,
             "ticketsProductId": 1062,
-            "activationVerdict": "MISMATCH",
-            "purchaseVerdict": "MISMATCH",
+            "activationVerdict": "WARNING",
+            "purchaseVerdict": "WARNING",
             "comparisons": [
               {
                 "field": "passengerType",
@@ -18099,7 +18151,9 @@
             "automaticActivationVerdict": "MISMATCH",
             "automaticPurchaseVerdict": "MISMATCH",
             "humanDecision": "APPROVED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "MISMATCH",
+            "dataPurchaseVerdict": "MISMATCH"
           }
         }
       ],
@@ -18801,7 +18855,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -19503,7 +19559,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "MISMATCH",
             "humanDecision": "REJECTED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "MISMATCH"
           }
         }
       ],
@@ -20189,7 +20247,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -20891,7 +20951,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -21593,7 +21655,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "MISMATCH",
             "humanDecision": "REJECTED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "MISMATCH"
           }
         }
       ],
@@ -22279,7 +22343,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -22901,7 +22967,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -23459,7 +23527,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -24017,7 +24087,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "MISMATCH",
             "humanDecision": "REJECTED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "MISMATCH"
           }
         }
       ],
@@ -24708,7 +24780,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -25426,7 +25500,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -26144,7 +26220,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -26862,7 +26940,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -27580,7 +27660,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -28298,7 +28380,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -29016,7 +29100,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -29734,7 +29820,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -30452,7 +30540,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -31170,7 +31260,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -31888,7 +31980,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -32606,7 +32700,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -33324,7 +33420,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -34042,7 +34140,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -34760,7 +34860,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -35478,7 +35580,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -36196,7 +36300,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -36914,7 +37020,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -37632,7 +37740,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -38350,7 +38460,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -39068,7 +39180,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -39786,7 +39900,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -40504,7 +40620,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -41222,7 +41340,9 @@
             "automaticActivationVerdict": "WARNING",
             "automaticPurchaseVerdict": "WARNING",
             "humanDecision": "UNDECIDED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "WARNING",
+            "dataPurchaseVerdict": "WARNING"
           }
         }
       ],
@@ -41612,8 +41732,8 @@
           "pair": {
             "iptProductId": 926,
             "ticketsProductId": 1002,
-            "activationVerdict": "MISMATCH",
-            "purchaseVerdict": "MISMATCH",
+            "activationVerdict": "WARNING",
+            "purchaseVerdict": "WARNING",
             "comparisons": [
               {
                 "field": "passengerType",
@@ -41873,7 +41993,9 @@
             "automaticActivationVerdict": "MISMATCH",
             "automaticPurchaseVerdict": "MISMATCH",
             "humanDecision": "APPROVED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "MISMATCH",
+            "dataPurchaseVerdict": "MISMATCH"
           }
         }
       ],
@@ -42196,8 +42318,8 @@
           "pair": {
             "iptProductId": 927,
             "ticketsProductId": 1074,
-            "activationVerdict": "MISMATCH",
-            "purchaseVerdict": "MISMATCH",
+            "activationVerdict": "WARNING",
+            "purchaseVerdict": "WARNING",
             "comparisons": [
               {
                 "field": "passengerType",
@@ -42523,7 +42645,9 @@
             "automaticActivationVerdict": "MISMATCH",
             "automaticPurchaseVerdict": "MISMATCH",
             "humanDecision": "APPROVED",
-            "ignoredFields": []
+            "ignoredFields": [],
+            "dataActivationVerdict": "MISMATCH",
+            "dataPurchaseVerdict": "MISMATCH"
           }
         }
       ],

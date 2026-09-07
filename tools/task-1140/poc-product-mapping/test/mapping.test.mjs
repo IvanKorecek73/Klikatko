@@ -133,7 +133,7 @@ test('an explicitly approved field exception is visible but no longer blocks the
   assert.equal(duration.activationResult, 'WARNING');
 });
 
-test('approving a mapping identity preserves a mismatch that still needs a data correction', () => {
+test('approving a mapping identity makes it usable while preserving the data mismatch', () => {
   const changedDuration = ticket({ duration: 90 });
   const report = buildReport([ipt.raw], { items: [changedDuration.raw] }, [
     {
@@ -142,8 +142,10 @@ test('approving a mapping identity preserves a mismatch that still needs a data 
     }
   ]);
   const pair = report.products[0].pairs[0].pair;
-  assert.equal(pair.activationVerdict, 'MISMATCH');
-  assert.equal(pair.purchaseVerdict, 'MISMATCH');
+  assert.equal(pair.dataActivationVerdict, 'MISMATCH');
+  assert.equal(pair.dataPurchaseVerdict, 'MISMATCH');
+  assert.equal(pair.activationVerdict, 'WARNING');
+  assert.equal(pair.purchaseVerdict, 'WARNING');
   assert.equal(report.summary.humanApproved, 1);
   assert.equal(report.summary.approvedPendingCorrection, 1);
 });

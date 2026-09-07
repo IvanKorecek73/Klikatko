@@ -28,7 +28,8 @@ Ručně potvrzované vazby patří do verzovaného `mapping-review-vN.csv`.
 Sloupec `usage` přijímá `ACTIVATE_EXISTING`, `PURCHASE_NEW` nebo `BOTH`.
 `humanDecision` přijímá `UNDECIDED`, `APPROVED`, `REJECTED` nebo `EXCLUDED`:
 
-- `APPROVED` potvrzuje identitu vazby, ale samo neskryje neopravené rozdíly dat;
+- `APPROVED` potvrzuje identitu vazby; celkově je vždy zelená, použitelná a
+  zahrnutá do seedu. Neopravené rozdíly zůstávají viditelné v detailu;
 - `ignoredFields` obsahuje středníkem oddělené konkrétní byznysové výjimky,
   které se po schválení sníží z chyby na varování;
 - `REJECTED` přebije oba automatické verdikty na `MISMATCH`;
@@ -97,5 +98,5 @@ dokumentace se změnil záměrně kvůli podpoře ruční revize v7.
 IPT 926 znamená jeden flexibilní třípásmový tarif. Tickets jej umí
 reprezentovat jedním produktem s povolenými zónami `P,0,B,1–13` a `ZoneCount=3`;
 není nutné zakládat dva produkty. Současný snapshot produktu 1002 tuto
-flexibilní konfiguraci nemá, proto report správně ponechává červený stav do
-opravy v Tickets.
+flexibilní konfiguraci nemá. Vazba je přesto zelená a zahrnutá do mapování;
+červeně zůstává pouze konkrétní rozdíl v detailu jako podklad pro opravu Tickets.
