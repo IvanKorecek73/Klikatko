@@ -2,6 +2,9 @@
 
 Obecné klikátko pro ruční a smoke testování API scénářů bez zásahu do testovaného backendu.
 
+Pro pokračování na jiném zařízení použij [předání stavu z 11. 9. 2026](docs/handoff-2026-09-11.md),
+včetně správné větve, lokální konfigurace a závislostí emulátorových scénářů.
+
 ## Spuštění
 
 ### PowerShell
@@ -132,3 +135,13 @@ To znamená:
 - nové use case nejdřív zkoušet pokrýt přes existující veřejné nebo interní API daného řešení
 - engine upravovat jen tehdy, když jde o obecně použitelnou schopnost
 - business logika patří do JSON packů, ne do `app.js`
+
+## Opakování mobilních testů nové a uložené karty (#1109)
+
+Spusťte postupně dvě samostatná workflow: **Jízdenky – platba novou kartou a její uložení** a **Jízdenky – platba uloženou kartou**. Použijte vyhrazený platební účet a ověřené lokální sandboxové prostředí.
+
+První workflow má po přihlášení přípravný krok **Vymazat všechny uložené karty testovacího účtu**. Moderátor v druhé záložce se stejným účtem a prostředím použije existující scénář **Jízdenky - odstranit testovací uloženou kartu** z packu tasku 1111. Zopakuje načtení, výběr a odstranění pro každou kartu; pokračuje teprve po čerstvém `GET /v1/accounts/me/saved-cards` s HTTP 200 a `[]`. Jde o lokální soft-delete uložených položek, bez revokace tokenu u brány. V emulátoru během přípravy nic nezadávejte.
+
+První nákup musí splnit platbu i uložení právě jedné nové karty. Uchovejte její `savedCardId` a vazbu na úspěšný booking/payment. **Mezi nákupy cleanup neopakujte.** Pro navazující sandboxový test zadejte koncovku `0006`, počet `1` a pozici `1`; skutečně použité `savedCardId` musí odpovídat kartě uložené prvním nákupem. Druhé workflow si před platbou stále samostatně ověřuje existenci karty.
+
+Platební údaje ani testovací OTP při automatických akcích ručně nevyplňujte. Řiďte se oddělenými kroky pro otevření brány, vyplnění a odeslání. Obě platby ověřte jako Paid/Fulfilled s neaktivovanými jízdenkami a skutečným návratem; samotné dokončení prezentačních kroků tyto kontroly nenahrazuje.

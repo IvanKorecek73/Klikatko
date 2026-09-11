@@ -7,6 +7,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_DEVICE_ID = "emulator-5554";
 const MAX_ACTIONS = 24;
 const MAX_BODY_BYTES = 64 * 1024;
+const MAX_NODE_TIMEOUT_MS = 60000;
 const SAFE_KEY_EVENTS = new Set(["BACK", "HOME", "ENTER", "ESCAPE", "TAB", "DPAD_UP", "DPAD_DOWN", "DPAD_LEFT", "DPAD_RIGHT"]);
 const TICKET_PAYMENT_CALLBACK_SCHEME = "pid-litacka-payment:";
 const TICKET_PAYMENT_CALLBACK_HOST = "ticket";
@@ -331,37 +332,16 @@ async function executeAction(
       throw new Error(`Skupina polí v akci ${index + 1} musí obsahovat 2 až 8 položek.`);
     }
 
-    const firstField = fields[0];
-    const firstMatch = await waitForNode(deviceId, firstField, pace, executionContext);
-    if (!firstMatch) {
-      throw new Error(`První pole pro akci ${index + 1} nebylo nalezeno: ${describeMatcher(firstField)}.`);
-    }
-
-    const firstPoint = pointWithinBounds(firstMatch.bounds, firstField.tapHorizontalRatio);
-    await presentationTap(deviceId, firstPoint.x, firstPoint.y, firstField, pace, executionContext);
-    await delay(clampInteger(action.focusSettleMs, 0, 2000, 200));
-
-    for (let fieldIndex = 0; fieldIndex < fields.length; fieldIndex += 1) {
-      const field = fields[fieldIndex];
-      const value = String(field.value ?? "");
-      if (value.length === 0 || value.length > 200) {
-        throw new Error(`Text v poli ${fieldIndex + 1} akce ${index + 1} musí mít 1 až 200 znaků.`);
-      }
-
-      if (fieldIndex > 0) {
-        await runAdb(["-s", deviceId, "shell", "input", "keyevent", "TAB"]);
-        await delay(clampInteger(action.tabSettleMs, 0, 1000, 75));
-      }
-
-      if (field.clear !== false) {
-        await runAdb(["-s", deviceId, "shell", "input", "keycombination", "KEYCODE_CTRL_LEFT", "KEYCODE_A"]);
-        await runAdb(["-s", deviceId, "shell", "input", "keyevent", "KEYCODE_DEL"]);
-      }
-      if (field.keyByKey === true) {
-        await typeAdbTextKeyByKey(deviceId, value, field.keyDelayMs);
-      } else {
-        await typeAdbText(deviceId, value);
-      }
+    // Hosted fields may move focus themselves after a complete value or an
+    // empty Backspace. Select each target instead of assuming a TAB order.
+    for (const field of fields) {
+      await executeAction(deviceId, {
+        ...field,
+        type: "inputText",
+        // Verified values replace stale input, including a retry of an older
+        // workflow that used clear:false for the former TAB shortcut.
+        clear: field.expectedValue !== undefined ? true : field.clear
+      }, index, pace, executionContext);
     }
 
     invalidateVisibleNodes(executionContext);
@@ -374,15 +354,8 @@ async function executeAction(
       return actualValue !== String(field.expectedValue);
     });
 
-    // Some hosted payment fields advance focus automatically. If that makes
-    // the fast TAB path skip a field, retry only the mismatched fields with
-    // the slower selector-based input instead of slowing every successful run.
-    for (const field of mismatches) {
-      await executeAction(deviceId, {
-        ...field,
-        type: "inputText",
-        clear: true
-      }, index, pace, executionContext);
+    if (mismatches.length > 0) {
+      throw new Error(`Po vyplnění skupiny nesouhlasí pole: ${mismatches.map(describeMatcher).join(", ")}.`);
     }
 
     return {
@@ -392,7 +365,7 @@ async function executeAction(
         field: field.resourceId || field.contentDescription || field.text || "focused",
         value: field.sensitive === true ? "***" : String(field.value)
       })),
-      fallbackCount: mismatches.length
+      navigation: "selectors"
     };
   }
 
@@ -425,10 +398,21 @@ async function executeAction(
         invalidateVisibleNodes(executionContext);
       }
 
-      if (action.clear !== false) {
+      if (action.clear !== false && (!matchedField || matchedField.text.length > 0)) {
         await runAdb(["-s", deviceId, "shell", "input", "keycombination", "KEYCODE_CTRL_LEFT", "KEYCODE_A"]);
         await runAdb(["-s", deviceId, "shell", "input", "keyevent", "KEYCODE_DEL"]);
-        const remainingCharacterCount = Array.from(String(matchedField?.text || "")).length;
+        let remainingCharacterCount = 0;
+        if (matchedField) {
+          invalidateVisibleNodes(executionContext);
+          const clearedNodes = await getVisibleNodes(deviceId, executionContext, { refresh: true });
+          const remainingField = findNode(clearedNodes, fieldMatcher(action));
+          if (!remainingField) {
+            throw new Error(`Pole po vymazání nebylo nalezeno: ${describeMatcher(action)}.`);
+          }
+          // Flutter fields may ignore Ctrl+A. Delete only the characters still
+          // present, never the original count after a successful select-all.
+          remainingCharacterCount = Array.from(remainingField.text).length;
+        }
         if (remainingCharacterCount > 0) {
           await runAdb(["-s", deviceId, "shell", "input", "keyevent", "KEYCODE_MOVE_END"]);
           for (const batch of buildDeleteKeyBatches(remainingCharacterCount)) {
@@ -459,7 +443,7 @@ async function executeAction(
 
     if (expectedValue !== null && actualValue !== expectedValue) {
       const detail = action.sensitive === true ? "" : ` Očekáváno ${expectedValue}, nalezeno ${actualValue ?? "nic"}.`;
-      throw new Error(`Pole pro akci ${index + 1} po vyplnění neobsahuje očekávanou hodnotu.${detail}`);
+      throw new Error(`Pole ${describeMatcher(action)} pro akci ${index + 1} po vyplnění neobsahuje očekávanou hodnotu.${detail}`);
     }
     return {
       index,
@@ -596,7 +580,7 @@ function buildDeleteKeyBatches(characterCount, batchSize = 80) {
 
 async function waitForNode(deviceId, matcher, pace, executionContext, options = {}) {
   const profile = EMULATOR_PACE_PROFILES[normalizeEmulatorPace(pace)];
-  const timeoutMs = clampInteger(matcher.timeoutMs, 0, 30000, profile.nodeTimeoutMs);
+  const timeoutMs = clampInteger(matcher.timeoutMs, 0, MAX_NODE_TIMEOUT_MS, profile.nodeTimeoutMs);
   const deadline = Date.now() + timeoutMs;
   if (options.allowLastKnown && !executionContext?.nodes && executionContext?.lastKnownNodes) {
     const lastKnownMatch = findNode(executionContext.lastKnownNodes, matcher);
@@ -738,8 +722,8 @@ function normalizeWaitForMatcher(value, transitionTimeoutMs) {
   return {
     ...value,
     timeoutMs: transitionTimeoutMs === undefined
-      ? clampInteger(value.timeoutMs, 0, 30000, 3000)
-      : clampInteger(transitionTimeoutMs, 0, 30000, 3000)
+      ? clampInteger(value.timeoutMs, 0, MAX_NODE_TIMEOUT_MS, 3000)
+      : clampInteger(transitionTimeoutMs, 0, MAX_NODE_TIMEOUT_MS, 3000)
   };
 }
 
@@ -828,6 +812,23 @@ function findNode(nodes, matcher = {}) {
       : actual.toLocaleLowerCase("cs-CZ").includes(expected.toLocaleLowerCase("cs-CZ")));
   });
 
+  if (matcher.unique === true && matches.length > 1) {
+    throw new Error(`Výběr není jednoznačný: ${describeMatcher(matcher)} (${matches.length} prvky).`);
+  }
+  if (matcher.position !== undefined || matcher.expectedCount !== undefined) {
+    const position = Number(matcher.position);
+    const expectedCount = Number(matcher.expectedCount);
+    if (!Number.isInteger(expectedCount) || expectedCount < 1 || expectedCount > 100
+      || !Number.isInteger(position) || position < 1 || position > expectedCount
+      || matcher.occurrence !== undefined) {
+      throw new Error("Výběr podle pořadí vyžaduje position a expectedCount od 1 do 100, pořadí nejvýše rovné počtu a žádné occurrence.");
+    }
+    if (matches.length !== expectedCount) {
+      throw new Error(`Počet odpovídajících položek se změnil: ${describeMatcher(matcher)} (očekáváno ${expectedCount}, nalezeno ${matches.length}). Znovu ověřte výběr.`);
+    }
+    // Human-facing positions are one-based, from top to bottom on the screen.
+    return [...matches].sort((a, b) => a.bounds.top - b.bounds.top || a.bounds.left - b.bounds.left)[position - 1];
+  }
   return matches[clampInteger(matcher.occurrence, 0, 100, 0)] || null;
 }
 

@@ -330,6 +330,11 @@
           "targetBaseUrl": "https://localhost:7261"
         },
         {
+          "id": "pidlitacka-local-1109",
+          "name": "LOCAL #1109 E2E",
+          "targetBaseUrl": "https://governing-physicians-narrow-crystal.trycloudflare.com"
+        },
+        {
           "id": "pidlitacka-local-aspire",
           "name": "LOCAL ASPIRE",
           "targetBaseUrl": "http://localhost:5065"

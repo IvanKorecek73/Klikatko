@@ -1,0 +1,44 @@
+# INT — přihlášení a resolver doporučených jízdenek (#1140)
+# Klient: Visual Studio Code + REST Client (humao.rest-client).
+# 1. Klikni na Send Request nad přihlášením a počkej na HTTP 200 s accessToken.
+# 2. Klikni na Send Request nad resolverem; token se převezme z poslední odpovědi přihlášení.
+# Při vypršení tokenu spusť přihlášení znovu. Token není potřeba ručně kopírovat.
+# Testovací profil z public/scenarios/index.json:
+# pidlitacka-presentation-safe-payment — účet pro nákup a doporučování.
+# Přihlašovací údaje načti z proměnných procesu VS Code;
+# PID_TEST_EMAIL a PID_TEST_PASSWORD nastav lokálně a neukládej je do Gitu.
+# Dostupné kusy závisí na aktuálním zásobníku účtu; NO_AVAILABLE_TICKET je platný výsledek.
+
+@baseUrl = https://pidl2-backend.int.pidlitacka.cz
+
+### 1. INT — přihlášení testovacího uživatele
+# @name loginRouteRecommendationsInt
+POST {{baseUrl}}/v1/auth/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "{{$processEnv PID_TEST_EMAIL}}",
+  "password": "{{$processEnv PID_TEST_PASSWORD}}",
+  "deviceId": "eb62700c-5b5f-4851-b800-393174ac5506",
+  "deviceName": "Presentation Android 5506",
+  "deviceMetadata": {
+    "platform": "Android",
+    "osVersion": "14",
+    "appVersion": "2.0.0",
+    "model": "Pixel 8"
+  },
+  "deviceLanguage": "cs",
+  "deviceMessagingToken": ""
+}
+
+### 2. INT — převod doporučení IPT na jízdenky Tickets
+# @name resolveRouteRecommendationsInt
+POST {{baseUrl}}/v1/client/tickets/route-recommendations/resolve
+Authorization: Bearer {{loginRouteRecommendationsInt.response.body.$.accessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "iptProductIds": [867, 868]
+}

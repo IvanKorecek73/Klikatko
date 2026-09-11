@@ -1,4 +1,6 @@
 node_modules/
+**/bin/
+**/obj/
 tools/redis-bridge/.env
 public/local/
 public/analysis/yaml/

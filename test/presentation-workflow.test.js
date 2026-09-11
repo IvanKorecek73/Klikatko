@@ -14,7 +14,7 @@ test("moderated FE presentation steps are split into standalone visible workflow
   assert.ok(presentation);
   assert.equal(presentation.hidden, true);
   assert.equal(presentation.mode, "presentation");
-  assert.equal(presentation.items.length, 17);
+  assert.equal(presentation.items.length, 19);
   assert.equal(new Set(presentation.items.map(item => item.id)).size, presentation.items.length);
   assert.equal(presentationWorkflows.length, 6);
 

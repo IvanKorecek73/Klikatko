@@ -3,6 +3,12 @@
   "defaultPackId": "pidlitacka-feature-729",
   "packs": [
     {
+      "id": "pidlitacka-task-1145-prague-zone-count",
+      "name": "PidLitacka - task 1145: Praha a tarifní pásma 2026",
+      "description": "Lokální ověření P = 1 přes PID BE a Tickets: aktivace, ETD, nabídka, rezervace a chybné výběry.",
+      "file": "task-1145-prague-zone-count.json"
+    },
+    {
       "id": "pidlitacka-feature-729",
       "name": "PidLitacka - založení účtu",
       "description": "Scénáře pro založení účtu, aktivaci, reaktivaci, obnovu hesla a změnu hesla.",
@@ -61,6 +67,12 @@
       "name": "PidLitacka - task 960: aktivace jízdenky",
       "description": "Autonomní lokální E2E scénáře aktivace zakoupených jízdenek přes BE PidLitacka a Ticket Service.",
       "file": "feature-960-aktivace-jizdenky.json"
+    },
+    {
+      "id": "pidlitacka-task-1140-ipt-ticket-mapping",
+      "name": "PidLitacka - task 1140: mapování IPT → Tickets",
+      "description": "Lokální E2E ověření mapování IPT produktu na koupenou jízdenku a aktuální produkt pro nákup.",
+      "file": "task-1140-ipt-ticket-mapping.json"
     },
     {
       "id": "pidlitacka-feature-966",

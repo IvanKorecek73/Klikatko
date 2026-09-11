@@ -9561,7 +9561,9 @@ function showPresentationWorkflowPauseResult(level, message, item) {
   elements.testerExpected.textContent = expected.join(" ");
   elements.stepCounter.textContent = "Ruční krok";
   elements.stepForm.innerHTML = "";
-  elements.modeBanner.textContent = "Prezentační režim: žádné backendové volání se nespustí; krok potvrďte v ovládání workflow.";
+  elements.modeBanner.textContent = hasEmulatorActions
+    ? "Spusťte pouze akci tohoto kroku. V emulátoru zasahujte jen podle pokynů Uživatel provede."
+    : "Ruční krok: proveďte pouze uvedené pokyny a ověřte očekávaný výsledek.";
   elements.resultCard.className = `result-card ${level} workflow-pause-result`;
   elements.resultCard.innerHTML = `
     <strong class="result-title">Teď uděláme</strong>
@@ -9596,7 +9598,7 @@ function showPresentationWorkflowPauseResult(level, message, item) {
       </div>
     ` : ""}
     <div class="workflow-pause-next">
-      <span>Až je krok odprezentovaný, pokračujte dalším krokem.</span>
+      <span>Pokračujte až po splnění všech očekávání tohoto kroku, včetně ručních kontrol. Při chybě běh zastavte a uložte log.</span>
       <button type="button" class="workflow-mobile-continue" data-workflow-continue ${hasEmulatorActions ? "disabled" : ""}>Pokračovat ve workflow</button>
     </div>
   `;
@@ -9857,9 +9859,23 @@ function resolvePresentationEmulatorExecution(item) {
 
   const variables = {
     ...state.workflowContext,
+    ...(state.workflowInputs || {}),
     ...(subscenario?.variables || {}),
     ...(configured.variables || {})
   };
+  for (const [name, pattern] of Object.entries({
+    ...(subscenario?.variablePatterns || {}),
+    ...(configured.variablePatterns || {})
+  })) {
+    const value = String(variables[name] ?? "").trim();
+    if (!value) {
+      throw new Error(`Chybí hodnota ${name}.`);
+    }
+    if (!new RegExp(pattern).test(value)) {
+      throw new Error(`Hodnota ${name} nemá požadovaný formát (${pattern}).`);
+    }
+    variables[name] = value;
+  }
   const profileEmail = String(configured.profileEmail || variables.email || "").trim();
 
   if (profileEmail) {

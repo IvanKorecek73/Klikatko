@@ -1,8 +1,9 @@
 {
-  "coreMosServiceKey": "c8b76d63-3c39-46f2-ac12-887776070d45",
+  "coreMosServiceKey": "",
   "redisConnections": {
     "pidlitacka-local": "localhost:6379,abortConnect=false",
     "pidlitacka-local-aspire": "localhost:6379,abortConnect=false",
-    "pidlitacka-integration": "valkey.database.svc.cluster.local,defaultDatabase=1,user=default"
+    "pidlitacka-local-1109": "localhost:18879,abortConnect=false",
+    "pidlitacka-integration": ""
   }
 }

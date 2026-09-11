@@ -2,6 +2,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const vm = require("node:vm");
+const { promisify } = require("node:util");
 const {
   buildDeleteKeyBatches,
   countConfiguredActions,
@@ -17,6 +19,128 @@ const {
 } = require("../tools/emulator-bridge");
 
 const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "tools", "emulator-bridge.js"), "utf8");
+
+for (const [timeoutMs, appearsAtMs, succeeds] of [[60000, 45000, true], [10000, 45000, false], [120000, 75000, false]]) {
+  test(`transition wait honors ${timeoutMs}ms within a 60-second cap without tapping twice`, async () => {
+    let now = 0;
+    let taps = 0;
+    const execFile = () => {};
+    execFile[promisify.custom] = async (_, args) => {
+      const command = args.slice(2);
+      let stdout = "";
+      if (command[0] === "get-state") stdout = "device";
+      else if (command[0] === "exec-out") {
+        if (taps) now += 5000;
+        stdout = now >= appearsAtMs
+          ? '<hierarchy><node content-desc="Aktivace jízdenek" enabled="true" bounds="[0,0][100,40]" /></hierarchy>'
+          : '<hierarchy><node text="Zaplatit" clickable="true" enabled="true" bounds="[0,0][100,40]" /></hierarchy>';
+      } else if (command[1] === "settings") {
+        // Presentation settings are unrelated to the observed transition.
+      } else if (command[1] === "input" && command[2] === "tap") taps++;
+      else throw Error("Unexpected ADB command: " + command.join(" "));
+      return { stdout, stderr: "" };
+    };
+    const sandbox = {
+      module: { exports: {} }, process,
+      require: name => name === "node:child_process" ? { execFile } : require(name),
+      Date: class extends Date { static now() { return now; } },
+      setTimeout: callback => { queueMicrotask(callback); return 0; }
+    };
+    vm.runInNewContext(bridgeSource, sandbox);
+    const run = sandbox.module.exports.executeEmulatorActions({ actions: [{
+      type: "tapNode", text: "Zaplatit", clickable: true,
+      waitFor: { contentDescription: "Aktivace jízdenek" }, transitionTimeoutMs: timeoutMs, retryCount: 0
+    }] });
+    if (succeeds) assert.equal((await run).ok, true);
+    else await assert.rejects(run, /neobjevil očekávaný prvek/);
+    assert.equal(taps, 1);
+    assert.ok(now <= 65000, "A request cannot make the bridge wait beyond its bounded limit");
+  });
+}
+
+function hostedFieldsBridge({ selectAllWorks = true } = {}) {
+  const fields = [
+    { id: "cardnumber", value: "4000007000010006" },
+    { id: "expiry", value: "" },
+    { id: "cvc", value: "082" }
+  ];
+  let focused = 0;
+  let selected = false;
+  let emptyDeletes = 0;
+  const calls = [];
+  const execFile = () => {};
+  execFile[promisify.custom] = async (_, args) => {
+    const command = args.slice(2);
+    calls.push(command);
+    let stdout = "";
+    if (command[0] === "get-state") stdout = "device";
+    else if (command[0] === "exec-out") {
+      stdout = '<hierarchy>' + fields.map((field, index) =>
+        `<node text="${field.value}" resource-id="${field.id}" class="android.widget.EditText" focused="${focused === index}" enabled="true" clickable="true" bounds="[0,${index * 100}][400,${index * 100 + 80}]" />`
+      ).join("") + '</hierarchy>';
+    } else if (command[1] === "settings") {
+      // Presentation settings do not affect the simulated form.
+    } else if (command[1] === "input") {
+      const [kind, ...values] = command.slice(2);
+      if (kind === "tap") {
+        focused = Math.floor(Number(values[1]) / 100);
+        selected = false;
+      } else if (kind === "keycombination") {
+        assert.deepEqual(values, ["KEYCODE_CTRL_LEFT", "KEYCODE_A"]);
+        selected = selectAllWorks;
+      } else if (kind === "keyevent") {
+        for (const key of values) {
+          if (key === "TAB") focused = (focused + 1) % fields.length;
+          else if (key === "KEYCODE_DEL") {
+            if (!fields[focused].value) {
+              emptyDeletes++;
+              focused = Math.max(0, focused - 1);
+            } else {
+              fields[focused].value = selected ? "" : fields[focused].value.slice(0, -1);
+            }
+            selected = false;
+          } else assert.equal(key, "KEYCODE_MOVE_END");
+        }
+      } else if (kind === "text") {
+        const field = fields[focused];
+        field.value += values[0];
+        if (field.id === "expiry" && /^\d{4}$/.test(field.value)) {
+          field.value = field.value.slice(0, 2) + "/" + field.value.slice(2);
+        }
+        if (field.id === "cvc") field.value = field.value.slice(0, 3);
+        if (field.id === "cardnumber" && field.value.length === 16) focused = 1;
+        else if (field.id === "expiry" && field.value.length === 5) focused = 2;
+      } else throw Error("Unexpected input: " + kind);
+    } else throw Error("Unexpected ADB command: " + command.join(" "));
+    return { stdout, stderr: "" };
+  };
+  const sandbox = {
+    module: { exports: {} }, process,
+    require: name => name === "node:child_process" ? { execFile } : require(name),
+    setTimeout: callback => { queueMicrotask(callback); return 0; }
+  };
+  vm.runInNewContext(bridgeSource, sandbox);
+  return { bridge: sandbox.module.exports, fields, calls, emptyDeletes: () => emptyDeletes };
+}
+
+for (const selectAllWorks of [true, false]) {
+  test(`hosted card fields survive auto-advance and repeated fill (select-all ${selectAllWorks})`, async () => {
+    const simulated = hostedFieldsBridge({ selectAllWorks });
+    const payload = { actions: [{ type: "inputTextGroup", fields: [
+      { resourceId: "cardnumber", value: "4000007000010006", expectedValue: "4000007000010006", sensitive: true },
+      { resourceId: "expiry", value: "0828", expectedValue: "08/28", clear: false, sensitive: true },
+      { resourceId: "cvc", value: "895", expectedValue: "895", clear: false, sensitive: true }
+    ] }] };
+    for (let run = 0; run < 2; run++) {
+      const result = await simulated.bridge.executeEmulatorActions(payload);
+      assert.equal(result.ok, true);
+      assert.deepEqual(simulated.fields.map(field => field.value), ["4000007000010006", "08/28", "895"]);
+      assert.equal(simulated.emptyDeletes(), 0, "Backspace on an empty hosted field moves focus backwards");
+      assert.ok(result.actions[0].fields.every(field => field.value === "***"));
+    }
+    assert.ok(!simulated.calls.some(command => command.includes("TAB")), "Hosted fields already advance focus themselves");
+  });
+}
 
 const fixture = `<?xml version="1.0"?>
 <hierarchy>
@@ -49,6 +173,14 @@ test("emulator bridge finds exact and partial presentation targets", () => {
   assert.equal(findNode(nodes, { contentDescriptions: ["0006", "Nová karta"], exact: false }).contentDescription, "Výchozí způsob platby\nNová karta");
   assert.equal(findNode(nodes, { text: "Chybí" }), null);
   assert.equal(findNode(nodes, { className: "android.widget.EditText", occurrence: 1 }), null);
+});
+
+test("unique semantic targets reject ambiguity without changing ordinary occurrence selection", () => {
+  const nodes = parseUiNodes('<node content-desc="Karta 0006" clickable="true" bounds="[0,0][100,40]" /><node content-desc="Karta 0006" clickable="true" bounds="[0,50][100,90]" />');
+  const matcher = { contentDescription: "0006", exact: false, clickable: true };
+  assert.throws(() => findNode(nodes, { ...matcher, unique: true }), /není jednoznačný/);
+  assert.equal(findNode(nodes, { ...matcher, occurrence: 1 }), nodes[1]);
+  assert.equal(findNode(nodes.slice(0, 1), { ...matcher, unique: true }), nodes[0]);
 });
 
 test("emulator bridge tokenizes reusable login and card values without a shell", () => {
