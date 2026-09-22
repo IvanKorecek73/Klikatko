@@ -1,0 +1,2903 @@
+{
+  "version": 1,
+  "projectId": "pidlitacka",
+  "name": "PidLitacka – #1145: validace pásem na INT",
+  "description": "Skutečný katalog, nabídky, rezervace a ručně vybrané AVAILABLE jízdenky. Aktivace spotřebuje vybraný kus; bez plateb.",
+  "scenarios": [
+    {
+      "id": "pidlitacka-1145-int-catalog",
+      "title": "INT: zkontrolovat katalog (pouze čtení)",
+      "description": "INT #1145 — reálné produkty, veřejné PID BE API.",
+      "requiresAuth": false,
+      "smoke": false,
+      "manualInputRequired": true,
+      "requiredEnvironment": {
+        "projectId": "pidlitacka",
+        "environmentId": "pidlitacka-integration",
+        "targetBaseUrl": "https://pidl2-backend.int.pidlitacka.cz/"
+      },
+      "tags": [
+        "Jízdenky",
+        "Pásma",
+        "task-1145",
+        "int-only"
+      ],
+      "app": {
+        "section": "tickets",
+        "title": "Pásma na INT",
+        "subtitle": "INT: zkontrolovat katalog (pouze čtení)"
+      },
+      "instructions": [
+        "Pouze INTEGRAČNÍ prostředí. Použijte vyhrazený testovací účet; před spuštěním ověřte přihlášenou identitu. Postup: docs/task-1145-int.md.",
+        "Spouštějte scénář od začátku se zapnutým zastavením na chybě. Neupravujte requesty ani aserce; změněný průchod není důkazem regrese.",
+        "Žádné lokální fixture ani databázové seedy. Připravený test není dokladem úspěšného INT běhu."
+      ],
+      "steps": [
+        {
+          "id": "pidlitacka-1145-int-catalog-read",
+          "title": "Ověřit skutečné produkty v katalogu INT",
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/products?limit=100&offset=0"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "productId": 1004,
+                  "productType": "ADMISSION_SINGLE",
+                  "state": "PUBLISHED",
+                  "zones": [
+                    "P",
+                    "0",
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                    "6",
+                    "7",
+                    "8",
+                    "9",
+                    "10",
+                    "11",
+                    "12",
+                    "13",
+                    "B"
+                  ],
+                  "excludedZoneDetails": [],
+                  "zoneCount": 4
+                },
+                "message": "Katalog produktu 1004 neodpovídá ověřenému INT kontraktu. Zastavte test a posuďte změnu dat."
+              },
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "productId": 1007,
+                  "productType": "ADMISSION_SINGLE",
+                  "state": "PUBLISHED",
+                  "zones": [
+                    "P",
+                    "0",
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                    "6",
+                    "7",
+                    "8",
+                    "9",
+                    "10",
+                    "11",
+                    "12",
+                    "13",
+                    "B"
+                  ],
+                  "excludedZoneDetails": [],
+                  "zoneCount": 7
+                },
+                "message": "Katalog produktu 1007 neodpovídá ověřenému INT kontraktu. Zastavte test a posuďte změnu dat."
+              },
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "productId": 1016,
+                  "productType": "ADMISSION_SINGLE",
+                  "state": "PUBLISHED",
+                  "zones": [
+                    "P",
+                    "0",
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                    "6",
+                    "7",
+                    "8",
+                    "9",
+                    "10",
+                    "11",
+                    "12",
+                    "13",
+                    "B"
+                  ],
+                  "excludedZoneDetails": [],
+                  "zoneCount": 16
+                },
+                "message": "Katalog produktu 1016 neodpovídá ověřenému INT kontraktu. Zastavte test a posuďte změnu dat."
+              },
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "productId": 1002,
+                  "productType": "ADMISSION_SINGLE",
+                  "state": "PUBLISHED",
+                  "zones": [
+                    "P",
+                    "0",
+                    "B"
+                  ],
+                  "excludedZoneDetails": []
+                },
+                "message": "Katalog produktu 1002 neodpovídá ověřenému INT kontraktu. Zastavte test a posuďte změnu dat."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-1145-int-offer-booking",
+      "title": "INT: nabídka a rezervace Praha + pásmo 1",
+      "description": "INT #1145 — reálné produkty, veřejné PID BE API.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "requiredEnvironment": {
+        "projectId": "pidlitacka",
+        "environmentId": "pidlitacka-integration",
+        "targetBaseUrl": "https://pidl2-backend.int.pidlitacka.cz/"
+      },
+      "tags": [
+        "Jízdenky",
+        "Pásma",
+        "task-1145",
+        "int-only"
+      ],
+      "app": {
+        "section": "tickets",
+        "title": "Pásma na INT",
+        "subtitle": "INT: nabídka a rezervace Praha + pásmo 1"
+      },
+      "instructions": [
+        "Pouze INTEGRAČNÍ prostředí. Použijte vyhrazený testovací účet; před spuštěním ověřte přihlášenou identitu. Postup: docs/task-1145-int.md.",
+        "Spouštějte scénář od začátku se zapnutým zastavením na chybě. Neupravujte requesty ani aserce; změněný průchod není důkazem regrese.",
+        "Žádné lokální fixture ani databázové seedy. Připravený test není dokladem úspěšného INT běhu.",
+        "Vytvoří jednu nezaplacenou rezervaci. Nezahájí platbu a nevydá jízdenku pro aktivační testy."
+      ],
+      "steps": [
+        {
+          "id": "pidlitacka-1145-int-offer-booking-catalog",
+          "title": "Ověřit skutečné produkty v katalogu INT",
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/products?limit=100&offset=0"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "productId": 1004,
+                  "productType": "ADMISSION_SINGLE",
+                  "state": "PUBLISHED",
+                  "zones": [
+                    "P",
+                    "0",
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                    "6",
+                    "7",
+                    "8",
+                    "9",
+                    "10",
+                    "11",
+                    "12",
+                    "13",
+                    "B"
+                  ],
+                  "excludedZoneDetails": [],
+                  "zoneCount": 4
+                },
+                "message": "Katalog produktu 1004 neodpovídá ověřenému INT kontraktu. Zastavte test a posuďte změnu dat."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-offer-booking-offer-short",
+          "title": "Odmítnout krátký výběr už při nacenění",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/offers",
+            "body": {
+              "productId": 1004,
+              "amount": 1,
+              "validSince": "{{nowPlus2Minutes}}",
+              "zones": [
+                "P",
+                "0",
+                "B"
+              ]
+            }
+          },
+          "expected": {
+            "status": 422,
+            "outcome": "expectedError"
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-offer-booking-offer",
+          "title": "Nacenit čtyři pásma P,0,B,1",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/offers",
+            "body": {
+              "productId": 1004,
+              "amount": 1,
+              "validSince": "{{nowPlus2Minutes}}",
+              "zones": [
+                "P",
+                "0",
+                "B",
+                "1"
+              ]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.offers",
+                "lengthAtLeast": 1
+              },
+              {
+                "path": "$.offers[0].productId",
+                "equals": 1004
+              },
+              {
+                "path": "$.offers[0].admission.zones",
+                "equals": [
+                  "P",
+                  "0",
+                  "B",
+                  "1"
+                ]
+              }
+            ]
+          },
+          "extract": {
+            "task1145IntOfferId": "$.offers[0].offerId"
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-offer-booking-booking",
+          "title": "Vytvořit rezervaci bez platby",
+          "requiresContext": [
+            "task1145IntOfferId"
+          ],
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/bookings",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "offerIds": [
+                "{{context.task1145IntOfferId}}"
+              ],
+              "amount": 1,
+              "activateAfterPayment": false,
+              "sendConfirmationEmail": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.bookingId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.bookedOffers",
+                "lengthEquals": 1
+              },
+              {
+                "path": "$.bookedOffers[0].productId",
+                "equals": 1004
+              },
+              {
+                "path": "$.bookedOffers[0].validZones",
+                "equals": [
+                  "P",
+                  "0",
+                  "B",
+                  "1"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-1145-int-prague-four",
+      "title": "INT: Praha + pásmo 1: čtyři pásma",
+      "description": "INT #1145 — reálné produkty, veřejné PID BE API.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "requiredEnvironment": {
+        "projectId": "pidlitacka",
+        "environmentId": "pidlitacka-integration",
+        "targetBaseUrl": "https://pidl2-backend.int.pidlitacka.cz/"
+      },
+      "tags": [
+        "Jízdenky",
+        "Pásma",
+        "task-1145",
+        "int-only",
+        "Aktivace"
+      ],
+      "app": {
+        "section": "tickets",
+        "title": "Pásma na INT",
+        "subtitle": "INT: Praha + pásmo 1: čtyři pásma"
+      },
+      "instructions": [
+        "Pouze INTEGRAČNÍ prostředí. Použijte vyhrazený testovací účet; před spuštěním ověřte přihlášenou identitu. Postup: docs/task-1145-int.md.",
+        "Spouštějte scénář od začátku se zapnutým zastavením na chybě. Neupravujte requesty ani aserce; změněný průchod není důkazem regrese.",
+        "Žádné lokální fixture ani databázové seedy. Připravený test není dokladem úspěšného INT běhu.",
+        "Spotřebuje jednu dříve zakoupenou jízdenku: jednotlivé plnocenné – 60 min, 4 pásem (produkt 1004). Pro frontendový test použijte jiný kus.",
+        "Vyberte kus ze seznamu. U flexibilní jízdenky musí být validZones prázdné nebo chybět; předvolená pásma obcházejí testovanou validaci.",
+        "Seznam vrací prvních 100 AVAILABLE jízdenek. Pokud vhodný kus chybí, jde o nesplněnou vstupní podmínku; použijte připravený účet se správnými kusy, test neoznačujte jako úspěšný.",
+        "Po aktivaci lze bezpečně opakovat jen krok opakování se stejným klíčem. Celý další běh potřebuje nový AVAILABLE kus."
+      ],
+      "steps": [
+        {
+          "id": "pidlitacka-1145-int-prague-four-catalog",
+          "title": "Ověřit skutečné produkty v katalogu INT",
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/products?limit=100&offset=0"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "productId": 1004,
+                  "productType": "ADMISSION_SINGLE",
+                  "state": "PUBLISHED",
+                  "zones": [
+                    "P",
+                    "0",
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                    "6",
+                    "7",
+                    "8",
+                    "9",
+                    "10",
+                    "11",
+                    "12",
+                    "13",
+                    "B"
+                  ],
+                  "excludedZoneDetails": [],
+                  "zoneCount": 4
+                },
+                "message": "Katalog produktu 1004 neodpovídá ověřenému INT kontraktu. Zastavte test a posuďte změnu dat."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-four-select",
+          "title": "Vybrat neaktivovanou testovací jízdenku",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=AVAILABLE"
+          },
+          "selection": {
+            "sourcePath": "$.items",
+            "filter": {
+              "productId": 1004,
+              "status": "AVAILABLE",
+              "zoneCount": 4
+            },
+            "buttonLabel": "Použít tento kus pro test",
+            "selectedButtonLabel": "Testovací kus vybrán",
+            "store": {
+              "task1145IntPragueFourFulfillmentId": "$.fulfillmentId"
+            },
+            "emptyTitle": "Chybí testovací jízdenka",
+            "emptyText": "Potřebujete AVAILABLE produkt 1004. Test zatím není proveden."
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-four-precondition",
+          "title": "Ověřit vybraný kus a chybějící předvolbu pásem",
+          "requiresContext": [
+            "task1145IntPragueFourFulfillmentId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueFourFulfillmentId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1145IntPragueFourFulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1004
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "path": "$.fulfillment.status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "sourcePath": "$.fulfillment.validZones",
+                "regex": "^(?:\\[\\]|null|\"\")$",
+                "message": "Vyberte flexibilní jízdenku bez předvolených pásem; tato jízdenka není vhodná pro #1145."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-four-device",
+          "title": "Zaregistrovat testovací zařízení",
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "deviceIdentifier": "{{auth.deviceId}}",
+              "deviceModel": "{{auth.model}}",
+              "platform": "{{auth.platform}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.deviceId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "task1145IntPragueFourDeviceId": "$.deviceId"
+          },
+          "requiresContext": [
+            "task1145IntPragueFourFulfillmentId"
+          ]
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-four-short",
+          "title": "Odmítnout starý příliš krátký výběr P,0,B",
+          "requiresContext": [
+            "task1145IntPragueFourDeviceId",
+            "task1145IntPragueFourFulfillmentId"
+          ],
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueFourFulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "zones": [
+                "P",
+                "0",
+                "B"
+              ],
+              "validSince": null,
+              "deviceId": "{{context.task1145IntPragueFourDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 422,
+            "outcome": "expectedError",
+            "assertions": []
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-four-short-unchanged",
+          "title": "Po odmítnutí zkontrolovat stejný kus AVAILABLE",
+          "requiresContext": [
+            "task1145IntPragueFourFulfillmentId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueFourFulfillmentId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1145IntPragueFourFulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1004
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "path": "$.fulfillment.status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "sourcePath": "$.fulfillment.validZones",
+                "regex": "^(?:\\[\\]|null|\"\")$",
+                "message": "Vyberte flexibilní jízdenku bez předvolených pásem; tato jízdenka není vhodná pro #1145."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-four-long",
+          "title": "Odmítnout pět pásem pro čtyřpásmový produkt",
+          "requiresContext": [
+            "task1145IntPragueFourDeviceId",
+            "task1145IntPragueFourFulfillmentId"
+          ],
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueFourFulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "zones": [
+                "P",
+                "0",
+                "B",
+                "1",
+                "2"
+              ],
+              "validSince": null,
+              "deviceId": "{{context.task1145IntPragueFourDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 422,
+            "outcome": "expectedError",
+            "assertions": []
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-four-long-unchanged",
+          "title": "Po odmítnutí zkontrolovat stejný kus AVAILABLE",
+          "requiresContext": [
+            "task1145IntPragueFourFulfillmentId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueFourFulfillmentId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1145IntPragueFourFulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1004
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "path": "$.fulfillment.status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "sourcePath": "$.fulfillment.validZones",
+                "regex": "^(?:\\[\\]|null|\"\")$",
+                "message": "Vyberte flexibilní jízdenku bez předvolených pásem; tato jízdenka není vhodná pro #1145."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-four-gap",
+          "title": "Odmítnout mezeru mezi P a B",
+          "requiresContext": [
+            "task1145IntPragueFourDeviceId",
+            "task1145IntPragueFourFulfillmentId"
+          ],
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueFourFulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "zones": [
+                "P",
+                "B",
+                "1",
+                "2"
+              ],
+              "validSince": null,
+              "deviceId": "{{context.task1145IntPragueFourDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 422,
+            "outcome": "expectedError",
+            "assertions": []
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-four-gap-unchanged",
+          "title": "Po odmítnutí zkontrolovat stejný kus AVAILABLE",
+          "requiresContext": [
+            "task1145IntPragueFourFulfillmentId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueFourFulfillmentId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1145IntPragueFourFulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1004
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "path": "$.fulfillment.status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "sourcePath": "$.fulfillment.validZones",
+                "regex": "^(?:\\[\\]|null|\"\")$",
+                "message": "Vyberte flexibilní jízdenku bez předvolených pásem; tato jízdenka není vhodná pro #1145."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-four-duplicate",
+          "title": "Odmítnout duplicitní P",
+          "requiresContext": [
+            "task1145IntPragueFourDeviceId",
+            "task1145IntPragueFourFulfillmentId"
+          ],
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueFourFulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "zones": [
+                "P",
+                "P",
+                "0",
+                "B"
+              ],
+              "validSince": null,
+              "deviceId": "{{context.task1145IntPragueFourDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 422,
+            "outcome": "expectedError",
+            "assertions": []
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-four-duplicate-unchanged",
+          "title": "Po odmítnutí zkontrolovat stejný kus AVAILABLE",
+          "requiresContext": [
+            "task1145IntPragueFourFulfillmentId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueFourFulfillmentId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1145IntPragueFourFulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1004
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "path": "$.fulfillment.status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "sourcePath": "$.fulfillment.validZones",
+                "regex": "^(?:\\[\\]|null|\"\")$",
+                "message": "Vyberte flexibilní jízdenku bez předvolených pásem; tato jízdenka není vhodná pro #1145."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-four-unknown",
+          "title": "Odmítnout neznámé pásmo X",
+          "requiresContext": [
+            "task1145IntPragueFourDeviceId",
+            "task1145IntPragueFourFulfillmentId"
+          ],
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueFourFulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "zones": [
+                "P",
+                "0",
+                "B",
+                "X"
+              ],
+              "validSince": null,
+              "deviceId": "{{context.task1145IntPragueFourDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 422,
+            "outcome": "expectedError",
+            "assertions": []
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-four-unknown-unchanged",
+          "title": "Po odmítnutí zkontrolovat stejný kus AVAILABLE",
+          "requiresContext": [
+            "task1145IntPragueFourFulfillmentId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueFourFulfillmentId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1145IntPragueFourFulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1004
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "path": "$.fulfillment.status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "sourcePath": "$.fulfillment.validZones",
+                "regex": "^(?:\\[\\]|null|\"\")$",
+                "message": "Vyberte flexibilní jízdenku bez předvolených pásem; tato jízdenka není vhodná pro #1145."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-four-missing",
+          "title": "Odmítnout chybějící výběr",
+          "requiresContext": [
+            "task1145IntPragueFourDeviceId",
+            "task1145IntPragueFourFulfillmentId"
+          ],
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueFourFulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "zones": null,
+              "validSince": null,
+              "deviceId": "{{context.task1145IntPragueFourDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 422,
+            "outcome": "expectedError",
+            "assertions": []
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-four-missing-unchanged",
+          "title": "Po odmítnutí zkontrolovat stejný kus AVAILABLE",
+          "requiresContext": [
+            "task1145IntPragueFourFulfillmentId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueFourFulfillmentId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1145IntPragueFourFulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1004
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "path": "$.fulfillment.status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "sourcePath": "$.fulfillment.validZones",
+                "regex": "^(?:\\[\\]|null|\"\")$",
+                "message": "Vyberte flexibilní jízdenku bez předvolených pásem; tato jízdenka není vhodná pro #1145."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-four-activate",
+          "title": "Aktivovat výběr P, 0, B, 1",
+          "requiresContext": [
+            "task1145IntPragueFourDeviceId",
+            "task1145IntPragueFourFulfillmentId"
+          ],
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueFourFulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "zones": [
+                "P",
+                "0",
+                "B",
+                "1"
+              ],
+              "validSince": null,
+              "deviceId": "{{context.task1145IntPragueFourDeviceId}}"
+            }
+          },
+          "extract": {
+            "task1145IntPragueFourEtd": "$.etd"
+          },
+          "remember": {
+            "task1145IntPragueFourActivationKey": "{{form.idempotencyKey}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1145IntPragueFourFulfillmentId}}"
+              },
+              {
+                "path": "$.zoneCount",
+                "equals": 4
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:P,0,B,1\\*",
+                "message": "ETD musí obsahovat přesně skutečně zvolená pásma."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-four-retry",
+          "title": "Zopakovat stejnou aktivaci se stejným klíčem",
+          "requiresContext": [
+            "task1145IntPragueFourFulfillmentId",
+            "task1145IntPragueFourDeviceId",
+            "task1145IntPragueFourActivationKey",
+            "task1145IntPragueFourEtd"
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueFourFulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{context.task1145IntPragueFourActivationKey}}"
+            },
+            "body": {
+              "zones": [
+                "P",
+                "0",
+                "B",
+                "1"
+              ],
+              "validSince": null,
+              "deviceId": "{{context.task1145IntPragueFourDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1145IntPragueFourFulfillmentId}}"
+              },
+              {
+                "path": "$.zoneCount",
+                "equals": 4
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:P,0,B,1\\*",
+                "message": "ETD musí obsahovat přesně skutečně zvolená pásma."
+              },
+              {
+                "path": "$.etd",
+                "equals": "{{context.task1145IntPragueFourEtd}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-four-readback",
+          "title": "Znovu načíst stejný kus a porovnat celé ETD",
+          "requiresContext": [
+            "task1145IntPragueFourFulfillmentId",
+            "task1145IntPragueFourDeviceId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueFourFulfillmentId}}",
+            "headers": {
+              "X-Device-Id": "{{context.task1145IntPragueFourDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1145IntPragueFourFulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1004
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "sourcePath": "$.fulfillment.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.fulfillment.etd",
+                "equals": "{{context.task1145IntPragueFourEtd}}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-1145-int-zero-b",
+      "title": "INT: 0, B, 1, 2: čtyři pásma",
+      "description": "INT #1145 — reálné produkty, veřejné PID BE API.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "requiredEnvironment": {
+        "projectId": "pidlitacka",
+        "environmentId": "pidlitacka-integration",
+        "targetBaseUrl": "https://pidl2-backend.int.pidlitacka.cz/"
+      },
+      "tags": [
+        "Jízdenky",
+        "Pásma",
+        "task-1145",
+        "int-only",
+        "Aktivace"
+      ],
+      "app": {
+        "section": "tickets",
+        "title": "Pásma na INT",
+        "subtitle": "INT: 0, B, 1, 2: čtyři pásma"
+      },
+      "instructions": [
+        "Pouze INTEGRAČNÍ prostředí. Použijte vyhrazený testovací účet; před spuštěním ověřte přihlášenou identitu. Postup: docs/task-1145-int.md.",
+        "Spouštějte scénář od začátku se zapnutým zastavením na chybě. Neupravujte requesty ani aserce; změněný průchod není důkazem regrese.",
+        "Žádné lokální fixture ani databázové seedy. Připravený test není dokladem úspěšného INT běhu.",
+        "Spotřebuje jednu dříve zakoupenou jízdenku: jednotlivé plnocenné – 60 min, 4 pásem (produkt 1004). Pro frontendový test použijte jiný kus.",
+        "Vyberte kus ze seznamu. U flexibilní jízdenky musí být validZones prázdné nebo chybět; předvolená pásma obcházejí testovanou validaci.",
+        "Seznam vrací prvních 100 AVAILABLE jízdenek. Pokud vhodný kus chybí, jde o nesplněnou vstupní podmínku; použijte připravený účet se správnými kusy, test neoznačujte jako úspěšný.",
+        "Po aktivaci lze bezpečně opakovat jen krok opakování se stejným klíčem. Celý další běh potřebuje nový AVAILABLE kus."
+      ],
+      "steps": [
+        {
+          "id": "pidlitacka-1145-int-zero-b-catalog",
+          "title": "Ověřit skutečné produkty v katalogu INT",
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/products?limit=100&offset=0"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "productId": 1004,
+                  "productType": "ADMISSION_SINGLE",
+                  "state": "PUBLISHED",
+                  "zones": [
+                    "P",
+                    "0",
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                    "6",
+                    "7",
+                    "8",
+                    "9",
+                    "10",
+                    "11",
+                    "12",
+                    "13",
+                    "B"
+                  ],
+                  "excludedZoneDetails": [],
+                  "zoneCount": 4
+                },
+                "message": "Katalog produktu 1004 neodpovídá ověřenému INT kontraktu. Zastavte test a posuďte změnu dat."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-zero-b-select",
+          "title": "Vybrat neaktivovanou testovací jízdenku",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=AVAILABLE"
+          },
+          "selection": {
+            "sourcePath": "$.items",
+            "filter": {
+              "productId": 1004,
+              "status": "AVAILABLE",
+              "zoneCount": 4
+            },
+            "buttonLabel": "Použít tento kus pro test",
+            "selectedButtonLabel": "Testovací kus vybrán",
+            "store": {
+              "task1145IntZeroBFulfillmentId": "$.fulfillmentId"
+            },
+            "emptyTitle": "Chybí testovací jízdenka",
+            "emptyText": "Potřebujete AVAILABLE produkt 1004. Test zatím není proveden."
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-zero-b-precondition",
+          "title": "Ověřit vybraný kus a chybějící předvolbu pásem",
+          "requiresContext": [
+            "task1145IntZeroBFulfillmentId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1145IntZeroBFulfillmentId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1145IntZeroBFulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1004
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "path": "$.fulfillment.status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "sourcePath": "$.fulfillment.validZones",
+                "regex": "^(?:\\[\\]|null|\"\")$",
+                "message": "Vyberte flexibilní jízdenku bez předvolených pásem; tato jízdenka není vhodná pro #1145."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-zero-b-device",
+          "title": "Zaregistrovat testovací zařízení",
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "deviceIdentifier": "{{auth.deviceId}}",
+              "deviceModel": "{{auth.model}}",
+              "platform": "{{auth.platform}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.deviceId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "task1145IntZeroBDeviceId": "$.deviceId"
+          },
+          "requiresContext": [
+            "task1145IntZeroBFulfillmentId"
+          ]
+        },
+        {
+          "id": "pidlitacka-1145-int-zero-b-activate",
+          "title": "Aktivovat výběr 0, B, 1, 2",
+          "requiresContext": [
+            "task1145IntZeroBDeviceId",
+            "task1145IntZeroBFulfillmentId"
+          ],
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1145IntZeroBFulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "zones": [
+                "0",
+                "B",
+                "1",
+                "2"
+              ],
+              "validSince": null,
+              "deviceId": "{{context.task1145IntZeroBDeviceId}}"
+            }
+          },
+          "extract": {
+            "task1145IntZeroBEtd": "$.etd"
+          },
+          "remember": {
+            "task1145IntZeroBActivationKey": "{{form.idempotencyKey}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1145IntZeroBFulfillmentId}}"
+              },
+              {
+                "path": "$.zoneCount",
+                "equals": 4
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:0,B,1,2\\*",
+                "message": "ETD musí obsahovat přesně skutečně zvolená pásma."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-zero-b-retry",
+          "title": "Zopakovat stejnou aktivaci se stejným klíčem",
+          "requiresContext": [
+            "task1145IntZeroBFulfillmentId",
+            "task1145IntZeroBDeviceId",
+            "task1145IntZeroBActivationKey",
+            "task1145IntZeroBEtd"
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1145IntZeroBFulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{context.task1145IntZeroBActivationKey}}"
+            },
+            "body": {
+              "zones": [
+                "0",
+                "B",
+                "1",
+                "2"
+              ],
+              "validSince": null,
+              "deviceId": "{{context.task1145IntZeroBDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1145IntZeroBFulfillmentId}}"
+              },
+              {
+                "path": "$.zoneCount",
+                "equals": 4
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:0,B,1,2\\*",
+                "message": "ETD musí obsahovat přesně skutečně zvolená pásma."
+              },
+              {
+                "path": "$.etd",
+                "equals": "{{context.task1145IntZeroBEtd}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-zero-b-readback",
+          "title": "Znovu načíst stejný kus a porovnat celé ETD",
+          "requiresContext": [
+            "task1145IntZeroBFulfillmentId",
+            "task1145IntZeroBDeviceId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1145IntZeroBFulfillmentId}}",
+            "headers": {
+              "X-Device-Id": "{{context.task1145IntZeroBDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1145IntZeroBFulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1004
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "sourcePath": "$.fulfillment.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.fulfillment.etd",
+                "equals": "{{context.task1145IntZeroBEtd}}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-1145-int-outer",
+      "title": "INT: vnější pásma 9–12",
+      "description": "INT #1145 — reálné produkty, veřejné PID BE API.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "requiredEnvironment": {
+        "projectId": "pidlitacka",
+        "environmentId": "pidlitacka-integration",
+        "targetBaseUrl": "https://pidl2-backend.int.pidlitacka.cz/"
+      },
+      "tags": [
+        "Jízdenky",
+        "Pásma",
+        "task-1145",
+        "int-only",
+        "Aktivace"
+      ],
+      "app": {
+        "section": "tickets",
+        "title": "Pásma na INT",
+        "subtitle": "INT: vnější pásma 9–12"
+      },
+      "instructions": [
+        "Pouze INTEGRAČNÍ prostředí. Použijte vyhrazený testovací účet; před spuštěním ověřte přihlášenou identitu. Postup: docs/task-1145-int.md.",
+        "Spouštějte scénář od začátku se zapnutým zastavením na chybě. Neupravujte requesty ani aserce; změněný průchod není důkazem regrese.",
+        "Žádné lokální fixture ani databázové seedy. Připravený test není dokladem úspěšného INT běhu.",
+        "Spotřebuje jednu dříve zakoupenou jízdenku: jednotlivé plnocenné – 60 min, 4 pásem (produkt 1004). Pro frontendový test použijte jiný kus.",
+        "Vyberte kus ze seznamu. U flexibilní jízdenky musí být validZones prázdné nebo chybět; předvolená pásma obcházejí testovanou validaci.",
+        "Seznam vrací prvních 100 AVAILABLE jízdenek. Pokud vhodný kus chybí, jde o nesplněnou vstupní podmínku; použijte připravený účet se správnými kusy, test neoznačujte jako úspěšný.",
+        "Po aktivaci lze bezpečně opakovat jen krok opakování se stejným klíčem. Celý další běh potřebuje nový AVAILABLE kus."
+      ],
+      "steps": [
+        {
+          "id": "pidlitacka-1145-int-outer-catalog",
+          "title": "Ověřit skutečné produkty v katalogu INT",
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/products?limit=100&offset=0"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "productId": 1004,
+                  "productType": "ADMISSION_SINGLE",
+                  "state": "PUBLISHED",
+                  "zones": [
+                    "P",
+                    "0",
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                    "6",
+                    "7",
+                    "8",
+                    "9",
+                    "10",
+                    "11",
+                    "12",
+                    "13",
+                    "B"
+                  ],
+                  "excludedZoneDetails": [],
+                  "zoneCount": 4
+                },
+                "message": "Katalog produktu 1004 neodpovídá ověřenému INT kontraktu. Zastavte test a posuďte změnu dat."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-outer-select",
+          "title": "Vybrat neaktivovanou testovací jízdenku",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=AVAILABLE"
+          },
+          "selection": {
+            "sourcePath": "$.items",
+            "filter": {
+              "productId": 1004,
+              "status": "AVAILABLE",
+              "zoneCount": 4
+            },
+            "buttonLabel": "Použít tento kus pro test",
+            "selectedButtonLabel": "Testovací kus vybrán",
+            "store": {
+              "task1145IntOuterFulfillmentId": "$.fulfillmentId"
+            },
+            "emptyTitle": "Chybí testovací jízdenka",
+            "emptyText": "Potřebujete AVAILABLE produkt 1004. Test zatím není proveden."
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-outer-precondition",
+          "title": "Ověřit vybraný kus a chybějící předvolbu pásem",
+          "requiresContext": [
+            "task1145IntOuterFulfillmentId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1145IntOuterFulfillmentId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1145IntOuterFulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1004
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "path": "$.fulfillment.status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "sourcePath": "$.fulfillment.validZones",
+                "regex": "^(?:\\[\\]|null|\"\")$",
+                "message": "Vyberte flexibilní jízdenku bez předvolených pásem; tato jízdenka není vhodná pro #1145."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-outer-device",
+          "title": "Zaregistrovat testovací zařízení",
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "deviceIdentifier": "{{auth.deviceId}}",
+              "deviceModel": "{{auth.model}}",
+              "platform": "{{auth.platform}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.deviceId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "task1145IntOuterDeviceId": "$.deviceId"
+          },
+          "requiresContext": [
+            "task1145IntOuterFulfillmentId"
+          ]
+        },
+        {
+          "id": "pidlitacka-1145-int-outer-activate",
+          "title": "Aktivovat výběr 9, 10, 11, 12",
+          "requiresContext": [
+            "task1145IntOuterDeviceId",
+            "task1145IntOuterFulfillmentId"
+          ],
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1145IntOuterFulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "zones": [
+                "9",
+                "10",
+                "11",
+                "12"
+              ],
+              "validSince": null,
+              "deviceId": "{{context.task1145IntOuterDeviceId}}"
+            }
+          },
+          "extract": {
+            "task1145IntOuterEtd": "$.etd"
+          },
+          "remember": {
+            "task1145IntOuterActivationKey": "{{form.idempotencyKey}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1145IntOuterFulfillmentId}}"
+              },
+              {
+                "path": "$.zoneCount",
+                "equals": 4
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:9,10,11,12\\*",
+                "message": "ETD musí obsahovat přesně skutečně zvolená pásma."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-outer-retry",
+          "title": "Zopakovat stejnou aktivaci se stejným klíčem",
+          "requiresContext": [
+            "task1145IntOuterFulfillmentId",
+            "task1145IntOuterDeviceId",
+            "task1145IntOuterActivationKey",
+            "task1145IntOuterEtd"
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1145IntOuterFulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{context.task1145IntOuterActivationKey}}"
+            },
+            "body": {
+              "zones": [
+                "9",
+                "10",
+                "11",
+                "12"
+              ],
+              "validSince": null,
+              "deviceId": "{{context.task1145IntOuterDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1145IntOuterFulfillmentId}}"
+              },
+              {
+                "path": "$.zoneCount",
+                "equals": 4
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:9,10,11,12\\*",
+                "message": "ETD musí obsahovat přesně skutečně zvolená pásma."
+              },
+              {
+                "path": "$.etd",
+                "equals": "{{context.task1145IntOuterEtd}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-outer-readback",
+          "title": "Znovu načíst stejný kus a porovnat celé ETD",
+          "requiresContext": [
+            "task1145IntOuterFulfillmentId",
+            "task1145IntOuterDeviceId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1145IntOuterFulfillmentId}}",
+            "headers": {
+              "X-Device-Id": "{{context.task1145IntOuterDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1145IntOuterFulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1004
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "sourcePath": "$.fulfillment.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.fulfillment.etd",
+                "equals": "{{context.task1145IntOuterEtd}}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-1145-int-prague-seven",
+      "title": "INT: Praha + pásma 1–4: sedm pásem",
+      "description": "INT #1145 — reálné produkty, veřejné PID BE API.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "requiredEnvironment": {
+        "projectId": "pidlitacka",
+        "environmentId": "pidlitacka-integration",
+        "targetBaseUrl": "https://pidl2-backend.int.pidlitacka.cz/"
+      },
+      "tags": [
+        "Jízdenky",
+        "Pásma",
+        "task-1145",
+        "int-only",
+        "Aktivace"
+      ],
+      "app": {
+        "section": "tickets",
+        "title": "Pásma na INT",
+        "subtitle": "INT: Praha + pásma 1–4: sedm pásem"
+      },
+      "instructions": [
+        "Pouze INTEGRAČNÍ prostředí. Použijte vyhrazený testovací účet; před spuštěním ověřte přihlášenou identitu. Postup: docs/task-1145-int.md.",
+        "Spouštějte scénář od začátku se zapnutým zastavením na chybě. Neupravujte requesty ani aserce; změněný průchod není důkazem regrese.",
+        "Žádné lokální fixture ani databázové seedy. Připravený test není dokladem úspěšného INT běhu.",
+        "Spotřebuje jednu dříve zakoupenou jízdenku: jednotlivé plnocenné – 150 min, 7 pásem (produkt 1007). Pro frontendový test použijte jiný kus.",
+        "Vyberte kus ze seznamu. U flexibilní jízdenky musí být validZones prázdné nebo chybět; předvolená pásma obcházejí testovanou validaci.",
+        "Seznam vrací prvních 100 AVAILABLE jízdenek. Pokud vhodný kus chybí, jde o nesplněnou vstupní podmínku; použijte připravený účet se správnými kusy, test neoznačujte jako úspěšný.",
+        "Po aktivaci lze bezpečně opakovat jen krok opakování se stejným klíčem. Celý další běh potřebuje nový AVAILABLE kus."
+      ],
+      "steps": [
+        {
+          "id": "pidlitacka-1145-int-prague-seven-catalog",
+          "title": "Ověřit skutečné produkty v katalogu INT",
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/products?limit=100&offset=0"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "productId": 1007,
+                  "productType": "ADMISSION_SINGLE",
+                  "state": "PUBLISHED",
+                  "zones": [
+                    "P",
+                    "0",
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                    "6",
+                    "7",
+                    "8",
+                    "9",
+                    "10",
+                    "11",
+                    "12",
+                    "13",
+                    "B"
+                  ],
+                  "excludedZoneDetails": [],
+                  "zoneCount": 7
+                },
+                "message": "Katalog produktu 1007 neodpovídá ověřenému INT kontraktu. Zastavte test a posuďte změnu dat."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-seven-select",
+          "title": "Vybrat neaktivovanou testovací jízdenku",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=AVAILABLE"
+          },
+          "selection": {
+            "sourcePath": "$.items",
+            "filter": {
+              "productId": 1007,
+              "status": "AVAILABLE",
+              "zoneCount": 7
+            },
+            "buttonLabel": "Použít tento kus pro test",
+            "selectedButtonLabel": "Testovací kus vybrán",
+            "store": {
+              "task1145IntPragueSevenFulfillmentId": "$.fulfillmentId"
+            },
+            "emptyTitle": "Chybí testovací jízdenka",
+            "emptyText": "Potřebujete AVAILABLE produkt 1007. Test zatím není proveden."
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-seven-precondition",
+          "title": "Ověřit vybraný kus a chybějící předvolbu pásem",
+          "requiresContext": [
+            "task1145IntPragueSevenFulfillmentId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueSevenFulfillmentId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1145IntPragueSevenFulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1007
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 7
+              },
+              {
+                "path": "$.fulfillment.status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "sourcePath": "$.fulfillment.validZones",
+                "regex": "^(?:\\[\\]|null|\"\")$",
+                "message": "Vyberte flexibilní jízdenku bez předvolených pásem; tato jízdenka není vhodná pro #1145."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-seven-device",
+          "title": "Zaregistrovat testovací zařízení",
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "deviceIdentifier": "{{auth.deviceId}}",
+              "deviceModel": "{{auth.model}}",
+              "platform": "{{auth.platform}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.deviceId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "task1145IntPragueSevenDeviceId": "$.deviceId"
+          },
+          "requiresContext": [
+            "task1145IntPragueSevenFulfillmentId"
+          ]
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-seven-activate",
+          "title": "Aktivovat výběr P, 0, B, 1, 2, 3, 4",
+          "requiresContext": [
+            "task1145IntPragueSevenDeviceId",
+            "task1145IntPragueSevenFulfillmentId"
+          ],
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueSevenFulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "zones": [
+                "P",
+                "0",
+                "B",
+                "1",
+                "2",
+                "3",
+                "4"
+              ],
+              "validSince": null,
+              "deviceId": "{{context.task1145IntPragueSevenDeviceId}}"
+            }
+          },
+          "extract": {
+            "task1145IntPragueSevenEtd": "$.etd"
+          },
+          "remember": {
+            "task1145IntPragueSevenActivationKey": "{{form.idempotencyKey}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1145IntPragueSevenFulfillmentId}}"
+              },
+              {
+                "path": "$.zoneCount",
+                "equals": 7
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:P,0,B,1,2,3,4\\*",
+                "message": "ETD musí obsahovat přesně skutečně zvolená pásma."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-seven-retry",
+          "title": "Zopakovat stejnou aktivaci se stejným klíčem",
+          "requiresContext": [
+            "task1145IntPragueSevenFulfillmentId",
+            "task1145IntPragueSevenDeviceId",
+            "task1145IntPragueSevenActivationKey",
+            "task1145IntPragueSevenEtd"
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueSevenFulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{context.task1145IntPragueSevenActivationKey}}"
+            },
+            "body": {
+              "zones": [
+                "P",
+                "0",
+                "B",
+                "1",
+                "2",
+                "3",
+                "4"
+              ],
+              "validSince": null,
+              "deviceId": "{{context.task1145IntPragueSevenDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1145IntPragueSevenFulfillmentId}}"
+              },
+              {
+                "path": "$.zoneCount",
+                "equals": 7
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:P,0,B,1,2,3,4\\*",
+                "message": "ETD musí obsahovat přesně skutečně zvolená pásma."
+              },
+              {
+                "path": "$.etd",
+                "equals": "{{context.task1145IntPragueSevenEtd}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-seven-readback",
+          "title": "Znovu načíst stejný kus a porovnat celé ETD",
+          "requiresContext": [
+            "task1145IntPragueSevenFulfillmentId",
+            "task1145IntPragueSevenDeviceId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueSevenFulfillmentId}}",
+            "headers": {
+              "X-Device-Id": "{{context.task1145IntPragueSevenDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1145IntPragueSevenFulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1007
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 7
+              },
+              {
+                "sourcePath": "$.fulfillment.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.fulfillment.etd",
+                "equals": "{{context.task1145IntPragueSevenEtd}}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-1145-int-prague-sixteen",
+      "title": "INT: Plný rozsah: šestnáct pásem",
+      "description": "INT #1145 — reálné produkty, veřejné PID BE API.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "requiredEnvironment": {
+        "projectId": "pidlitacka",
+        "environmentId": "pidlitacka-integration",
+        "targetBaseUrl": "https://pidl2-backend.int.pidlitacka.cz/"
+      },
+      "tags": [
+        "Jízdenky",
+        "Pásma",
+        "task-1145",
+        "int-only",
+        "Aktivace"
+      ],
+      "app": {
+        "section": "tickets",
+        "title": "Pásma na INT",
+        "subtitle": "INT: Plný rozsah: šestnáct pásem"
+      },
+      "instructions": [
+        "Pouze INTEGRAČNÍ prostředí. Použijte vyhrazený testovací účet; před spuštěním ověřte přihlášenou identitu. Postup: docs/task-1145-int.md.",
+        "Spouštějte scénář od začátku se zapnutým zastavením na chybě. Neupravujte requesty ani aserce; změněný průchod není důkazem regrese.",
+        "Žádné lokální fixture ani databázové seedy. Připravený test není dokladem úspěšného INT běhu.",
+        "Spotřebuje jednu dříve zakoupenou jízdenku: jednotlivé plnocenné – 180 min, 16 pásem (produkt 1016). Pro frontendový test použijte jiný kus.",
+        "Vyberte kus ze seznamu. U flexibilní jízdenky musí být validZones prázdné nebo chybět; předvolená pásma obcházejí testovanou validaci.",
+        "Seznam vrací prvních 100 AVAILABLE jízdenek. Pokud vhodný kus chybí, jde o nesplněnou vstupní podmínku; použijte připravený účet se správnými kusy, test neoznačujte jako úspěšný.",
+        "Po aktivaci lze bezpečně opakovat jen krok opakování se stejným klíčem. Celý další běh potřebuje nový AVAILABLE kus."
+      ],
+      "steps": [
+        {
+          "id": "pidlitacka-1145-int-prague-sixteen-catalog",
+          "title": "Ověřit skutečné produkty v katalogu INT",
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/products?limit=100&offset=0"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "productId": 1016,
+                  "productType": "ADMISSION_SINGLE",
+                  "state": "PUBLISHED",
+                  "zones": [
+                    "P",
+                    "0",
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                    "6",
+                    "7",
+                    "8",
+                    "9",
+                    "10",
+                    "11",
+                    "12",
+                    "13",
+                    "B"
+                  ],
+                  "excludedZoneDetails": [],
+                  "zoneCount": 16
+                },
+                "message": "Katalog produktu 1016 neodpovídá ověřenému INT kontraktu. Zastavte test a posuďte změnu dat."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-sixteen-select",
+          "title": "Vybrat neaktivovanou testovací jízdenku",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=AVAILABLE"
+          },
+          "selection": {
+            "sourcePath": "$.items",
+            "filter": {
+              "productId": 1016,
+              "status": "AVAILABLE",
+              "zoneCount": 16
+            },
+            "buttonLabel": "Použít tento kus pro test",
+            "selectedButtonLabel": "Testovací kus vybrán",
+            "store": {
+              "task1145IntPragueSixteenFulfillmentId": "$.fulfillmentId"
+            },
+            "emptyTitle": "Chybí testovací jízdenka",
+            "emptyText": "Potřebujete AVAILABLE produkt 1016. Test zatím není proveden."
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-sixteen-precondition",
+          "title": "Ověřit vybraný kus a chybějící předvolbu pásem",
+          "requiresContext": [
+            "task1145IntPragueSixteenFulfillmentId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueSixteenFulfillmentId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1145IntPragueSixteenFulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1016
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 16
+              },
+              {
+                "path": "$.fulfillment.status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "sourcePath": "$.fulfillment.validZones",
+                "regex": "^(?:\\[\\]|null|\"\")$",
+                "message": "Vyberte flexibilní jízdenku bez předvolených pásem; tato jízdenka není vhodná pro #1145."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-sixteen-device",
+          "title": "Zaregistrovat testovací zařízení",
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "deviceIdentifier": "{{auth.deviceId}}",
+              "deviceModel": "{{auth.model}}",
+              "platform": "{{auth.platform}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.deviceId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "task1145IntPragueSixteenDeviceId": "$.deviceId"
+          },
+          "requiresContext": [
+            "task1145IntPragueSixteenFulfillmentId"
+          ]
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-sixteen-activate",
+          "title": "Aktivovat výběr P, 0, B, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13",
+          "requiresContext": [
+            "task1145IntPragueSixteenDeviceId",
+            "task1145IntPragueSixteenFulfillmentId"
+          ],
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueSixteenFulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "zones": [
+                "P",
+                "0",
+                "B",
+                "1",
+                "2",
+                "3",
+                "4",
+                "5",
+                "6",
+                "7",
+                "8",
+                "9",
+                "10",
+                "11",
+                "12",
+                "13"
+              ],
+              "validSince": null,
+              "deviceId": "{{context.task1145IntPragueSixteenDeviceId}}"
+            }
+          },
+          "extract": {
+            "task1145IntPragueSixteenEtd": "$.etd"
+          },
+          "remember": {
+            "task1145IntPragueSixteenActivationKey": "{{form.idempotencyKey}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1145IntPragueSixteenFulfillmentId}}"
+              },
+              {
+                "path": "$.zoneCount",
+                "equals": 16
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:P,0,B,1,2,3,4,5,6,7,8,9,10,11,12,13\\*",
+                "message": "ETD musí obsahovat přesně skutečně zvolená pásma."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-sixteen-retry",
+          "title": "Zopakovat stejnou aktivaci se stejným klíčem",
+          "requiresContext": [
+            "task1145IntPragueSixteenFulfillmentId",
+            "task1145IntPragueSixteenDeviceId",
+            "task1145IntPragueSixteenActivationKey",
+            "task1145IntPragueSixteenEtd"
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueSixteenFulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{context.task1145IntPragueSixteenActivationKey}}"
+            },
+            "body": {
+              "zones": [
+                "P",
+                "0",
+                "B",
+                "1",
+                "2",
+                "3",
+                "4",
+                "5",
+                "6",
+                "7",
+                "8",
+                "9",
+                "10",
+                "11",
+                "12",
+                "13"
+              ],
+              "validSince": null,
+              "deviceId": "{{context.task1145IntPragueSixteenDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1145IntPragueSixteenFulfillmentId}}"
+              },
+              {
+                "path": "$.zoneCount",
+                "equals": 16
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:P,0,B,1,2,3,4,5,6,7,8,9,10,11,12,13\\*",
+                "message": "ETD musí obsahovat přesně skutečně zvolená pásma."
+              },
+              {
+                "path": "$.etd",
+                "equals": "{{context.task1145IntPragueSixteenEtd}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-prague-sixteen-readback",
+          "title": "Znovu načíst stejný kus a porovnat celé ETD",
+          "requiresContext": [
+            "task1145IntPragueSixteenFulfillmentId",
+            "task1145IntPragueSixteenDeviceId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1145IntPragueSixteenFulfillmentId}}",
+            "headers": {
+              "X-Device-Id": "{{context.task1145IntPragueSixteenDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1145IntPragueSixteenFulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1016
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 16
+              },
+              {
+                "sourcePath": "$.fulfillment.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.fulfillment.etd",
+                "equals": "{{context.task1145IntPragueSixteenEtd}}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-1145-int-fixed",
+      "title": "INT: Pevná Praha: zachovat stávající aktivaci",
+      "description": "INT #1145 — reálné produkty, veřejné PID BE API.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "requiredEnvironment": {
+        "projectId": "pidlitacka",
+        "environmentId": "pidlitacka-integration",
+        "targetBaseUrl": "https://pidl2-backend.int.pidlitacka.cz/"
+      },
+      "tags": [
+        "Jízdenky",
+        "Pásma",
+        "task-1145",
+        "int-only",
+        "Aktivace"
+      ],
+      "app": {
+        "section": "tickets",
+        "title": "Pásma na INT",
+        "subtitle": "INT: Pevná Praha: zachovat stávající aktivaci"
+      },
+      "instructions": [
+        "Pouze INTEGRAČNÍ prostředí. Použijte vyhrazený testovací účet; před spuštěním ověřte přihlášenou identitu. Postup: docs/task-1145-int.md.",
+        "Spouštějte scénář od začátku se zapnutým zastavením na chybě. Neupravujte requesty ani aserce; změněný průchod není důkazem regrese.",
+        "Žádné lokální fixture ani databázové seedy. Připravený test není dokladem úspěšného INT běhu.",
+        "Spotřebuje jednu dříve zakoupenou jízdenku: jednotlivé plnocenné – 30 min, Praha P,0,B resp. 3 (produkt 1002). Pro frontendový test použijte jiný kus.",
+        "Vyberte kus ze seznamu. U flexibilní jízdenky musí být validZones prázdné nebo chybět; předvolená pásma obcházejí testovanou validaci.",
+        "Seznam vrací prvních 100 AVAILABLE jízdenek. Pokud vhodný kus chybí, jde o nesplněnou vstupní podmínku; použijte připravený účet se správnými kusy, test neoznačujte jako úspěšný.",
+        "Po aktivaci lze bezpečně opakovat jen krok opakování se stejným klíčem. Celý další běh potřebuje nový AVAILABLE kus."
+      ],
+      "steps": [
+        {
+          "id": "pidlitacka-1145-int-fixed-catalog",
+          "title": "Ověřit skutečné produkty v katalogu INT",
+          "request": {
+            "method": "GET",
+            "path": "/v1/tickets/products?limit=100&offset=0"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "productId": 1002,
+                  "productType": "ADMISSION_SINGLE",
+                  "state": "PUBLISHED",
+                  "zones": [
+                    "P",
+                    "0",
+                    "B"
+                  ],
+                  "excludedZoneDetails": []
+                },
+                "message": "Katalog produktu 1002 neodpovídá ověřenému INT kontraktu. Zastavte test a posuďte změnu dat."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-fixed-select",
+          "title": "Vybrat neaktivovanou testovací jízdenku",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=AVAILABLE"
+          },
+          "selection": {
+            "sourcePath": "$.items",
+            "filter": {
+              "productId": 1002,
+              "status": "AVAILABLE"
+            },
+            "buttonLabel": "Použít tento kus pro test",
+            "selectedButtonLabel": "Testovací kus vybrán",
+            "store": {
+              "task1145IntFixedFulfillmentId": "$.fulfillmentId"
+            },
+            "emptyTitle": "Chybí testovací jízdenka",
+            "emptyText": "Potřebujete AVAILABLE produkt 1002. Test zatím není proveden."
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-fixed-precondition",
+          "title": "Ověřit vybraný kus a chybějící předvolbu pásem",
+          "requiresContext": [
+            "task1145IntFixedFulfillmentId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1145IntFixedFulfillmentId}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1145IntFixedFulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1002
+              },
+              {
+                "path": "$.fulfillment.status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "path": "$.fulfillment.validZones",
+                "equals": [
+                  "P",
+                  "0",
+                  "B"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-fixed-device",
+          "title": "Zaregistrovat testovací zařízení",
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "deviceIdentifier": "{{auth.deviceId}}",
+              "deviceModel": "{{auth.model}}",
+              "platform": "{{auth.platform}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.deviceId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "task1145IntFixedDeviceId": "$.deviceId"
+          },
+          "requiresContext": [
+            "task1145IntFixedFulfillmentId"
+          ]
+        },
+        {
+          "id": "pidlitacka-1145-int-fixed-activate",
+          "title": "Aktivovat pevnou pražskou jízdenku",
+          "requiresContext": [
+            "task1145IntFixedDeviceId",
+            "task1145IntFixedFulfillmentId"
+          ],
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1145IntFixedFulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "zones": null,
+              "validSince": null,
+              "deviceId": "{{context.task1145IntFixedDeviceId}}"
+            }
+          },
+          "extract": {
+            "task1145IntFixedEtd": "$.etd"
+          },
+          "remember": {
+            "task1145IntFixedActivationKey": "{{form.idempotencyKey}}"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1145IntFixedFulfillmentId}}"
+              },
+              {
+                "path": "$.validZones",
+                "equals": [
+                  "P",
+                  "0",
+                  "B"
+                ]
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:P,0,B\\*",
+                "message": "ETD musí obsahovat přesně skutečně zvolená pásma."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-fixed-retry",
+          "title": "Zopakovat stejnou aktivaci se stejným klíčem",
+          "requiresContext": [
+            "task1145IntFixedFulfillmentId",
+            "task1145IntFixedDeviceId",
+            "task1145IntFixedActivationKey",
+            "task1145IntFixedEtd"
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1145IntFixedFulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{context.task1145IntFixedActivationKey}}"
+            },
+            "body": {
+              "zones": null,
+              "validSince": null,
+              "deviceId": "{{context.task1145IntFixedDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1145IntFixedFulfillmentId}}"
+              },
+              {
+                "path": "$.validZones",
+                "equals": [
+                  "P",
+                  "0",
+                  "B"
+                ]
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:P,0,B\\*",
+                "message": "ETD musí obsahovat přesně skutečně zvolená pásma."
+              },
+              {
+                "path": "$.etd",
+                "equals": "{{context.task1145IntFixedEtd}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1145-int-fixed-readback",
+          "title": "Znovu načíst stejný kus a porovnat celé ETD",
+          "requiresContext": [
+            "task1145IntFixedFulfillmentId",
+            "task1145IntFixedDeviceId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1145IntFixedFulfillmentId}}",
+            "headers": {
+              "X-Device-Id": "{{context.task1145IntFixedDeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1145IntFixedFulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1002
+              },
+              {
+                "sourcePath": "$.fulfillment.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.fulfillment.etd",
+                "equals": "{{context.task1145IntFixedEtd}}"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

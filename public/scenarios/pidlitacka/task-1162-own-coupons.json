@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "projectId": "pidlitacka",
+  "name": "PidLitacka – #1162: vlastní kupóny a propojené účty",
+  "description": "Read-only ověření filtru GET /v1/client/coupons nad skutečnými MOS vztahy. Přesný seznam očekávaných ID musí být předem ověřený v Core MOS.",
+  "scenarios": [
+    {
+      "id": "pidlitacka-1162-mixed-owner-list",
+      "title": "#1162: smíšený účet – jen vlastní kupón a nosiče",
+      "description": "Nejprve ověří čtyři nosiče dostupné pod loginem, pak v přehledu přesně dva vlastní nosiče a jeden vlastní platný kupón.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["Kupóny", "Propojené účty", "task-1162", "Regrese"],
+      "app": {
+        "section": "profile",
+        "title": "Vlastní kupóny",
+        "subtitle": "Smíšený účet"
+      },
+      "instructions": [
+        "Použijte jen vyhrazený testovací login s ověřenou datovou sadou podle docs/task-1162-coupon-ownership.md. Spusťte proti lokálnímu opravenému BE napojenému na MOS PRE nebo po nasazení proti INT.",
+        "Před spuštěním zapište čtyři skutečná ID nosičů a jedno ID vlastního platného kupónu. Ověřte v Core MOS, že Child i Shared mají každý vlastní platný kupón; veřejná response jejich CustomerId neobsahuje.",
+        "Nosič Self anon je vlastní anonymní nosič bez kupónu. Žádná uvedená ID nejsou syntetické příklady; formulář záměrně nemá předvyplněné hodnoty.",
+        "Spusťte od začátku se zastavením na chybě. Bez znalosti MOS dat nelze úspěch interpretovat jako důkaz správného vlastnictví."
+      ],
+      "steps": [
+        {
+          "id": "pidlitacka-1162-mixed-raw-identifiers",
+          "title": "Ověřit nosiče celého loginu",
+          "description": "Samostatný seznam identifikátorů má obsahovat přesně Self, Self anon, Child a Shared. Je to předpoklad testu filtru přehledu.",
+          "fields": [
+            { "name": "selfIdentifierId", "label": "Vlastní personalizovaný nosič ID", "type": "number", "value": "", "placeholder": "ID z Core MOS" },
+            { "name": "selfAnonymousIdentifierId", "label": "Vlastní anonymní nosič ID", "type": "number", "value": "", "placeholder": "ID z Core MOS" },
+            { "name": "childIdentifierId", "label": "Nosič Child ID", "type": "number", "value": "", "placeholder": "ID z Core MOS" },
+            { "name": "sharedIdentifierId", "label": "Nosič Shared ID", "type": "number", "value": "", "placeholder": "ID z Core MOS" }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers",
+            "headers": { "X-Device-Id": "{{context.pidCurrentDeviceId}}" }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.identifiers", "lengthEquals": 4 },
+              { "path": "$.identifiers", "containsItem": { "identifierId": "{{form.selfIdentifierId}}" } },
+              { "path": "$.identifiers", "containsItem": { "identifierId": "{{form.selfAnonymousIdentifierId}}", "isPersonalized": false } },
+              { "path": "$.identifiers", "containsItem": { "identifierId": "{{form.childIdentifierId}}" } },
+              { "path": "$.identifiers", "containsItem": { "identifierId": "{{form.sharedIdentifierId}}" } }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1162-mixed-own-coupons",
+          "title": "Ověřit vlastní přehled",
+          "description": "Délky a očekávaná ID dohromady vylučují cizí nosiče a kupóny z veřejné odpovědi.",
+          "fields": [
+            { "name": "selfIdentifierId", "label": "Vlastní personalizovaný nosič ID", "type": "number", "value": "", "placeholder": "Stejné ID jako v předchozím kroku" },
+            { "name": "selfAnonymousIdentifierId", "label": "Vlastní anonymní nosič ID", "type": "number", "value": "", "placeholder": "Stejné ID jako v předchozím kroku" },
+            { "name": "selfCouponId", "label": "Vlastní platný kupón ID", "type": "number", "value": "", "placeholder": "ID z Core MOS" }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons",
+            "headers": { "X-Device-Id": "{{context.pidCurrentDeviceId}}" }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "Completed" },
+              { "path": "$.identifiers", "lengthEquals": 2 },
+              { "path": "$.identifiers", "containsItem": { "identifierId": "{{form.selfIdentifierId}}" } },
+              { "path": "$.identifiers", "containsItem": { "identifierId": "{{form.selfAnonymousIdentifierId}}", "isPersonalized": false } },
+              { "path": "$.coupons", "lengthEquals": 1 },
+              { "path": "$.coupons", "containsItem": { "couponId": "{{form.selfCouponId}}", "status": "Valid", "identifier.identifierId": "{{form.selfIdentifierId}}" } }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-1162-empty-self-list",
+      "title": "#1162: vlastní účet bez položek",
+      "description": "Login má propojený Child nosič s platným kupónem, ale Self nemá žádný nosič ani kupón. Přehled musí vrátit dvě prázdná pole.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": ["Kupóny", "Propojené účty", "task-1162", "Regrese"],
+      "app": {
+        "section": "profile",
+        "title": "Vlastní kupóny",
+        "subtitle": "Prázdný Self"
+      },
+      "instructions": [
+        "Přihlaste vyhrazený druhý testovací login. V Core MOS předem ověřte, že Self nemá nosič ani kupón a Child má jeden nosič s platným kupónem.",
+        "Scénář volá pouze čtecí endpointy. Prázdná response bez potvrzeného Child kupónu by byla falešně pozitivní; viz docs/task-1162-coupon-ownership.md."
+      ],
+      "steps": [
+        {
+          "id": "pidlitacka-1162-empty-linked-identifier",
+          "title": "Ověřit existenci propojeného nosiče",
+          "fields": [
+            { "name": "childIdentifierId", "label": "Nosič Child ID", "type": "number", "value": "", "placeholder": "ID z Core MOS" }
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/identifiers",
+            "headers": { "X-Device-Id": "{{context.pidCurrentDeviceId}}" }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.identifiers", "lengthEquals": 1 },
+              { "path": "$.identifiers", "containsItem": { "identifierId": "{{form.childIdentifierId}}" } }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1162-empty-own-coupons",
+          "title": "Ověřit prázdný vlastní přehled",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/coupons",
+            "headers": { "X-Device-Id": "{{context.pidCurrentDeviceId}}" }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.status", "equals": "Completed" },
+              { "path": "$.identifiers", "lengthEquals": 0 },
+              { "path": "$.coupons", "lengthEquals": 0 }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

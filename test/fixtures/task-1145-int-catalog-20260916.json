@@ -1,0 +1,135 @@
+{
+  "items": [
+    {
+      "productId": 1002,
+      "productType": "ADMISSION_SINGLE",
+      "title": {
+        "cs": "jednotlivé plnocenné – 30 min, Praha P,0,B resp. 3"
+      },
+      "state": "PUBLISHED",
+      "zones": [
+        "P",
+        "0",
+        "B"
+      ],
+      "zoneCount": null,
+      "excludedZoneDetails": [],
+      "price": {
+        "amount": 36.0,
+        "currency": "CZK",
+        "vat": {
+          "amount": 3.6,
+          "percentage": 10
+        }
+      }
+    },
+    {
+      "productId": 1004,
+      "productType": "ADMISSION_SINGLE",
+      "title": {
+        "cs": "jednotlivé plnocenné – 60 min, 4 pásem"
+      },
+      "state": "PUBLISHED",
+      "zones": [
+        "P",
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "B"
+      ],
+      "zoneCount": 4,
+      "excludedZoneDetails": [],
+      "price": {
+        "amount": 48.0,
+        "currency": "CZK",
+        "vat": {
+          "amount": 4.8,
+          "percentage": 10
+        }
+      }
+    },
+    {
+      "productId": 1007,
+      "productType": "ADMISSION_SINGLE",
+      "title": {
+        "cs": "jednotlivé plnocenné – 150 min, 7 pásem"
+      },
+      "state": "PUBLISHED",
+      "zones": [
+        "P",
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "B"
+      ],
+      "zoneCount": 7,
+      "excludedZoneDetails": [],
+      "price": {
+        "amount": 84.0,
+        "currency": "CZK",
+        "vat": {
+          "amount": 8.4,
+          "percentage": 10
+        }
+      }
+    },
+    {
+      "productId": 1016,
+      "productType": "ADMISSION_SINGLE",
+      "title": {
+        "cs": "jednotlivé plnocenné – 180 min, 16 pásem"
+      },
+      "state": "PUBLISHED",
+      "zones": [
+        "P",
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "B"
+      ],
+      "zoneCount": 16,
+      "excludedZoneDetails": [],
+      "price": {
+        "amount": 192.0,
+        "currency": "CZK",
+        "vat": {
+          "amount": 19.2,
+          "percentage": 10
+        }
+      }
+    }
+  ]
+}

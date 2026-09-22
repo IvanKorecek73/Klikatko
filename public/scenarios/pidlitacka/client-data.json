@@ -285,6 +285,59 @@
       ]
     },
     {
+      "id": "task-1198-date-of-birth-verified",
+      "title": "#1198 – ověřené datum narození",
+      "description": "Regresní kontrola, že detail klientských dat vrací příznak ověření data narození z Core MOSu.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "profile",
+        "client-data",
+        "personal-data",
+        "task-1198"
+      ],
+      "app": {
+        "section": "profile",
+        "title": "Profil",
+        "subtitle": "Ověření data narození"
+      },
+      "instructions": [
+        "V panelu Přístup zvolte testovací účet s osobními údaji a v Core MOSu ověřeným datem narození.",
+        "Scénář je read-only: načte GET /v1/client/data a očekává personalData.dateOfBirthVerified = true.",
+        "Pro účet bez ověřeného data narození použijte stejný endpoint a ověřte false v technické response."
+      ],
+      "steps": [
+        {
+          "id": "task-1198-date-of-birth-verified-step",
+          "title": "Načíst ověřené datum narození",
+          "description": "Ověřuje, že backend propisuje příznak DateOfBirthVerified jako dateOfBirthVerified do osobních údajů klienta.",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/data"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "Completed"
+              },
+              {
+                "path": "$.personalData",
+                "notEmpty": true
+              },
+              {
+                "path": "$.personalData.dateOfBirthVerified",
+                "equals": true,
+                "message": "Chybí nebo neodpovídá příznak dateOfBirthVerified; endpoint musí vracet boolean true pro tento ověřený testovací účet."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "client-data-detail",
       "title": "Klientská data - načtení detailu",
       "description": "Načte kompletní klientská data přihlášeného uživatele včetně osobních údajů a dostupných fotografií.",

@@ -3,6 +3,24 @@
   "defaultPackId": "pidlitacka-feature-729",
   "packs": [
     {
+      "id": "pidlitacka-task-1162-own-coupons",
+      "name": "PidLitacka – #1162: vlastní kupóny a propojené účty",
+      "description": "Read-only regrese přehledu kupónů pro smíšený a prázdný vlastní účet; vyžaduje ověřená MOS data.",
+      "file": "task-1162-own-coupons.json"
+    },
+    {
+      "id": "pidlitacka-task-1147-active-zones-api",
+      "name": "PidLitacka – #1147: aktivní pásma přes API",
+      "description": "Kontrola validZones po aktivaci, v detailu/seznamu, retry a reaktivaci. Bez FE emulátoru.",
+      "file": "task-1147-active-zones-api.json"
+    },
+    {
+      "id": "pidlitacka-task-1145-prague-zone-count-int",
+      "name": "PidLitacka – #1145: validace pásem na INT",
+      "description": "Skutečný katalog, nabídky, rezervace a ručně vybrané AVAILABLE jízdenky. Aktivace spotřebuje vybraný kus; bez plateb.",
+      "file": "task-1145-prague-zone-count-int.json"
+    },
+    {
       "id": "pidlitacka-task-1145-prague-zone-count",
       "name": "PidLitacka - task 1145: Praha a tarifní pásma 2026",
       "description": "Lokální ověření P = 1 přes PID BE a Tickets: aktivace, ETD, nabídka, rezervace a chybné výběry.",

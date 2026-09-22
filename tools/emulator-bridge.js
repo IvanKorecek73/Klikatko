@@ -136,7 +136,7 @@ async function executeAction(
     const readyLabel = await waitForAnyContentDescription(
       deviceId,
       readyContentDescriptions,
-      clampInteger(action.timeoutMs, 3000, 30000, 15000),
+      clampInteger(action.timeoutMs, 3000, MAX_NODE_TIMEOUT_MS, 15000),
       executionContext
     );
     return { index, type, packageName, readyLabel };

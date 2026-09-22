@@ -21,6 +21,50 @@ const {
 const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "tools", "emulator-bridge.js"), "utf8");
 
 for (const [timeoutMs, appearsAtMs, succeeds] of [[60000, 45000, true], [10000, 45000, false], [120000, 75000, false]]) {
+  test(`restart waits for the root screen within the requested ${timeoutMs}ms and 60-second cap`, async () => {
+    let now = 0;
+    let launches = 0;
+    let stops = 0;
+    const execFile = () => {};
+    execFile[promisify.custom] = async (_, args) => {
+      const command = args.slice(2);
+      let stdout = "";
+      if (command[0] === "get-state") stdout = "device";
+      else if (command[0] === "exec-out") {
+        now += 5000;
+        stdout = now >= appearsAtMs
+          ? '<hierarchy><node content-desc="Vyhledávání" enabled="true" bounds="[0,0][100,40]" /></hierarchy>'
+          : '<hierarchy />';
+      } else if (command[1] === "settings") {
+        // Presentation settings are unrelated to application readiness.
+      } else if (command[1] === "am" && command[2] === "force-stop") stops++;
+      else if (command[1] === "monkey") launches++;
+      else throw Error("Unexpected ADB command: " + command.join(" "));
+      return { stdout, stderr: "" };
+    };
+    const sandbox = {
+      module: { exports: {} }, process,
+      require: name => name === "node:child_process" ? { execFile } : require(name),
+      Date: class extends Date { static now() { return now; } },
+      setTimeout: callback => { queueMicrotask(callback); return 0; }
+    };
+    vm.runInNewContext(bridgeSource, sandbox);
+    const run = sandbox.module.exports.executeEmulatorActions({ actions: [{
+      type: "restartApp", packageName: "cz.dpp.praguepublictransport.dev.pidlitacka",
+      readyContentDescriptions: ["Vyhledávání", "Přihlaste se"], timeoutMs
+    }] });
+    if (succeeds) {
+      const result = await run;
+      assert.equal(result.ok, true);
+      assert.equal(result.actions[0].readyLabel, "Vyhledávání");
+    } else await assert.rejects(run, /nezobrazila očekávanou výchozí obrazovku/);
+    assert.equal(stops, 1);
+    assert.equal(launches, 1);
+    assert.ok(now <= 65000, "Readiness wait stays bounded, including the final UI read");
+  });
+}
+
+for (const [timeoutMs, appearsAtMs, succeeds] of [[60000, 45000, true], [10000, 45000, false], [120000, 75000, false]]) {
   test(`transition wait honors ${timeoutMs}ms within a 60-second cap without tapping twice`, async () => {
     let now = 0;
     let taps = 0;

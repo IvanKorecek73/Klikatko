@@ -178,6 +178,15 @@ Po ucelené změně je vhodné commitnout malý logický commit.
 
 ## Styl práce
 
+### Spouštění emulátoru ve Windows
+
+Používat `Start-Emulator.ps1` v kořeni Klikátka. Před startem odvodí bezpečnou
+polohu a velikost hostitelského okna z pracovní plochy primárního monitoru.
+Nepoužívat ad hoc start bez tohoto nastavení; při jiné sestavě monitorů by se okno
+mohlo znovu otevřít mimo obrazovku. `-Preview` je kontrola bez změn a bez startu.
+Pokud emulátor už běží, spouštěč odmítne založit další instanci. Při chybě paměti
+neopakovat starty; uživatel požaduje nejprve restart počítače. Data AVD nemažte.
+
 Preferovat malé bezpečné kroky:
 
 - změna scénáře

@@ -488,6 +488,35 @@ function getSelectedWorkflowEnvironmentProfile() {
   return getWorkflowEnvironmentProfiles().find(profile => profile.id === selectedId) || null;
 }
 
+function getWorkflowEnvironmentError(workflow) {
+  const requiredId = workflow?.requiredEnvironmentProfileId;
+  if (!requiredId) {
+    return "";
+  }
+
+  const profile = getWorkflowEnvironmentProfiles().find(item => item.id === requiredId);
+  if (!profile) {
+    return `Workflow vyžaduje nedostupný profil prostředí ${requiredId}.`;
+  }
+
+  if (getSelectedWorkflowEnvironmentProfileId() !== requiredId
+    || getPidLitackaEnvironmentId() !== profile.environments?.pidlitacka) {
+    return `Pro workflow „${workflow.name}“ zvolte prostředí ${profile.name} v panelu Uživatel. Potom krok spusťte znovu.`;
+  }
+
+  if (workflow.requiredBackendUrl) {
+    const project = state.projectIndex?.projects?.find(item => item.id === "pidlitacka");
+    const environment = project?.environments?.find(item => item.id === profile.environments?.pidlitacka);
+    const actual = String(environment?.targetBaseUrl || "").replace(/\/+$/, "");
+    const expected = String(workflow.requiredBackendUrl).replace(/\/+$/, "");
+    if (actual !== expected) {
+      return `Konfigurace prostředí neodpovídá backendu požadovanému workflow: ${expected}.`;
+    }
+  }
+
+  return "";
+}
+
 function selectWorkflowProfileForPidLitackaEnvironment(environmentId) {
   selectWorkflowProfileForIdentityEnvironments(environmentId, getSelectedMosEnvironmentId());
 }
@@ -2577,6 +2606,12 @@ async function ensureMosSessionReady(authConfig) {
   }
 
   if (!state.authSession?.accessToken || state.authSession?.isAnonymous) {
+    return;
+  }
+
+  // The local Redis bridge cannot inspect the remote INT backend's session store.
+  // The authenticated API request will verify its own MOS session server-side.
+  if (state.currentProject?.id === "pidlitacka" && state.currentEnvironmentId === "pidlitacka-integration") {
     return;
   }
 
@@ -6906,12 +6941,47 @@ function shouldTrackDirty(field) {
 
   return !requiresManualInput(state.scenario);
 }
+function getScenarioEnvironmentError(scenario = state.scenario) {
+  const required = scenario?.requiredEnvironment;
+  if (!required) {
+    return "";
+  }
+
+  try {
+    const base = new URL(elements.baseUrl.value.trim() || "/api", window.location.origin);
+    const usesProxy = base.origin === window.location.origin
+      && (base.pathname === "/api" || base.pathname.startsWith("/api/"));
+    const target = new URL(usesProxy ? state.harnessMeta?.proxyTarget : base.href);
+    const expected = new URL(required.targetBaseUrl);
+    if (state.currentProject?.id === required.projectId
+      && state.currentEnvironmentId === required.environmentId
+      && target.href.replace(/\/+$/, "") === expected.href.replace(/\/+$/, "")) {
+      return "";
+    }
+  } catch {
+    // An unknown proxy target must not allow a bound scenario to run.
+  }
+
+  return `Scénář vyžaduje prostředí ${required.environmentId} a skutečný cíl ${required.targetBaseUrl}. Zkontrolujte projekt a prostředí; požadavek nebyl odeslán.`;
+}
+
 async function runCurrentStep() {
   cancelAutoRetry({ announce: false });
   const step = currentStep();
   const runningStepIndex = state.stepIndex;
 
   if (!step) {
+    return;
+  }
+
+  const environmentError = getScenarioEnvironmentError();
+  if (environmentError) {
+    const result = { level: "error", messages: [environmentError] };
+    state.lastStepResult = result;
+    state.stepResults[runningStepIndex] = result;
+    addLog("error", `${step.title} blocked`, { reason: "ScenarioEnvironmentMismatch" });
+    showResult("error", environmentError);
+    updateNextStepControl();
     return;
   }
 
@@ -7008,6 +7078,10 @@ async function runCurrentStep() {
     }
 
     await applyStepProxyTarget(step);
+    const requestEnvironmentError = getScenarioEnvironmentError();
+    if (requestEnvironmentError) {
+      throw new Error(requestEnvironmentError);
+    }
     request = buildRequest(step);
     const startedAt = performance.now();
     let response = await fetch(request.url, request.options);
@@ -8637,6 +8711,11 @@ async function startSelectedWorkflow() {
   state.workflowInputsReady = false;
 
   selectWorkflowProfileForIdentityEnvironments();
+  const environmentError = getWorkflowEnvironmentError(workflow);
+  if (environmentError) {
+    showWorkflowSummary("error", environmentError, []);
+    return;
+  }
   prepareWorkflowRun(workflow, 0, {
     keepContext: false,
     keepPreviousResults: false
@@ -8658,6 +8737,11 @@ async function startWorkflowFromItem(workflowId, itemIndex) {
   }
 
   selectWorkflowProfileForIdentityEnvironments();
+  const environmentError = getWorkflowEnvironmentError(workflow);
+  if (environmentError) {
+    showWorkflowSummary("error", environmentError, []);
+    return;
+  }
   const keepContext = state.workflowRun?.workflowId === workflow.id;
   state.selectedWorkflowId = workflow.id;
   prepareWorkflowRun(workflow, itemIndex, {
@@ -8736,6 +8820,12 @@ async function continueWorkflowRun() {
   const workflow = getSelectedWorkflow();
 
   if (!workflow || !state.workflowRun) {
+    return;
+  }
+
+  const environmentError = getWorkflowEnvironmentError(workflow);
+  if (environmentError) {
+    pauseWorkflow(environmentError, "error");
     return;
   }
 
@@ -9746,6 +9836,10 @@ async function runPresentationWorkflowItemInEmulator(item, button) {
   const paceLabel = "maximální";
 
   try {
+    const environmentError = getWorkflowEnvironmentError(getSelectedWorkflow());
+    if (environmentError) {
+      throw new Error(environmentError);
+    }
     emulator = resolvePresentationEmulatorExecution(item);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

@@ -1,0 +1,1987 @@
+{
+  "version": 1,
+  "name": "PidLitacka – #1147: aktivní pásma přes API",
+  "description": "Kontrola validZones po aktivaci, v detailu/seznamu, retry a reaktivaci. Bez FE emulátoru.",
+  "scenarios": [
+    {
+      "id": "pidlitacka-1147-local-now",
+      "title": "LOCAL — aktivní pásma 2–5 přes PID BE",
+      "description": "Regrese #1147: přesné validZones v PATCH, detailu a seznamu; shoda s ETD a zachování při retry.",
+      "requiresAuth": true,
+      "smoke": true,
+      "manualInputRequired": false,
+      "requiredEnvironment": {
+        "projectId": "pidlitacka",
+        "environmentId": "pidlitacka-local-aspire",
+        "targetBaseUrl": "http://localhost:5065"
+      },
+      "tags": [
+        "Jízdenky",
+        "Pásma",
+        "Aktivace",
+        "task-1147",
+        "LOCAL"
+      ],
+      "app": {
+        "section": "tickets",
+        "title": "Jízdné",
+        "subtitle": "#1147 — aktivní pásma přes API"
+      },
+      "instructions": [
+        "Pouze LOCAL ASPIRE. Fixture vytvoří čerstvou jízdenku v izolované tickets-smoke-960 DB a nahrazuje nákup a platbu.",
+        "Aktivace, retry i GET vedou přes /v1/client/tickets na PID Lítačka BE, nikoli přímo do Tickets. Oprava #1147 musí běžet ve skutečném upstreamu Tickets.",
+        "Test stačí na úrovni API podle pokynu uživatele. Neověřuje text rozsahu ani sekundy ve Flutter FE a nepoužívá emulátor.",
+        "Prázdné/null/vynechané validZones musí test zčervenat, i když ETD obsahuje správné VZ. Spouštějte bez úprav vstupů (varování po úpravě není PASS).",
+        "Detail používá X-Device-Id z registrace Tickets; jiné zařízení může skrýt ETD. Seznam očekává testovací kus mezi prvními 100 položkami."
+      ],
+      "steps": [
+        {
+          "id": "pidlitacka-1147-local-now-fixture",
+          "title": "Připravit čerstvou testovací jízdenku",
+          "description": "Izolovaná lokální fixture nahrazuje nákup a platbu; vlastní test vede přes veřejné API PID BE.",
+          "request": {
+            "method": "POST",
+            "path": "/__harness/fixtures/task-960",
+            "headers": {
+              "X-Klikatko-Local-Fixture": "task-960"
+            },
+            "body": {
+              "userId": "{{session.identityId}}",
+              "variant": "outer-four",
+              "count": 1
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.count",
+                "equals": 1
+              },
+              {
+                "path": "$.items[0].productId",
+                "equals": 1145104
+              },
+              {
+                "path": "$.items[0].status",
+                "equals": "AVAILABLE"
+              }
+            ]
+          },
+          "extract": {
+            "task1147FulfillmentId": "$.items[0].fulfillmentId"
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-now-device",
+          "title": "Zaregistrovat testovací zařízení",
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "deviceIdentifier": "{{auth.deviceId}}",
+              "deviceModel": "{{auth.model}}",
+              "platform": "{{auth.platform}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.deviceId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "task1147DeviceId": "$.deviceId"
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-now-precondition",
+          "title": "Ověřit původní stav a pásma",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "X-Device-Id": "{{context.task1147DeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1145104
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "path": "$.fulfillment.status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "sourcePath": "$.fulfillment.validZones",
+                "regex": "^(?:\\[\\]|null|\"\")$",
+                "message": "Pro regresi #1147 je nutný AVAILABLE kus bez předvolených pásem. Předvybraný rozsah by původní bug zakryl."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-now-invalid",
+          "title": "Odmítnout neúplný výběr tří pásem",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId"
+          ],
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "deviceId": "{{context.task1147DeviceId}}",
+              "zones": [
+                "2",
+                "3",
+                "4"
+              ],
+              "validSince": null
+            }
+          },
+          "remember": {
+            "task1147ActivationKey": "{{form.idempotencyKey}}"
+          },
+          "expected": {
+            "status": 422,
+            "outcome": "expectedError",
+            "assertions": [
+              {
+                "path": "$.title",
+                "notEmpty": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-now-after-invalid",
+          "title": "Po odmítnutí znovu ověřit neaktivovaný kus",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "X-Device-Id": "{{context.task1147DeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1145104
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "path": "$.fulfillment.status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "sourcePath": "$.fulfillment.validZones",
+                "regex": "^(?:\\[\\]|null|\"\")$",
+                "message": "Pro regresi #1147 je nutný AVAILABLE kus bez předvolených pásem. Předvybraný rozsah by původní bug zakryl."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-now-activate",
+          "title": "Aktivovat pásma 2–5 se stejným klíčem po odmítnutí",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId",
+            "task1147ActivationKey"
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{context.task1147ActivationKey}}"
+            },
+            "body": {
+              "deviceId": "{{context.task1147DeviceId}}",
+              "zones": [
+                "2",
+                "3",
+                "4",
+                "5"
+              ],
+              "validSince": null
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.productId",
+                "equals": 1145104
+              },
+              {
+                "path": "$.zoneCount",
+                "equals": 4
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validZones",
+                "equals": [
+                  "2",
+                  "3",
+                  "4",
+                  "5"
+                ],
+                "message": "validZones musí obsahovat přesně skutečně zvolená pásma; samotné VZ v ETD nestačí."
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:2,3,4,5\\*"
+              }
+            ]
+          },
+          "extract": {
+            "task1147Etd": "$.etd"
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-now-retry",
+          "title": "Opakovat aktivaci se stejným klíčem",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId",
+            "task1147ActivationKey",
+            "task1147Etd"
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{context.task1147ActivationKey}}"
+            },
+            "body": {
+              "deviceId": "{{context.task1147DeviceId}}",
+              "zones": [
+                "2",
+                "3",
+                "4",
+                "5"
+              ],
+              "validSince": null
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.productId",
+                "equals": 1145104
+              },
+              {
+                "path": "$.zoneCount",
+                "equals": 4
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validZones",
+                "equals": [
+                  "2",
+                  "3",
+                  "4",
+                  "5"
+                ],
+                "message": "validZones musí obsahovat přesně skutečně zvolená pásma; samotné VZ v ETD nestačí."
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:2,3,4,5\\*"
+              },
+              {
+                "path": "$.etd",
+                "equals": "{{context.task1147Etd}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-now-readback-detail",
+          "title": "Načíst detail a porovnat pásma i ETD",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId",
+            "task1147Etd"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "X-Device-Id": "{{context.task1147DeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1145104
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "sourcePath": "$.fulfillment.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.fulfillment.validZones",
+                "equals": [
+                  "2",
+                  "3",
+                  "4",
+                  "5"
+                ],
+                "message": "validZones musí obsahovat přesně skutečně zvolená pásma; samotné VZ v ETD nestačí."
+              },
+              {
+                "path": "$.fulfillment.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.fulfillment.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.fulfillment.etd",
+                "regex": "\\*VZ:2,3,4,5\\*"
+              },
+              {
+                "path": "$.fulfillment.etd",
+                "equals": "{{context.task1147Etd}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-now-readback-list",
+          "title": "Ověřit stejná pásma v seznamu jízdenek",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId",
+            "task1147Etd"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=FULFILLED%2CIN_PROTECTION_DELAY",
+            "headers": {
+              "X-Device-Id": "{{context.task1147DeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.task1147FulfillmentId}}",
+                  "productId": 1145104,
+                  "validZones": [
+                    "2",
+                    "3",
+                    "4",
+                    "5"
+                  ],
+                  "etd": "{{context.task1147Etd}}"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-1147-local-scheduled",
+      "title": "LOCAL — plánovaná aktivace a reaktivace pásem 2–5",
+      "description": "Regrese #1147: přesné validZones v PATCH, detailu a seznamu; shoda s ETD a zachování při retry.",
+      "requiresAuth": true,
+      "smoke": true,
+      "manualInputRequired": false,
+      "requiredEnvironment": {
+        "projectId": "pidlitacka",
+        "environmentId": "pidlitacka-local-aspire",
+        "targetBaseUrl": "http://localhost:5065"
+      },
+      "tags": [
+        "Jízdenky",
+        "Pásma",
+        "Aktivace",
+        "task-1147",
+        "LOCAL"
+      ],
+      "app": {
+        "section": "tickets",
+        "title": "Jízdné",
+        "subtitle": "#1147 — aktivní pásma přes API"
+      },
+      "instructions": [
+        "Pouze LOCAL ASPIRE. Fixture vytvoří čerstvou jízdenku v izolované tickets-smoke-960 DB a nahrazuje nákup a platbu.",
+        "Aktivace, retry i GET vedou přes /v1/client/tickets na PID Lítačka BE, nikoli přímo do Tickets. Oprava #1147 musí běžet ve skutečném upstreamu Tickets.",
+        "Test stačí na úrovni API podle pokynu uživatele. Neověřuje text rozsahu ani sekundy ve Flutter FE a nepoužívá emulátor.",
+        "Prázdné/null/vynechané validZones musí test zčervenat, i když ETD obsahuje správné VZ. Spouštějte bez úprav vstupů (varování po úpravě není PASS).",
+        "Detail používá X-Device-Id z registrace Tickets; jiné zařízení může skrýt ETD. Seznam očekává testovací kus mezi prvními 100 položkami.",
+        "Dokončete scénář do pěti minut od fixture; původní platnost musí být stále v budoucnosti a ochranná prodleva kratší než zbývající čas."
+      ],
+      "steps": [
+        {
+          "id": "pidlitacka-1147-local-scheduled-fixture",
+          "title": "Připravit čerstvou testovací jízdenku",
+          "description": "Izolovaná lokální fixture nahrazuje nákup a platbu; vlastní test vede přes veřejné API PID BE.",
+          "request": {
+            "method": "POST",
+            "path": "/__harness/fixtures/task-960",
+            "headers": {
+              "X-Klikatko-Local-Fixture": "task-960"
+            },
+            "body": {
+              "userId": "{{session.identityId}}",
+              "variant": "outer-four",
+              "count": 1
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.count",
+                "equals": 1
+              },
+              {
+                "path": "$.items[0].productId",
+                "equals": 1145104
+              },
+              {
+                "path": "$.items[0].status",
+                "equals": "AVAILABLE"
+              }
+            ]
+          },
+          "extract": {
+            "task1147FulfillmentId": "$.items[0].fulfillmentId",
+            "task1147ScheduledSince": "$.suggestedValidSince"
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-scheduled-device",
+          "title": "Zaregistrovat testovací zařízení",
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "deviceIdentifier": "{{auth.deviceId}}",
+              "deviceModel": "{{auth.model}}",
+              "platform": "{{auth.platform}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.deviceId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "task1147DeviceId": "$.deviceId"
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-scheduled-precondition",
+          "title": "Ověřit původní stav a pásma",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "X-Device-Id": "{{context.task1147DeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1145104
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "path": "$.fulfillment.status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "sourcePath": "$.fulfillment.validZones",
+                "regex": "^(?:\\[\\]|null|\"\")$",
+                "message": "Pro regresi #1147 je nutný AVAILABLE kus bez předvolených pásem. Předvybraný rozsah by původní bug zakryl."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-scheduled-invalid",
+          "title": "Odmítnout neúplný výběr tří pásem",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId"
+          ],
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "deviceId": "{{context.task1147DeviceId}}",
+              "zones": [
+                "2",
+                "3",
+                "4"
+              ],
+              "validSince": null
+            }
+          },
+          "remember": {
+            "task1147ActivationKey": "{{form.idempotencyKey}}"
+          },
+          "expected": {
+            "status": 422,
+            "outcome": "expectedError",
+            "assertions": [
+              {
+                "path": "$.title",
+                "notEmpty": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-scheduled-after-invalid",
+          "title": "Po odmítnutí znovu ověřit neaktivovaný kus",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "X-Device-Id": "{{context.task1147DeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1145104
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "path": "$.fulfillment.status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "sourcePath": "$.fulfillment.validZones",
+                "regex": "^(?:\\[\\]|null|\"\")$",
+                "message": "Pro regresi #1147 je nutný AVAILABLE kus bez předvolených pásem. Předvybraný rozsah by původní bug zakryl."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-scheduled-activate",
+          "title": "Naplánovat aktivaci pásem 2–5",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId",
+            "task1147ActivationKey",
+            "task1147ScheduledSince"
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{context.task1147ActivationKey}}"
+            },
+            "body": {
+              "deviceId": "{{context.task1147DeviceId}}",
+              "zones": [
+                "2",
+                "3",
+                "4",
+                "5"
+              ],
+              "validSince": "{{context.task1147ScheduledSince}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.productId",
+                "equals": 1145104
+              },
+              {
+                "path": "$.zoneCount",
+                "equals": 4
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validZones",
+                "equals": [
+                  "2",
+                  "3",
+                  "4",
+                  "5"
+                ],
+                "message": "validZones musí obsahovat přesně skutečně zvolená pásma; samotné VZ v ETD nestačí."
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:2,3,4,5\\*"
+              }
+            ]
+          },
+          "extract": {
+            "task1147Etd": "$.etd"
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-scheduled-retry",
+          "title": "Opakovat aktivaci se stejným klíčem",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId",
+            "task1147ActivationKey",
+            "task1147Etd",
+            "task1147ScheduledSince"
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{context.task1147ActivationKey}}"
+            },
+            "body": {
+              "deviceId": "{{context.task1147DeviceId}}",
+              "zones": [
+                "2",
+                "3",
+                "4",
+                "5"
+              ],
+              "validSince": "{{context.task1147ScheduledSince}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.productId",
+                "equals": 1145104
+              },
+              {
+                "path": "$.zoneCount",
+                "equals": 4
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validZones",
+                "equals": [
+                  "2",
+                  "3",
+                  "4",
+                  "5"
+                ],
+                "message": "validZones musí obsahovat přesně skutečně zvolená pásma; samotné VZ v ETD nestačí."
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:2,3,4,5\\*"
+              },
+              {
+                "path": "$.etd",
+                "equals": "{{context.task1147Etd}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-scheduled-readback-detail",
+          "title": "Načíst detail a porovnat pásma i ETD",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId",
+            "task1147Etd"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "X-Device-Id": "{{context.task1147DeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1145104
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "sourcePath": "$.fulfillment.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.fulfillment.validZones",
+                "equals": [
+                  "2",
+                  "3",
+                  "4",
+                  "5"
+                ],
+                "message": "validZones musí obsahovat přesně skutečně zvolená pásma; samotné VZ v ETD nestačí."
+              },
+              {
+                "path": "$.fulfillment.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.fulfillment.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.fulfillment.etd",
+                "regex": "\\*VZ:2,3,4,5\\*"
+              },
+              {
+                "path": "$.fulfillment.etd",
+                "equals": "{{context.task1147Etd}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-scheduled-readback-list",
+          "title": "Ověřit stejná pásma v seznamu jízdenek",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId",
+            "task1147Etd"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=FULFILLED%2CIN_PROTECTION_DELAY",
+            "headers": {
+              "X-Device-Id": "{{context.task1147DeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.task1147FulfillmentId}}",
+                  "productId": 1145104,
+                  "validZones": [
+                    "2",
+                    "3",
+                    "4",
+                    "5"
+                  ],
+                  "etd": "{{context.task1147Etd}}"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-scheduled-reactivate",
+          "title": "Přitáhnout platnost a zachovat původní pásma 2–5",
+          "description": "Nový klíč znamená reaktivaci; odlišná request zones 3–6 se musí ignorovat. Znovu podepsané ETD musí stále obsahovat 2–5.",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId"
+          ],
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "deviceId": "{{context.task1147DeviceId}}",
+              "zones": [
+                "3",
+                "4",
+                "5",
+                "6"
+              ],
+              "validSince": null
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.productId",
+                "equals": 1145104
+              },
+              {
+                "path": "$.zoneCount",
+                "equals": 4
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validZones",
+                "equals": [
+                  "2",
+                  "3",
+                  "4",
+                  "5"
+                ],
+                "message": "validZones musí obsahovat přesně skutečně zvolená pásma; samotné VZ v ETD nestačí."
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:2,3,4,5\\*"
+              }
+            ]
+          },
+          "extract": {
+            "task1147Etd": "$.etd"
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-scheduled-reactivated-detail",
+          "title": "Načíst detail a porovnat pásma i ETD",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId",
+            "task1147Etd"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "X-Device-Id": "{{context.task1147DeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1145104
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "sourcePath": "$.fulfillment.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.fulfillment.validZones",
+                "equals": [
+                  "2",
+                  "3",
+                  "4",
+                  "5"
+                ],
+                "message": "validZones musí obsahovat přesně skutečně zvolená pásma; samotné VZ v ETD nestačí."
+              },
+              {
+                "path": "$.fulfillment.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.fulfillment.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.fulfillment.etd",
+                "regex": "\\*VZ:2,3,4,5\\*"
+              },
+              {
+                "path": "$.fulfillment.etd",
+                "equals": "{{context.task1147Etd}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-scheduled-reactivated-list",
+          "title": "Ověřit stejná pásma v seznamu jízdenek",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId",
+            "task1147Etd"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=FULFILLED%2CIN_PROTECTION_DELAY",
+            "headers": {
+              "X-Device-Id": "{{context.task1147DeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.task1147FulfillmentId}}",
+                  "productId": 1145104,
+                  "validZones": [
+                    "2",
+                    "3",
+                    "4",
+                    "5"
+                  ],
+                  "etd": "{{context.task1147Etd}}"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-1147-local-fixed",
+      "title": "LOCAL — pevná Praha zůstává beze změny",
+      "description": "Regrese #1147: přesné validZones v PATCH, detailu a seznamu; shoda s ETD a zachování při retry.",
+      "requiresAuth": true,
+      "smoke": true,
+      "manualInputRequired": false,
+      "requiredEnvironment": {
+        "projectId": "pidlitacka",
+        "environmentId": "pidlitacka-local-aspire",
+        "targetBaseUrl": "http://localhost:5065"
+      },
+      "tags": [
+        "Jízdenky",
+        "Pásma",
+        "Aktivace",
+        "task-1147",
+        "LOCAL"
+      ],
+      "app": {
+        "section": "tickets",
+        "title": "Jízdné",
+        "subtitle": "#1147 — aktivní pásma přes API"
+      },
+      "instructions": [
+        "Pouze LOCAL ASPIRE. Fixture vytvoří čerstvou jízdenku v izolované tickets-smoke-960 DB a nahrazuje nákup a platbu.",
+        "Aktivace, retry i GET vedou přes /v1/client/tickets na PID Lítačka BE, nikoli přímo do Tickets. Oprava #1147 musí běžet ve skutečném upstreamu Tickets.",
+        "Test stačí na úrovni API podle pokynu uživatele. Neověřuje text rozsahu ani sekundy ve Flutter FE a nepoužívá emulátor.",
+        "Prázdné/null/vynechané validZones musí test zčervenat, i když ETD obsahuje správné VZ. Spouštějte bez úprav vstupů (varování po úpravě není PASS).",
+        "Detail používá X-Device-Id z registrace Tickets; jiné zařízení může skrýt ETD. Seznam očekává testovací kus mezi prvními 100 položkami."
+      ],
+      "steps": [
+        {
+          "id": "pidlitacka-1147-local-fixed-fixture",
+          "title": "Připravit čerstvou testovací jízdenku",
+          "description": "Izolovaná lokální fixture nahrazuje nákup a platbu; vlastní test vede přes veřejné API PID BE.",
+          "request": {
+            "method": "POST",
+            "path": "/__harness/fixtures/task-960",
+            "headers": {
+              "X-Klikatko-Local-Fixture": "task-960"
+            },
+            "body": {
+              "userId": "{{session.identityId}}",
+              "variant": "fixed",
+              "count": 1
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.count",
+                "equals": 1
+              },
+              {
+                "path": "$.items[0].productId",
+                "equals": 960001
+              },
+              {
+                "path": "$.items[0].status",
+                "equals": "AVAILABLE"
+              }
+            ]
+          },
+          "extract": {
+            "task1147FulfillmentId": "$.items[0].fulfillmentId"
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-fixed-device",
+          "title": "Zaregistrovat testovací zařízení",
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "deviceIdentifier": "{{auth.deviceId}}",
+              "deviceModel": "{{auth.model}}",
+              "platform": "{{auth.platform}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.deviceId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "task1147DeviceId": "$.deviceId"
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-fixed-precondition",
+          "title": "Ověřit původní stav a pásma",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "X-Device-Id": "{{context.task1147DeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 960001
+              },
+              {
+                "path": "$.fulfillment.status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "path": "$.fulfillment.validZones",
+                "equals": [
+                  "P",
+                  "0",
+                  "B"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-fixed-activate",
+          "title": "Aktivovat pevná pražská pásma",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId"
+          ],
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "remember": {
+            "task1147ActivationKey": "{{form.idempotencyKey}}"
+          },
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "deviceId": "{{context.task1147DeviceId}}",
+              "zones": null,
+              "validSince": null
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.productId",
+                "equals": 960001
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validZones",
+                "equals": [
+                  "P",
+                  "0",
+                  "B"
+                ],
+                "message": "validZones musí obsahovat přesně skutečně zvolená pásma; samotné VZ v ETD nestačí."
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:P,0,B\\*"
+              }
+            ]
+          },
+          "extract": {
+            "task1147Etd": "$.etd"
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-fixed-retry",
+          "title": "Opakovat aktivaci se stejným klíčem",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId",
+            "task1147ActivationKey",
+            "task1147Etd"
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{context.task1147ActivationKey}}"
+            },
+            "body": {
+              "deviceId": "{{context.task1147DeviceId}}",
+              "zones": null,
+              "validSince": null
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.productId",
+                "equals": 960001
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validZones",
+                "equals": [
+                  "P",
+                  "0",
+                  "B"
+                ],
+                "message": "validZones musí obsahovat přesně skutečně zvolená pásma; samotné VZ v ETD nestačí."
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:P,0,B\\*"
+              },
+              {
+                "path": "$.etd",
+                "equals": "{{context.task1147Etd}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-fixed-readback-detail",
+          "title": "Načíst detail a porovnat pásma i ETD",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId",
+            "task1147Etd"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "X-Device-Id": "{{context.task1147DeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 960001
+              },
+              {
+                "sourcePath": "$.fulfillment.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.fulfillment.validZones",
+                "equals": [
+                  "P",
+                  "0",
+                  "B"
+                ],
+                "message": "validZones musí obsahovat přesně skutečně zvolená pásma; samotné VZ v ETD nestačí."
+              },
+              {
+                "path": "$.fulfillment.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.fulfillment.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.fulfillment.etd",
+                "regex": "\\*VZ:P,0,B\\*"
+              },
+              {
+                "path": "$.fulfillment.etd",
+                "equals": "{{context.task1147Etd}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1147-local-fixed-readback-list",
+          "title": "Ověřit stejná pásma v seznamu jízdenek",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId",
+            "task1147Etd"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=FULFILLED%2CIN_PROTECTION_DELAY",
+            "headers": {
+              "X-Device-Id": "{{context.task1147DeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.task1147FulfillmentId}}",
+                  "productId": 960001,
+                  "validZones": [
+                    "P",
+                    "0",
+                    "B"
+                  ],
+                  "etd": "{{context.task1147Etd}}"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pidlitacka-1147-int-now",
+      "title": "INT — aktivní pásma 2–5 přes PID BE",
+      "description": "Regrese #1147: přesné validZones v PATCH, detailu a seznamu; shoda s ETD a zachování při retry.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": true,
+      "requiredEnvironment": {
+        "projectId": "pidlitacka",
+        "environmentId": "pidlitacka-integration",
+        "targetBaseUrl": "https://pidl2-backend.int.pidlitacka.cz/"
+      },
+      "tags": [
+        "Jízdenky",
+        "Pásma",
+        "Aktivace",
+        "task-1147",
+        "INT"
+      ],
+      "app": {
+        "section": "tickets",
+        "title": "Jízdné",
+        "subtitle": "#1147 — aktivní pásma přes API"
+      },
+      "instructions": [
+        "Pouze INT. Ručně vyberte AVAILABLE produkt 1004 bez předvolených pásem. Aktivace spotřebuje tento testovací kus; test nic nekupuje ani neplatí.",
+        "Aktivace, retry i GET vedou přes /v1/client/tickets na PID Lítačka BE, nikoli přímo do Tickets. Oprava #1147 musí běžet ve skutečném upstreamu Tickets.",
+        "Test stačí na úrovni API podle pokynu uživatele. Neověřuje text rozsahu ani sekundy ve Flutter FE a nepoužívá emulátor.",
+        "Prázdné/null/vynechané validZones musí test zčervenat, i když ETD obsahuje správné VZ. Spouštějte bez úprav vstupů (varování po úpravě není PASS).",
+        "Detail používá X-Device-Id z registrace Tickets; jiné zařízení může skrýt ETD. Seznam očekává testovací kus mezi prvními 100 položkami."
+      ],
+      "steps": [
+        {
+          "id": "pidlitacka-1147-int-now-select",
+          "title": "Vybrat neaktivovanou čtyřpásmovou jízdenku",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=AVAILABLE"
+          },
+          "selection": {
+            "sourcePath": "$.items",
+            "filter": {
+              "productId": 1004,
+              "status": "AVAILABLE",
+              "zoneCount": 4
+            },
+            "buttonLabel": "Použít tento kus pro test",
+            "selectedButtonLabel": "Testovací kus vybrán",
+            "store": {
+              "task1147FulfillmentId": "$.fulfillmentId"
+            },
+            "emptyTitle": "Chybí vhodná testovací jízdenka",
+            "emptyText": "Potřebujete AVAILABLE produkt 1004 bez předvolených pásem. Test zatím není proveden; další kusy mohou být na další stránce zásobníku."
+          },
+          "expected": {
+            "status": 200
+          }
+        },
+        {
+          "id": "pidlitacka-1147-int-now-device",
+          "title": "Zaregistrovat testovací zařízení",
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "deviceIdentifier": "{{auth.deviceId}}",
+              "deviceModel": "{{auth.model}}",
+              "platform": "{{auth.platform}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.deviceId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "task1147DeviceId": "$.deviceId"
+          }
+        },
+        {
+          "id": "pidlitacka-1147-int-now-precondition",
+          "title": "Ověřit původní stav a pásma",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "X-Device-Id": "{{context.task1147DeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1004
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "path": "$.fulfillment.status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "sourcePath": "$.fulfillment.validZones",
+                "regex": "^(?:\\[\\]|null|\"\")$",
+                "message": "Pro regresi #1147 je nutný AVAILABLE kus bez předvolených pásem. Předvybraný rozsah by původní bug zakryl."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1147-int-now-invalid",
+          "title": "Odmítnout neúplný výběr tří pásem",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId"
+          ],
+          "fields": [
+            {
+              "name": "idempotencyKey",
+              "label": "Idempotency-Key",
+              "value": "{{uuid}}",
+              "hidden": true
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{form.idempotencyKey}}"
+            },
+            "body": {
+              "deviceId": "{{context.task1147DeviceId}}",
+              "zones": [
+                "2",
+                "3",
+                "4"
+              ],
+              "validSince": null
+            }
+          },
+          "remember": {
+            "task1147ActivationKey": "{{form.idempotencyKey}}"
+          },
+          "expected": {
+            "status": 422,
+            "outcome": "expectedError",
+            "assertions": [
+              {
+                "path": "$.title",
+                "notEmpty": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1147-int-now-after-invalid",
+          "title": "Po odmítnutí znovu ověřit neaktivovaný kus",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "X-Device-Id": "{{context.task1147DeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1004
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "path": "$.fulfillment.status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "sourcePath": "$.fulfillment.validZones",
+                "regex": "^(?:\\[\\]|null|\"\")$",
+                "message": "Pro regresi #1147 je nutný AVAILABLE kus bez předvolených pásem. Předvybraný rozsah by původní bug zakryl."
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1147-int-now-activate",
+          "title": "Aktivovat pásma 2–5 se stejným klíčem po odmítnutí",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId",
+            "task1147ActivationKey"
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{context.task1147ActivationKey}}"
+            },
+            "body": {
+              "deviceId": "{{context.task1147DeviceId}}",
+              "zones": [
+                "2",
+                "3",
+                "4",
+                "5"
+              ],
+              "validSince": null
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.productId",
+                "equals": 1004
+              },
+              {
+                "path": "$.zoneCount",
+                "equals": 4
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validZones",
+                "equals": [
+                  "2",
+                  "3",
+                  "4",
+                  "5"
+                ],
+                "message": "validZones musí obsahovat přesně skutečně zvolená pásma; samotné VZ v ETD nestačí."
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:2,3,4,5\\*"
+              }
+            ]
+          },
+          "extract": {
+            "task1147Etd": "$.etd"
+          }
+        },
+        {
+          "id": "pidlitacka-1147-int-now-retry",
+          "title": "Opakovat aktivaci se stejným klíčem",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId",
+            "task1147ActivationKey",
+            "task1147Etd"
+          ],
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "Idempotency-Key": "{{context.task1147ActivationKey}}"
+            },
+            "body": {
+              "deviceId": "{{context.task1147DeviceId}}",
+              "zones": [
+                "2",
+                "3",
+                "4",
+                "5"
+              ],
+              "validSince": null
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.productId",
+                "equals": 1004
+              },
+              {
+                "path": "$.zoneCount",
+                "equals": 4
+              },
+              {
+                "sourcePath": "$.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.validZones",
+                "equals": [
+                  "2",
+                  "3",
+                  "4",
+                  "5"
+                ],
+                "message": "validZones musí obsahovat přesně skutečně zvolená pásma; samotné VZ v ETD nestačí."
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.etd",
+                "regex": "\\*VZ:2,3,4,5\\*"
+              },
+              {
+                "path": "$.etd",
+                "equals": "{{context.task1147Etd}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1147-int-now-readback-detail",
+          "title": "Načíst detail a porovnat pásma i ETD",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId",
+            "task1147Etd"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.task1147FulfillmentId}}",
+            "headers": {
+              "X-Device-Id": "{{context.task1147DeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillment.fulfillmentId",
+                "equals": "{{context.task1147FulfillmentId}}"
+              },
+              {
+                "path": "$.fulfillment.productId",
+                "equals": 1004
+              },
+              {
+                "path": "$.fulfillment.zoneCount",
+                "equals": 4
+              },
+              {
+                "sourcePath": "$.fulfillment.status",
+                "regex": "^(FULFILLED|IN_PROTECTION_DELAY)$"
+              },
+              {
+                "path": "$.fulfillment.validZones",
+                "equals": [
+                  "2",
+                  "3",
+                  "4",
+                  "5"
+                ],
+                "message": "validZones musí obsahovat přesně skutečně zvolená pásma; samotné VZ v ETD nestačí."
+              },
+              {
+                "path": "$.fulfillment.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.fulfillment.validUntil",
+                "notEmpty": true
+              },
+              {
+                "sourcePath": "$.fulfillment.etd",
+                "regex": "\\*VZ:2,3,4,5\\*"
+              },
+              {
+                "path": "$.fulfillment.etd",
+                "equals": "{{context.task1147Etd}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pidlitacka-1147-int-now-readback-list",
+          "title": "Ověřit stejná pásma v seznamu jízdenek",
+          "requiresContext": [
+            "task1147FulfillmentId",
+            "task1147DeviceId",
+            "task1147Etd"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets?limit=100&offset=0&status=FULFILLED%2CIN_PROTECTION_DELAY",
+            "headers": {
+              "X-Device-Id": "{{context.task1147DeviceId}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "containsItem": {
+                  "fulfillmentId": "{{context.task1147FulfillmentId}}",
+                  "productId": 1004,
+                  "validZones": [
+                    "2",
+                    "3",
+                    "4",
+                    "5"
+                  ],
+                  "etd": "{{context.task1147Etd}}"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
