@@ -1,4 +1,5 @@
 node_modules/
+.tmp-*.png
 **/bin/
 **/obj/
 tools/redis-bridge/.env
