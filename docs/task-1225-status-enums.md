@@ -81,3 +81,12 @@ Přenositelné kopie dokladů jsou součástí změny; provozní `public/local/`
 a Obsidian nejsou součástí commitu Klikátka.
 
 Návrh commit message: `test: ticket payment status contract`
+
+## Opakování po review #1225
+
+30. 9. 2026 16:31 Europe/Prague: znovu sestavený host nad BE HEAD 94290dba + review diff,
+stejný pack a prostředí. Runner **62/62 PASS**; [sanitizovaný protokol](test-results/task-1225/review-runner-report.json).
+Zachovány všechny původní response tokeny, nullable absence a recovery. Nový enum ve filtru
+bookings-search a jeho převod na upstream ověřuje BE HTTP/OpenAPI sada (v celé solution
+4 671 PASS / 0 FAIL / 1 SKIP externího HSM). Tento opakovaný běh byl proveden runnerem;
+původní UI doklad 14:57 zůstává výše samostatným dokladem dřívější revize.
