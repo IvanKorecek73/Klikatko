@@ -1,0 +1,2275 @@
+{
+  "task": "1225",
+  "recordedAt": "2026-09-30T12:58:16.941Z",
+  "mode": "actual-pid-be-http-pipeline-with-synthetic-tickets-responses",
+  "evidence": [
+    {
+      "response": {
+        "body": {
+          "fixture": "task-1225-contract",
+          "mode": "synthetic-tickets-responses"
+        },
+        "status": 200
+      },
+      "sessionOmitted": true,
+      "title": "14:57:07 Připravit lokální testovací přihlášení -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/card/initiate",
+      "response": {
+        "body": {
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000001",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "created",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "paymentId": "12250000-0001-4000-8000-000000000001",
+          "paymentUrl": "https://gateway.example/fixture-only",
+          "status": "created"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 289,
+        "status": 200
+      },
+      "title": "14:57:07 Kartová iniciace: created -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000001/payments/12250000-0001-4000-8000-000000000001",
+      "response": {
+        "body": {
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000001",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "created",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "paymentId": "12250000-0001-4000-8000-000000000001",
+          "paymentUrl": "https://gateway.example/fixture-only",
+          "status": "created"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 32,
+        "status": 200
+      },
+      "title": "14:57:07 Načíst platbu: created -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000001/payments/12250000-0001-4000-8000-000000000001/process",
+      "response": {
+        "body": {
+          "authenticateRequired": false,
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000001",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "created",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "fingerprintRequired": false,
+          "paymentId": "12250000-0001-4000-8000-000000000001",
+          "paymentInProgress": false,
+          "status": "created"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 61,
+        "status": 200
+      },
+      "title": "14:57:07 Wallet process: created -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/bookings/12250000-0000-4000-8000-000000000001",
+      "response": {
+        "body": {
+          "bookedOffers": [],
+          "bookingId": "12250000-0000-4000-8000-000000000001",
+          "confirmedPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "createdAt": "2026-09-30T12:00:00Z",
+          "fulfillments": [],
+          "paymentState": "created",
+          "provisionalPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "status": "confirmed",
+          "userId": "12250000-aaaa-4000-8000-000000000001"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 13,
+        "status": 200
+      },
+      "title": "14:57:07 Detail objednávky: created -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/card/initiate",
+      "response": {
+        "body": {
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000002",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "inProgress",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "paymentId": "12250000-0001-4000-8000-000000000002",
+          "paymentUrl": "https://gateway.example/fixture-only",
+          "status": "inProgress"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 7,
+        "status": 200
+      },
+      "title": "14:57:07 Kartová iniciace: in-progress -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000002/payments/12250000-0001-4000-8000-000000000002",
+      "response": {
+        "body": {
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000002",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "inProgress",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "paymentId": "12250000-0001-4000-8000-000000000002",
+          "paymentUrl": "https://gateway.example/fixture-only",
+          "status": "inProgress"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 8,
+        "status": 200
+      },
+      "title": "14:57:07 Načíst platbu: in-progress -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000002/payments/12250000-0001-4000-8000-000000000002/process",
+      "response": {
+        "body": {
+          "authenticateRequired": false,
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000002",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "inProgress",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "fingerprintRequired": false,
+          "paymentId": "12250000-0001-4000-8000-000000000002",
+          "paymentInProgress": true,
+          "status": "inProgress"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 6,
+        "status": 200
+      },
+      "title": "14:57:07 Wallet process: in-progress -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/bookings/12250000-0000-4000-8000-000000000002",
+      "response": {
+        "body": {
+          "bookedOffers": [],
+          "bookingId": "12250000-0000-4000-8000-000000000002",
+          "confirmedPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "createdAt": "2026-09-30T12:00:00Z",
+          "fulfillments": [],
+          "paymentState": "inProgress",
+          "provisionalPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "status": "confirmed",
+          "userId": "12250000-aaaa-4000-8000-000000000001"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 6,
+        "status": 200
+      },
+      "title": "14:57:07 Detail objednávky: in-progress -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/card/initiate",
+      "response": {
+        "body": {
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000003",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paidAt": "2026-09-30T12:00:01Z",
+            "paymentState": "paid",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "paymentId": "12250000-0001-4000-8000-000000000003",
+          "paymentUrl": "https://gateway.example/fixture-only",
+          "status": "paid"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 8,
+        "status": 200
+      },
+      "title": "14:57:07 Kartová iniciace: paid -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000003/payments/12250000-0001-4000-8000-000000000003",
+      "response": {
+        "body": {
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000003",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paidAt": "2026-09-30T12:00:01Z",
+            "paymentState": "paid",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "paymentId": "12250000-0001-4000-8000-000000000003",
+          "paymentUrl": "https://gateway.example/fixture-only",
+          "status": "paid"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 6,
+        "status": 200
+      },
+      "title": "14:57:07 Načíst platbu: paid -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000003/payments/12250000-0001-4000-8000-000000000003/process",
+      "response": {
+        "body": {
+          "authenticateRequired": false,
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000003",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paidAt": "2026-09-30T12:00:01Z",
+            "paymentState": "paid",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "fingerprintRequired": false,
+          "paymentId": "12250000-0001-4000-8000-000000000003",
+          "paymentInProgress": false,
+          "status": "paid"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 8,
+        "status": 200
+      },
+      "title": "14:57:07 Wallet process: paid -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/bookings/12250000-0000-4000-8000-000000000003",
+      "response": {
+        "body": {
+          "bookedOffers": [],
+          "bookingId": "12250000-0000-4000-8000-000000000003",
+          "confirmedPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "createdAt": "2026-09-30T12:00:00Z",
+          "fulfillments": [],
+          "paidAt": "2026-09-30T12:00:01Z",
+          "paymentState": "paid",
+          "provisionalPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "status": "confirmed",
+          "userId": "12250000-aaaa-4000-8000-000000000001"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 8,
+        "status": 200
+      },
+      "title": "14:57:07 Detail objednávky: paid -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/card/initiate",
+      "response": {
+        "body": {
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000004",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "canceledByUser",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "paymentId": "12250000-0001-4000-8000-000000000004",
+          "paymentUrl": "https://gateway.example/fixture-only",
+          "status": "canceledByUser"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 5,
+        "status": 200
+      },
+      "title": "14:57:07 Kartová iniciace: canceled-user -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000004/payments/12250000-0001-4000-8000-000000000004",
+      "response": {
+        "body": {
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000004",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "canceledByUser",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "paymentId": "12250000-0001-4000-8000-000000000004",
+          "paymentUrl": "https://gateway.example/fixture-only",
+          "status": "canceledByUser"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 6,
+        "status": 200
+      },
+      "title": "14:57:07 Načíst platbu: canceled-user -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000004/payments/12250000-0001-4000-8000-000000000004/process",
+      "response": {
+        "body": {
+          "authenticateRequired": false,
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000004",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "canceledByUser",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "fingerprintRequired": false,
+          "paymentId": "12250000-0001-4000-8000-000000000004",
+          "paymentInProgress": false,
+          "status": "canceledByUser"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 7,
+        "status": 200
+      },
+      "title": "14:57:07 Wallet process: canceled-user -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/bookings/12250000-0000-4000-8000-000000000004",
+      "response": {
+        "body": {
+          "bookedOffers": [],
+          "bookingId": "12250000-0000-4000-8000-000000000004",
+          "confirmedPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "createdAt": "2026-09-30T12:00:00Z",
+          "fulfillments": [],
+          "paymentState": "canceledByUser",
+          "provisionalPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "status": "confirmed",
+          "userId": "12250000-aaaa-4000-8000-000000000001"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 5,
+        "status": 200
+      },
+      "title": "14:57:07 Detail objednávky: canceled-user -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/card/initiate",
+      "response": {
+        "body": {
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000005",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "canceledByGateway",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "paymentId": "12250000-0001-4000-8000-000000000005",
+          "paymentUrl": "https://gateway.example/fixture-only",
+          "status": "canceledByGateway"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 5,
+        "status": 200
+      },
+      "title": "14:57:07 Kartová iniciace: canceled-gateway -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000005/payments/12250000-0001-4000-8000-000000000005",
+      "response": {
+        "body": {
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000005",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "canceledByGateway",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "paymentId": "12250000-0001-4000-8000-000000000005",
+          "paymentUrl": "https://gateway.example/fixture-only",
+          "status": "canceledByGateway"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 8,
+        "status": 200
+      },
+      "title": "14:57:07 Načíst platbu: canceled-gateway -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000005/payments/12250000-0001-4000-8000-000000000005/process",
+      "response": {
+        "body": {
+          "authenticateRequired": false,
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000005",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "canceledByGateway",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "fingerprintRequired": false,
+          "paymentId": "12250000-0001-4000-8000-000000000005",
+          "paymentInProgress": false,
+          "status": "canceledByGateway"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 6,
+        "status": 200
+      },
+      "title": "14:57:08 Wallet process: canceled-gateway -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/bookings/12250000-0000-4000-8000-000000000005",
+      "response": {
+        "body": {
+          "bookedOffers": [],
+          "bookingId": "12250000-0000-4000-8000-000000000005",
+          "confirmedPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "createdAt": "2026-09-30T12:00:00Z",
+          "fulfillments": [],
+          "paymentState": "canceledByGateway",
+          "provisionalPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "status": "confirmed",
+          "userId": "12250000-aaaa-4000-8000-000000000001"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 5,
+        "status": 200
+      },
+      "title": "14:57:08 Detail objednávky: canceled-gateway -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/card/initiate",
+      "response": {
+        "body": {
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000006",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "inRefundProcess",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "paymentId": "12250000-0001-4000-8000-000000000006",
+          "paymentUrl": "https://gateway.example/fixture-only",
+          "status": "inRefundProcess"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 9,
+        "status": 200
+      },
+      "title": "14:57:08 Kartová iniciace: refund-progress -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000006/payments/12250000-0001-4000-8000-000000000006",
+      "response": {
+        "body": {
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000006",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "inRefundProcess",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "paymentId": "12250000-0001-4000-8000-000000000006",
+          "paymentUrl": "https://gateway.example/fixture-only",
+          "status": "inRefundProcess"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 6,
+        "status": 200
+      },
+      "title": "14:57:08 Načíst platbu: refund-progress -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000006/payments/12250000-0001-4000-8000-000000000006/process",
+      "response": {
+        "body": {
+          "authenticateRequired": false,
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000006",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "inRefundProcess",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "fingerprintRequired": false,
+          "paymentId": "12250000-0001-4000-8000-000000000006",
+          "paymentInProgress": false,
+          "status": "inRefundProcess"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 6,
+        "status": 200
+      },
+      "title": "14:57:08 Wallet process: refund-progress -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/bookings/12250000-0000-4000-8000-000000000006",
+      "response": {
+        "body": {
+          "bookedOffers": [],
+          "bookingId": "12250000-0000-4000-8000-000000000006",
+          "confirmedPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "createdAt": "2026-09-30T12:00:00Z",
+          "fulfillments": [],
+          "paymentState": "inRefundProcess",
+          "provisionalPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "status": "confirmed",
+          "userId": "12250000-aaaa-4000-8000-000000000001"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 6,
+        "status": 200
+      },
+      "title": "14:57:08 Detail objednávky: refund-progress -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/card/initiate",
+      "response": {
+        "body": {
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000007",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "refunded",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "paymentId": "12250000-0001-4000-8000-000000000007",
+          "paymentUrl": "https://gateway.example/fixture-only",
+          "status": "refunded"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 6,
+        "status": 200
+      },
+      "title": "14:57:08 Kartová iniciace: refunded -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000007/payments/12250000-0001-4000-8000-000000000007",
+      "response": {
+        "body": {
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000007",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "refunded",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "paymentId": "12250000-0001-4000-8000-000000000007",
+          "paymentUrl": "https://gateway.example/fixture-only",
+          "status": "refunded"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 8,
+        "status": 200
+      },
+      "title": "14:57:08 Načíst platbu: refunded -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000007/payments/12250000-0001-4000-8000-000000000007/process",
+      "response": {
+        "body": {
+          "authenticateRequired": false,
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000007",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "refunded",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "fingerprintRequired": false,
+          "paymentId": "12250000-0001-4000-8000-000000000007",
+          "paymentInProgress": false,
+          "status": "refunded"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 7,
+        "status": 200
+      },
+      "title": "14:57:08 Wallet process: refunded -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/bookings/12250000-0000-4000-8000-000000000007",
+      "response": {
+        "body": {
+          "bookedOffers": [],
+          "bookingId": "12250000-0000-4000-8000-000000000007",
+          "confirmedPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "createdAt": "2026-09-30T12:00:00Z",
+          "fulfillments": [],
+          "paymentState": "refunded",
+          "provisionalPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "status": "confirmed",
+          "userId": "12250000-aaaa-4000-8000-000000000001"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 6,
+        "status": 200
+      },
+      "title": "14:57:08 Detail objednávky: refunded -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/card/initiate",
+      "response": {
+        "body": {
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000008",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "undefined",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "paymentId": "12250000-0001-4000-8000-000000000008",
+          "paymentUrl": "https://gateway.example/fixture-only",
+          "status": "undefined"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 13,
+        "status": 200
+      },
+      "title": "14:57:08 Kartová iniciace: unknown -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000008/payments/12250000-0001-4000-8000-000000000008",
+      "response": {
+        "body": {
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000008",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "undefined",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "paymentId": "12250000-0001-4000-8000-000000000008",
+          "paymentUrl": "https://gateway.example/fixture-only",
+          "status": "undefined"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 6,
+        "status": 200
+      },
+      "title": "14:57:08 Načíst platbu: unknown -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000008/payments/12250000-0001-4000-8000-000000000008/process",
+      "response": {
+        "body": {
+          "authenticateRequired": false,
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000008",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "undefined",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "fingerprintRequired": false,
+          "paymentId": "12250000-0001-4000-8000-000000000008",
+          "paymentInProgress": false,
+          "status": "undefined"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 6,
+        "status": 200
+      },
+      "title": "14:57:08 Wallet process: unknown -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/bookings/12250000-0000-4000-8000-000000000008",
+      "response": {
+        "body": {
+          "bookedOffers": [],
+          "bookingId": "12250000-0000-4000-8000-000000000008",
+          "confirmedPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "createdAt": "2026-09-30T12:00:00Z",
+          "fulfillments": [],
+          "paymentState": "undefined",
+          "provisionalPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "status": "confirmed",
+          "userId": "12250000-aaaa-4000-8000-000000000001"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 8,
+        "status": 200
+      },
+      "title": "14:57:08 Detail objednávky: unknown -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/card/initiate",
+      "response": {
+        "body": {
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000009",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "undefined",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "paymentId": "12250000-0001-4000-8000-000000000009",
+          "paymentUrl": "https://gateway.example/fixture-only",
+          "status": "undefined"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 6,
+        "status": 200
+      },
+      "title": "14:57:08 Kartová iniciace: empty -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000009/payments/12250000-0001-4000-8000-000000000009",
+      "response": {
+        "body": {
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000009",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "undefined",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "paymentId": "12250000-0001-4000-8000-000000000009",
+          "paymentUrl": "https://gateway.example/fixture-only",
+          "status": "undefined"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 6,
+        "status": 200
+      },
+      "title": "14:57:08 Načíst platbu: empty -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000009/payments/12250000-0001-4000-8000-000000000009/process",
+      "response": {
+        "body": {
+          "authenticateRequired": false,
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000009",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "undefined",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "fingerprintRequired": false,
+          "paymentId": "12250000-0001-4000-8000-000000000009",
+          "paymentInProgress": false,
+          "status": "undefined"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 7,
+        "status": 200
+      },
+      "title": "14:57:08 Wallet process: empty -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/bookings/12250000-0000-4000-8000-000000000009",
+      "response": {
+        "body": {
+          "bookedOffers": [],
+          "bookingId": "12250000-0000-4000-8000-000000000009",
+          "confirmedPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "createdAt": "2026-09-30T12:00:00Z",
+          "fulfillments": [],
+          "paymentState": "undefined",
+          "provisionalPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "status": "confirmed",
+          "userId": "12250000-aaaa-4000-8000-000000000001"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 6,
+        "status": 200
+      },
+      "title": "14:57:08 Detail objednávky: empty -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/card/initiate",
+      "response": {
+        "body": {
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000010",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "paymentId": "12250000-0001-4000-8000-000000000010",
+          "paymentUrl": "https://gateway.example/fixture-only",
+          "status": "undefined"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 7,
+        "status": 200
+      },
+      "title": "14:57:08 Kartová iniciace: null -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000010/payments/12250000-0001-4000-8000-000000000010",
+      "response": {
+        "body": {
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000010",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "paymentId": "12250000-0001-4000-8000-000000000010",
+          "paymentUrl": "https://gateway.example/fixture-only",
+          "status": "undefined"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 5,
+        "status": 200
+      },
+      "title": "14:57:08 Načíst platbu: null -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000010/payments/12250000-0001-4000-8000-000000000010/process",
+      "response": {
+        "body": {
+          "authenticateRequired": false,
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000010",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "fingerprintRequired": false,
+          "paymentId": "12250000-0001-4000-8000-000000000010",
+          "paymentInProgress": false,
+          "status": "undefined"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 8,
+        "status": 200
+      },
+      "title": "14:57:08 Wallet process: null -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/bookings/12250000-0000-4000-8000-000000000010",
+      "response": {
+        "body": {
+          "bookedOffers": [],
+          "bookingId": "12250000-0000-4000-8000-000000000010",
+          "confirmedPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "createdAt": "2026-09-30T12:00:00Z",
+          "fulfillments": [],
+          "provisionalPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "status": "confirmed",
+          "userId": "12250000-aaaa-4000-8000-000000000001"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 6,
+        "status": 200
+      },
+      "title": "14:57:08 Detail objednávky: null -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/saved-card/12250000-0000-4000-8000-000000000002/initiate",
+      "response": {
+        "body": {
+          "authenticateRequired": false,
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000002",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "inProgress",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "fingerprintRequired": false,
+          "paymentId": "12250000-0001-4000-8000-000000000002",
+          "paymentInProgress": true,
+          "status": "inProgress"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 41,
+        "status": 200
+      },
+      "title": "14:57:08 Uložená karta: in-progress -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Očekávaná chyba byla vrácena.",
+        "Název chyby: Conflict",
+        "Detail chyby: Payment initiation is already reserved. Resume the same payment through authenticated process/GET; do not create a replacement payment."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/saved-card/12250000-0000-4000-8000-000000000002/initiate",
+      "response": {
+        "body": {
+          "bookingId": "12250000-0000-4000-8000-000000000002",
+          "code": "ticket_payment_recovery_required",
+          "detail": "Payment initiation is already reserved. Resume the same payment through authenticated process/GET; do not create a replacement payment.",
+          "paymentId": "12250000-0001-4000-8000-000000000002",
+          "paymentStatus": "inProgress",
+          "status": 409,
+          "timestamp": "2026-09-30T12:57:08.3441942+00:00",
+          "title": "Conflict",
+          "traceId": "0HNOUU9ANC934",
+          "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 56,
+        "status": 409
+      },
+      "title": "14:57:08 Opakovat stejný pokus: in-progress -> HTTP 409"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/saved-card/12250000-0000-4000-8000-000000000003/initiate",
+      "response": {
+        "body": {
+          "authenticateRequired": false,
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000003",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paidAt": "2026-09-30T12:00:01Z",
+            "paymentState": "paid",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "fingerprintRequired": false,
+          "paymentId": "12250000-0001-4000-8000-000000000003",
+          "paymentInProgress": false,
+          "status": "paid"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 13,
+        "status": 200
+      },
+      "title": "14:57:08 Uložená karta: paid -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Očekávaná chyba byla vrácena.",
+        "Název chyby: Conflict",
+        "Detail chyby: Payment initiation is already reserved. Resume the same payment through authenticated process/GET; do not create a replacement payment."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/saved-card/12250000-0000-4000-8000-000000000003/initiate",
+      "response": {
+        "body": {
+          "bookingId": "12250000-0000-4000-8000-000000000003",
+          "code": "ticket_payment_recovery_required",
+          "detail": "Payment initiation is already reserved. Resume the same payment through authenticated process/GET; do not create a replacement payment.",
+          "paymentId": "12250000-0001-4000-8000-000000000003",
+          "paymentStatus": "paid",
+          "status": 409,
+          "timestamp": "2026-09-30T12:57:08.4028492+00:00",
+          "title": "Conflict",
+          "traceId": "0HNOUU9ANC936",
+          "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 8,
+        "status": 409
+      },
+      "title": "14:57:08 Opakovat stejný pokus: paid -> HTTP 409"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/saved-card/12250000-0000-4000-8000-000000000008/initiate",
+      "response": {
+        "body": {
+          "authenticateRequired": false,
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000008",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "undefined",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "fingerprintRequired": false,
+          "paymentId": "12250000-0001-4000-8000-000000000008",
+          "paymentInProgress": false,
+          "status": "undefined"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 6,
+        "status": 200
+      },
+      "title": "14:57:08 Uložená karta: unknown -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Očekávaná chyba byla vrácena.",
+        "Název chyby: Conflict",
+        "Detail chyby: Payment initiation is already reserved. Resume the same payment through authenticated process/GET; do not create a replacement payment."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/saved-card/12250000-0000-4000-8000-000000000008/initiate",
+      "response": {
+        "body": {
+          "bookingId": "12250000-0000-4000-8000-000000000008",
+          "code": "ticket_payment_recovery_required",
+          "detail": "Payment initiation is already reserved. Resume the same payment through authenticated process/GET; do not create a replacement payment.",
+          "paymentId": "12250000-0001-4000-8000-000000000008",
+          "paymentStatus": "undefined",
+          "status": 409,
+          "timestamp": "2026-09-30T12:57:08.4311581+00:00",
+          "title": "Conflict",
+          "traceId": "0HNOUU9ANC938",
+          "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 8,
+        "status": 409
+      },
+      "title": "14:57:08 Opakovat stejný pokus: unknown -> HTTP 409"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/saved-card/12250000-0000-4000-8000-000000000009/initiate",
+      "response": {
+        "body": {
+          "authenticateRequired": false,
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000009",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "undefined",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "fingerprintRequired": false,
+          "paymentId": "12250000-0001-4000-8000-000000000009",
+          "paymentInProgress": false,
+          "status": "undefined"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 8,
+        "status": 200
+      },
+      "title": "14:57:08 Uložená karta: empty -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Očekávaná chyba byla vrácena.",
+        "Název chyby: Conflict",
+        "Detail chyby: Payment initiation is already reserved. Resume the same payment through authenticated process/GET; do not create a replacement payment."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/saved-card/12250000-0000-4000-8000-000000000009/initiate",
+      "response": {
+        "body": {
+          "bookingId": "12250000-0000-4000-8000-000000000009",
+          "code": "ticket_payment_recovery_required",
+          "detail": "Payment initiation is already reserved. Resume the same payment through authenticated process/GET; do not create a replacement payment.",
+          "paymentId": "12250000-0001-4000-8000-000000000009",
+          "paymentStatus": "undefined",
+          "status": 409,
+          "timestamp": "2026-09-30T12:57:08.4571317+00:00",
+          "title": "Conflict",
+          "traceId": "0HNOUU9ANC93A",
+          "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 12,
+        "status": 409
+      },
+      "title": "14:57:08 Opakovat stejný pokus: empty -> HTTP 409"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/saved-card/12250000-0000-4000-8000-000000000010/initiate",
+      "response": {
+        "body": {
+          "authenticateRequired": false,
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000010",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "fingerprintRequired": false,
+          "paymentId": "12250000-0001-4000-8000-000000000010",
+          "paymentInProgress": false,
+          "status": "undefined"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 12,
+        "status": 200
+      },
+      "title": "14:57:08 Uložená karta: null -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Očekávaná chyba byla vrácena.",
+        "Název chyby: Conflict",
+        "Detail chyby: Payment initiation is already reserved. Resume the same payment through authenticated process/GET; do not create a replacement payment."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/saved-card/12250000-0000-4000-8000-000000000010/initiate",
+      "response": {
+        "body": {
+          "bookingId": "12250000-0000-4000-8000-000000000010",
+          "code": "ticket_payment_recovery_required",
+          "detail": "Payment initiation is already reserved. Resume the same payment through authenticated process/GET; do not create a replacement payment.",
+          "paymentId": "12250000-0001-4000-8000-000000000010",
+          "status": 409,
+          "timestamp": "2026-09-30T12:57:08.4983077+00:00",
+          "title": "Conflict",
+          "traceId": "0HNOUU9ANC93C",
+          "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 10,
+        "status": 409
+      },
+      "title": "14:57:08 Opakovat stejný pokus: null -> HTTP 409"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/apple-pay/12250000-0000-4000-8000-000000000002/initiate",
+      "response": {
+        "body": {
+          "authenticateRequired": false,
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000002",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "inProgress",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "fingerprintRequired": false,
+          "paymentId": "12250000-0001-4000-8000-000000000002",
+          "paymentInProgress": true,
+          "status": "inProgress"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 19,
+        "status": 200
+      },
+      "title": "14:57:08 apple-pay: společný stav platby -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/google-pay/12250000-0000-4000-8000-000000000002/initiate",
+      "response": {
+        "body": {
+          "authenticateRequired": false,
+          "booking": {
+            "bookedOffers": [],
+            "bookingId": "12250000-0000-4000-8000-000000000002",
+            "confirmedPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "createdAt": "2026-09-30T12:00:00Z",
+            "fulfillments": [],
+            "paymentState": "inProgress",
+            "provisionalPrice": {
+              "amount": 4800,
+              "currency": "CZK"
+            },
+            "status": "confirmed",
+            "userId": "12250000-aaaa-4000-8000-000000000001"
+          },
+          "fingerprintRequired": false,
+          "paymentId": "12250000-0001-4000-8000-000000000002",
+          "paymentInProgress": true,
+          "status": "inProgress"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 19,
+        "status": 200
+      },
+      "title": "14:57:08 google-pay: společný stav platby -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/bookings",
+      "response": {
+        "body": {
+          "bookedOffers": [],
+          "bookingId": "12250000-0002-4000-8000-000000000001",
+          "confirmedPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "createdAt": "2026-09-30T12:00:00Z",
+          "fulfillments": [],
+          "provisionalPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "status": "prebooked",
+          "userId": "12250000-aaaa-4000-8000-000000000001"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 33,
+        "status": 200
+      },
+      "title": "14:57:08 Vytvořit objednávku: prebooked -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/bookings/12250000-0002-4000-8000-000000000001",
+      "response": {
+        "body": {
+          "bookedOffers": [],
+          "bookingId": "12250000-0002-4000-8000-000000000001",
+          "confirmedPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "createdAt": "2026-09-30T12:00:00Z",
+          "fulfillments": [],
+          "provisionalPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "status": "prebooked",
+          "userId": "12250000-aaaa-4000-8000-000000000001"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 5,
+        "status": 200
+      },
+      "title": "14:57:08 Detail: prebooked bez platby -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/bookings",
+      "response": {
+        "body": {
+          "bookedOffers": [],
+          "bookingId": "12250000-0002-4000-8000-000000000002",
+          "confirmedPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "createdAt": "2026-09-30T12:00:00Z",
+          "fulfillments": [],
+          "provisionalPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "status": "confirmed",
+          "userId": "12250000-aaaa-4000-8000-000000000001"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 7,
+        "status": 200
+      },
+      "title": "14:57:08 Vytvořit objednávku: confirmed -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/bookings/12250000-0002-4000-8000-000000000002",
+      "response": {
+        "body": {
+          "bookedOffers": [],
+          "bookingId": "12250000-0002-4000-8000-000000000002",
+          "confirmedPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "createdAt": "2026-09-30T12:00:00Z",
+          "fulfillments": [],
+          "provisionalPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "status": "confirmed",
+          "userId": "12250000-aaaa-4000-8000-000000000001"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 7,
+        "status": 200
+      },
+      "title": "14:57:08 Detail: confirmed bez platby -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/bookings",
+      "response": {
+        "body": {
+          "bookedOffers": [],
+          "bookingId": "12250000-0002-4000-8000-000000000003",
+          "confirmedPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "createdAt": "2026-09-30T12:00:00Z",
+          "fulfillments": [],
+          "provisionalPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "status": "fulfilled",
+          "userId": "12250000-aaaa-4000-8000-000000000001"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 10,
+        "status": 200
+      },
+      "title": "14:57:08 Vytvořit objednávku: fulfilled -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/bookings/12250000-0002-4000-8000-000000000003",
+      "response": {
+        "body": {
+          "bookedOffers": [],
+          "bookingId": "12250000-0002-4000-8000-000000000003",
+          "confirmedPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "createdAt": "2026-09-30T12:00:00Z",
+          "fulfillments": [],
+          "provisionalPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "status": "fulfilled",
+          "userId": "12250000-aaaa-4000-8000-000000000001"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 8,
+        "status": 200
+      },
+      "title": "14:57:08 Detail: fulfilled bez platby -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/bookings",
+      "response": {
+        "body": {
+          "bookedOffers": [],
+          "bookingId": "12250000-0002-4000-8000-000000000004",
+          "confirmedPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "createdAt": "2026-09-30T12:00:00Z",
+          "fulfillments": [],
+          "provisionalPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "status": "cancelled",
+          "userId": "12250000-aaaa-4000-8000-000000000001"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 9,
+        "status": 200
+      },
+      "title": "14:57:08 Vytvořit objednávku: cancelled -> HTTP 200"
+    },
+    {
+      "method": "GET",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/bookings/12250000-0002-4000-8000-000000000004",
+      "response": {
+        "body": {
+          "bookedOffers": [],
+          "bookingId": "12250000-0002-4000-8000-000000000004",
+          "confirmedPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "createdAt": "2026-09-30T12:00:00Z",
+          "fulfillments": [],
+          "provisionalPrice": {
+            "amount": 4800,
+            "currency": "CZK"
+          },
+          "status": "cancelled",
+          "userId": "12250000-aaaa-4000-8000-000000000001"
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 5,
+        "status": 200
+      },
+      "title": "14:57:08 Detail: cancelled bez platby -> HTTP 200"
+    },
+    {
+      "method": "POST",
+      "notes": [
+        "Krok odpovídá očekávání."
+      ],
+      "path": "/api/v1/client/tickets/purchase/payment/bookings-search",
+      "response": {
+        "body": {
+          "items": [
+            {
+              "bookedOffers": [],
+              "bookingId": "12250000-0000-4000-8000-000000000001",
+              "confirmedPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "createdAt": "2026-09-30T12:00:00Z",
+              "fulfillments": [],
+              "paymentState": "created",
+              "provisionalPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "status": "confirmed",
+              "userId": "12250000-aaaa-4000-8000-000000000001"
+            },
+            {
+              "bookedOffers": [],
+              "bookingId": "12250000-0000-4000-8000-000000000002",
+              "confirmedPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "createdAt": "2026-09-30T12:00:00Z",
+              "fulfillments": [],
+              "paymentState": "inProgress",
+              "provisionalPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "status": "confirmed",
+              "userId": "12250000-aaaa-4000-8000-000000000001"
+            },
+            {
+              "bookedOffers": [],
+              "bookingId": "12250000-0000-4000-8000-000000000003",
+              "confirmedPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "createdAt": "2026-09-30T12:00:00Z",
+              "fulfillments": [],
+              "paidAt": "2026-09-30T12:00:01Z",
+              "paymentState": "paid",
+              "provisionalPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "status": "confirmed",
+              "userId": "12250000-aaaa-4000-8000-000000000001"
+            },
+            {
+              "bookedOffers": [],
+              "bookingId": "12250000-0000-4000-8000-000000000004",
+              "confirmedPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "createdAt": "2026-09-30T12:00:00Z",
+              "fulfillments": [],
+              "paymentState": "canceledByUser",
+              "provisionalPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "status": "confirmed",
+              "userId": "12250000-aaaa-4000-8000-000000000001"
+            },
+            {
+              "bookedOffers": [],
+              "bookingId": "12250000-0000-4000-8000-000000000005",
+              "confirmedPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "createdAt": "2026-09-30T12:00:00Z",
+              "fulfillments": [],
+              "paymentState": "canceledByGateway",
+              "provisionalPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "status": "confirmed",
+              "userId": "12250000-aaaa-4000-8000-000000000001"
+            },
+            {
+              "bookedOffers": [],
+              "bookingId": "12250000-0000-4000-8000-000000000006",
+              "confirmedPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "createdAt": "2026-09-30T12:00:00Z",
+              "fulfillments": [],
+              "paymentState": "inRefundProcess",
+              "provisionalPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "status": "confirmed",
+              "userId": "12250000-aaaa-4000-8000-000000000001"
+            },
+            {
+              "bookedOffers": [],
+              "bookingId": "12250000-0000-4000-8000-000000000007",
+              "confirmedPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "createdAt": "2026-09-30T12:00:00Z",
+              "fulfillments": [],
+              "paymentState": "refunded",
+              "provisionalPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "status": "confirmed",
+              "userId": "12250000-aaaa-4000-8000-000000000001"
+            },
+            {
+              "bookedOffers": [],
+              "bookingId": "12250000-0000-4000-8000-000000000008",
+              "confirmedPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "createdAt": "2026-09-30T12:00:00Z",
+              "fulfillments": [],
+              "paymentState": "undefined",
+              "provisionalPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "status": "confirmed",
+              "userId": "12250000-aaaa-4000-8000-000000000001"
+            },
+            {
+              "bookedOffers": [],
+              "bookingId": "12250000-0000-4000-8000-000000000009",
+              "confirmedPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "createdAt": "2026-09-30T12:00:00Z",
+              "fulfillments": [],
+              "paymentState": "undefined",
+              "provisionalPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "status": "confirmed",
+              "userId": "12250000-aaaa-4000-8000-000000000001"
+            },
+            {
+              "bookedOffers": [],
+              "bookingId": "12250000-0000-4000-8000-000000000010",
+              "confirmedPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "createdAt": "2026-09-30T12:00:00Z",
+              "fulfillments": [],
+              "provisionalPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "status": "confirmed",
+              "userId": "12250000-aaaa-4000-8000-000000000001"
+            },
+            {
+              "bookedOffers": [],
+              "bookingId": "12250000-0002-4000-8000-000000000001",
+              "confirmedPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "createdAt": "2026-09-30T12:00:00Z",
+              "fulfillments": [],
+              "provisionalPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "status": "prebooked",
+              "userId": "12250000-aaaa-4000-8000-000000000001"
+            },
+            {
+              "bookedOffers": [],
+              "bookingId": "12250000-0002-4000-8000-000000000002",
+              "confirmedPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "createdAt": "2026-09-30T12:00:00Z",
+              "fulfillments": [],
+              "provisionalPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "status": "confirmed",
+              "userId": "12250000-aaaa-4000-8000-000000000001"
+            },
+            {
+              "bookedOffers": [],
+              "bookingId": "12250000-0002-4000-8000-000000000003",
+              "confirmedPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "createdAt": "2026-09-30T12:00:00Z",
+              "fulfillments": [],
+              "provisionalPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "status": "fulfilled",
+              "userId": "12250000-aaaa-4000-8000-000000000001"
+            },
+            {
+              "bookedOffers": [],
+              "bookingId": "12250000-0002-4000-8000-000000000004",
+              "confirmedPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "createdAt": "2026-09-30T12:00:00Z",
+              "fulfillments": [],
+              "provisionalPrice": {
+                "amount": 4800,
+                "currency": "CZK"
+              },
+              "status": "cancelled",
+              "userId": "12250000-aaaa-4000-8000-000000000001"
+            }
+          ],
+          "limit": 20,
+          "offset": 0,
+          "total": 14
+        },
+        "contentType": "application/json; charset=utf-8",
+        "durationMs": 21,
+        "status": 200
+      },
+      "title": "14:57:08 Historie: stejné enumy a stránkování -> HTTP 200"
+    },
+    {
+      "summary": {
+        "failedSteps": [],
+        "scenario": "pidlitacka-task-1225-status-consistency",
+        "targetStep": 62
+      },
+      "title": "14:57:08 Auto run finished"
+    }
+  ]
+}

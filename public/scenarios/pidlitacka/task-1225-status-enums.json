@@ -1,0 +1,2539 @@
+{
+  "version": 1,
+  "projectId": "pidlitacka",
+  "name": "Task 1225 — jednotné stavy platby a bookingu",
+  "description": "Lokální kontraktní test skutečného PID BE s řízenými Tickets odpověďmi. Bez platební brány a bez emulátoru.",
+  "scenarios": [
+    {
+      "id": "pidlitacka-task-1225-status-consistency",
+      "title": "LOCAL #1225 — jednotné JSON enumy",
+      "description": "Kartová iniciace, GET platby, wallet process, saved-card recovery, booking create/detail a historie.",
+      "requiresAuth": false,
+      "smoke": false,
+      "manualInputRequired": false,
+      "requiredEnvironment": {
+        "projectId": "pidlitacka",
+        "environmentId": "pidlitacka-local-1225",
+        "targetBaseUrl": "http://127.0.0.1:5125"
+      },
+      "tags": [
+        "tickets",
+        "payment",
+        "booking",
+        "idempotence",
+        "validation"
+      ],
+      "app": {
+        "section": "tickets",
+        "title": "Stavy platby a objednávky",
+        "subtitle": "#1225 — kontrola veřejného JSON"
+      },
+      "instructions": [
+        "Task #1225: https://gitlab.com/operator-ict/mobility/mos-pid/pid-litacka-aplikace/pid-litacka-2.0/pid-litacka-2.0-general/-/work_items/1225",
+        "Spusť lokální tools/task-1225-contract-host podle README nad větví #1225 a vyber prostředí LOCAL #1225 — kontrakt.",
+        "Host používá skutečný PID BE Program, controllery, handlery, mapper, serializery a recovery službu. Tickets odpovědi, karta a úložiště rezervací jsou syntetické testovací fixtures; žádná platba ani refundace se neprovádí.",
+        "Sedm business payment tokenů musí být stejné v kartové/wallet response a booking.paymentState; recovery ověřuje inProgress, paid, unknown, empty i chybějící stav.",
+        "Unknown a prázdný nenullový stav jsou undefined. Nullable absence platby zůstává vynechaná. Booking má vlastní čtyři stavy. PAID není FULFILLED.",
+        "Testovací JWT platí pouze pro izolovaný lokální host. Do reportu ani chatu se přihlášení nevypisuje. Tento scénář neověřuje Tickets runtime, platební bránu, INT ani FE emulátor."
+      ],
+      "steps": [
+        {
+          "id": "ticket-1225-session",
+          "title": "Připravit lokální testovací přihlášení",
+          "request": {
+            "method": "GET",
+            "path": "/__test/session"
+          },
+          "extract": {
+            "ticket1225Token": "$.accessToken"
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fixture",
+                "equals": "task-1225-contract"
+              },
+              {
+                "path": "$.mode",
+                "equals": "synthetic-tickets-responses"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-card-created",
+          "title": "Kartová iniciace: created",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "{{uuid}}"
+            },
+            "body": {
+              "bookingId": "12250000-0000-4000-8000-000000000001",
+              "returnUrlFromPaymentGateway": "pid-litacka-payment://ticket/fixture",
+              "language": "cs",
+              "saveCard": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "created"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000001"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000001"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "created"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-payment-created",
+          "title": "Načíst platbu: created",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000001/payments/12250000-0001-4000-8000-000000000001",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "created"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000001"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000001"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "created"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-wallet-created",
+          "title": "Wallet process: created",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000001/payments/12250000-0001-4000-8000-000000000001/process",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            },
+            "body": {
+              "paymentMethod": "ApplePay",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              }
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "created"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000001"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000001"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "created"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-booking-created",
+          "title": "Detail objednávky: created",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/12250000-0000-4000-8000-000000000001",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000001"
+              },
+              {
+                "path": "$.paymentState",
+                "equals": "created"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-card-in-progress",
+          "title": "Kartová iniciace: in-progress",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "{{uuid}}"
+            },
+            "body": {
+              "bookingId": "12250000-0000-4000-8000-000000000002",
+              "returnUrlFromPaymentGateway": "pid-litacka-payment://ticket/fixture",
+              "language": "cs",
+              "saveCard": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "inProgress"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000002"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000002"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "inProgress"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-payment-in-progress",
+          "title": "Načíst platbu: in-progress",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000002/payments/12250000-0001-4000-8000-000000000002",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "inProgress"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000002"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000002"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "inProgress"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-wallet-in-progress",
+          "title": "Wallet process: in-progress",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000002/payments/12250000-0001-4000-8000-000000000002/process",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            },
+            "body": {
+              "paymentMethod": "ApplePay",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              }
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "inProgress"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000002"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000002"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "inProgress"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-booking-in-progress",
+          "title": "Detail objednávky: in-progress",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/12250000-0000-4000-8000-000000000002",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000002"
+              },
+              {
+                "path": "$.paymentState",
+                "equals": "inProgress"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-card-paid",
+          "title": "Kartová iniciace: paid",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "{{uuid}}"
+            },
+            "body": {
+              "bookingId": "12250000-0000-4000-8000-000000000003",
+              "returnUrlFromPaymentGateway": "pid-litacka-payment://ticket/fixture",
+              "language": "cs",
+              "saveCard": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "paid"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000003"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000003"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "paid"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-payment-paid",
+          "title": "Načíst platbu: paid",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000003/payments/12250000-0001-4000-8000-000000000003",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "paid"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000003"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000003"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "paid"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-wallet-paid",
+          "title": "Wallet process: paid",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000003/payments/12250000-0001-4000-8000-000000000003/process",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            },
+            "body": {
+              "paymentMethod": "ApplePay",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              }
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "paid"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000003"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000003"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "paid"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-booking-paid",
+          "title": "Detail objednávky: paid",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/12250000-0000-4000-8000-000000000003",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000003"
+              },
+              {
+                "path": "$.paymentState",
+                "equals": "paid"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-card-canceled-user",
+          "title": "Kartová iniciace: canceled-user",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "{{uuid}}"
+            },
+            "body": {
+              "bookingId": "12250000-0000-4000-8000-000000000004",
+              "returnUrlFromPaymentGateway": "pid-litacka-payment://ticket/fixture",
+              "language": "cs",
+              "saveCard": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "canceledByUser"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000004"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000004"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "canceledByUser"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-payment-canceled-user",
+          "title": "Načíst platbu: canceled-user",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000004/payments/12250000-0001-4000-8000-000000000004",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "canceledByUser"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000004"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000004"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "canceledByUser"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-wallet-canceled-user",
+          "title": "Wallet process: canceled-user",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000004/payments/12250000-0001-4000-8000-000000000004/process",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            },
+            "body": {
+              "paymentMethod": "ApplePay",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              }
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "canceledByUser"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000004"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000004"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "canceledByUser"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-booking-canceled-user",
+          "title": "Detail objednávky: canceled-user",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/12250000-0000-4000-8000-000000000004",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000004"
+              },
+              {
+                "path": "$.paymentState",
+                "equals": "canceledByUser"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-card-canceled-gateway",
+          "title": "Kartová iniciace: canceled-gateway",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "{{uuid}}"
+            },
+            "body": {
+              "bookingId": "12250000-0000-4000-8000-000000000005",
+              "returnUrlFromPaymentGateway": "pid-litacka-payment://ticket/fixture",
+              "language": "cs",
+              "saveCard": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "canceledByGateway"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000005"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000005"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "canceledByGateway"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-payment-canceled-gateway",
+          "title": "Načíst platbu: canceled-gateway",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000005/payments/12250000-0001-4000-8000-000000000005",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "canceledByGateway"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000005"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000005"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "canceledByGateway"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-wallet-canceled-gateway",
+          "title": "Wallet process: canceled-gateway",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000005/payments/12250000-0001-4000-8000-000000000005/process",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            },
+            "body": {
+              "paymentMethod": "ApplePay",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              }
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "canceledByGateway"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000005"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000005"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "canceledByGateway"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-booking-canceled-gateway",
+          "title": "Detail objednávky: canceled-gateway",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/12250000-0000-4000-8000-000000000005",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000005"
+              },
+              {
+                "path": "$.paymentState",
+                "equals": "canceledByGateway"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-card-refund-progress",
+          "title": "Kartová iniciace: refund-progress",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "{{uuid}}"
+            },
+            "body": {
+              "bookingId": "12250000-0000-4000-8000-000000000006",
+              "returnUrlFromPaymentGateway": "pid-litacka-payment://ticket/fixture",
+              "language": "cs",
+              "saveCard": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "inRefundProcess"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000006"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000006"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "inRefundProcess"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-payment-refund-progress",
+          "title": "Načíst platbu: refund-progress",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000006/payments/12250000-0001-4000-8000-000000000006",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "inRefundProcess"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000006"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000006"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "inRefundProcess"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-wallet-refund-progress",
+          "title": "Wallet process: refund-progress",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000006/payments/12250000-0001-4000-8000-000000000006/process",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            },
+            "body": {
+              "paymentMethod": "ApplePay",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              }
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "inRefundProcess"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000006"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000006"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "inRefundProcess"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-booking-refund-progress",
+          "title": "Detail objednávky: refund-progress",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/12250000-0000-4000-8000-000000000006",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000006"
+              },
+              {
+                "path": "$.paymentState",
+                "equals": "inRefundProcess"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-card-refunded",
+          "title": "Kartová iniciace: refunded",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "{{uuid}}"
+            },
+            "body": {
+              "bookingId": "12250000-0000-4000-8000-000000000007",
+              "returnUrlFromPaymentGateway": "pid-litacka-payment://ticket/fixture",
+              "language": "cs",
+              "saveCard": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "refunded"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000007"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000007"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "refunded"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-payment-refunded",
+          "title": "Načíst platbu: refunded",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000007/payments/12250000-0001-4000-8000-000000000007",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "refunded"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000007"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000007"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "refunded"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-wallet-refunded",
+          "title": "Wallet process: refunded",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000007/payments/12250000-0001-4000-8000-000000000007/process",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            },
+            "body": {
+              "paymentMethod": "ApplePay",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              }
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "refunded"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000007"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000007"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "refunded"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-booking-refunded",
+          "title": "Detail objednávky: refunded",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/12250000-0000-4000-8000-000000000007",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000007"
+              },
+              {
+                "path": "$.paymentState",
+                "equals": "refunded"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-card-unknown",
+          "title": "Kartová iniciace: unknown",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "{{uuid}}"
+            },
+            "body": {
+              "bookingId": "12250000-0000-4000-8000-000000000008",
+              "returnUrlFromPaymentGateway": "pid-litacka-payment://ticket/fixture",
+              "language": "cs",
+              "saveCard": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "undefined"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000008"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000008"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "undefined"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-payment-unknown",
+          "title": "Načíst platbu: unknown",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000008/payments/12250000-0001-4000-8000-000000000008",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "undefined"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000008"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000008"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "undefined"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-wallet-unknown",
+          "title": "Wallet process: unknown",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000008/payments/12250000-0001-4000-8000-000000000008/process",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            },
+            "body": {
+              "paymentMethod": "ApplePay",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              }
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "undefined"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000008"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000008"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "undefined"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-booking-unknown",
+          "title": "Detail objednávky: unknown",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/12250000-0000-4000-8000-000000000008",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000008"
+              },
+              {
+                "path": "$.paymentState",
+                "equals": "undefined"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-card-empty",
+          "title": "Kartová iniciace: empty",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "{{uuid}}"
+            },
+            "body": {
+              "bookingId": "12250000-0000-4000-8000-000000000009",
+              "returnUrlFromPaymentGateway": "pid-litacka-payment://ticket/fixture",
+              "language": "cs",
+              "saveCard": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "undefined"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000009"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000009"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "undefined"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-payment-empty",
+          "title": "Načíst platbu: empty",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000009/payments/12250000-0001-4000-8000-000000000009",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "undefined"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000009"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000009"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "undefined"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-wallet-empty",
+          "title": "Wallet process: empty",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000009/payments/12250000-0001-4000-8000-000000000009/process",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            },
+            "body": {
+              "paymentMethod": "ApplePay",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              }
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "undefined"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000009"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000009"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "undefined"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-booking-empty",
+          "title": "Detail objednávky: empty",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/12250000-0000-4000-8000-000000000009",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000009"
+              },
+              {
+                "path": "$.paymentState",
+                "equals": "undefined"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-card-null",
+          "title": "Kartová iniciace: null",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "{{uuid}}"
+            },
+            "body": {
+              "bookingId": "12250000-0000-4000-8000-000000000010",
+              "returnUrlFromPaymentGateway": "pid-litacka-payment://ticket/fixture",
+              "language": "cs",
+              "saveCard": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "undefined"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000010"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000010"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "sourcePath": "$",
+                "regex": "^(?![\\s\\S]*\"paymentState\"\\s*:)[\\s\\S]*$"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-payment-null",
+          "title": "Načíst platbu: null",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000010/payments/12250000-0001-4000-8000-000000000010",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "undefined"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000010"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000010"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "sourcePath": "$",
+                "regex": "^(?![\\s\\S]*\"paymentState\"\\s*:)[\\s\\S]*$"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-wallet-null",
+          "title": "Wallet process: null",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/12250000-0000-4000-8000-000000000010/payments/12250000-0001-4000-8000-000000000010/process",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            },
+            "body": {
+              "paymentMethod": "ApplePay",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              }
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "undefined"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000010"
+              },
+              {
+                "path": "$.booking.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000010"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              },
+              {
+                "sourcePath": "$",
+                "regex": "^(?![\\s\\S]*\"paymentState\"\\s*:)[\\s\\S]*$"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-booking-null",
+          "title": "Detail objednávky: null",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/12250000-0000-4000-8000-000000000010",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000010"
+              },
+              {
+                "sourcePath": "$",
+                "regex": "^(?![\\s\\S]*\"paymentState\"\\s*:)[\\s\\S]*$"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-saved-in-progress",
+          "title": "Uložená karta: in-progress",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/saved-card/12250000-0000-4000-8000-000000000002/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "12250000-0003-4000-8000-000000000002"
+            },
+            "body": {
+              "savedPaymentCardId": "12250000-0004-4000-8000-000000000001",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              },
+              "isSdkUsed": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "inProgress"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000002"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-recovery-in-progress",
+          "title": "Opakovat stejný pokus: in-progress",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/saved-card/12250000-0000-4000-8000-000000000002/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "12250000-0003-4000-8000-000000000002"
+            },
+            "body": {
+              "savedPaymentCardId": "12250000-0004-4000-8000-000000000001",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              },
+              "isSdkUsed": false
+            }
+          },
+          "expected": {
+            "status": 409,
+            "outcome": "expectedError",
+            "assertions": [
+              {
+                "path": "$.code",
+                "equals": "ticket_payment_recovery_required"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000002"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000002"
+              },
+              {
+                "path": "$.paymentStatus",
+                "equals": "inProgress"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-saved-paid",
+          "title": "Uložená karta: paid",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/saved-card/12250000-0000-4000-8000-000000000003/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "12250000-0003-4000-8000-000000000003"
+            },
+            "body": {
+              "savedPaymentCardId": "12250000-0004-4000-8000-000000000001",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              },
+              "isSdkUsed": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "paid"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000003"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-recovery-paid",
+          "title": "Opakovat stejný pokus: paid",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/saved-card/12250000-0000-4000-8000-000000000003/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "12250000-0003-4000-8000-000000000003"
+            },
+            "body": {
+              "savedPaymentCardId": "12250000-0004-4000-8000-000000000001",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              },
+              "isSdkUsed": false
+            }
+          },
+          "expected": {
+            "status": 409,
+            "outcome": "expectedError",
+            "assertions": [
+              {
+                "path": "$.code",
+                "equals": "ticket_payment_recovery_required"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000003"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000003"
+              },
+              {
+                "path": "$.paymentStatus",
+                "equals": "paid"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-saved-unknown",
+          "title": "Uložená karta: unknown",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/saved-card/12250000-0000-4000-8000-000000000008/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "12250000-0003-4000-8000-000000000008"
+            },
+            "body": {
+              "savedPaymentCardId": "12250000-0004-4000-8000-000000000001",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              },
+              "isSdkUsed": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "undefined"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000008"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-recovery-unknown",
+          "title": "Opakovat stejný pokus: unknown",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/saved-card/12250000-0000-4000-8000-000000000008/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "12250000-0003-4000-8000-000000000008"
+            },
+            "body": {
+              "savedPaymentCardId": "12250000-0004-4000-8000-000000000001",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              },
+              "isSdkUsed": false
+            }
+          },
+          "expected": {
+            "status": 409,
+            "outcome": "expectedError",
+            "assertions": [
+              {
+                "path": "$.code",
+                "equals": "ticket_payment_recovery_required"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000008"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000008"
+              },
+              {
+                "path": "$.paymentStatus",
+                "equals": "undefined"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-saved-empty",
+          "title": "Uložená karta: empty",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/saved-card/12250000-0000-4000-8000-000000000009/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "12250000-0003-4000-8000-000000000009"
+            },
+            "body": {
+              "savedPaymentCardId": "12250000-0004-4000-8000-000000000001",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              },
+              "isSdkUsed": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "undefined"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000009"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-recovery-empty",
+          "title": "Opakovat stejný pokus: empty",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/saved-card/12250000-0000-4000-8000-000000000009/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "12250000-0003-4000-8000-000000000009"
+            },
+            "body": {
+              "savedPaymentCardId": "12250000-0004-4000-8000-000000000001",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              },
+              "isSdkUsed": false
+            }
+          },
+          "expected": {
+            "status": 409,
+            "outcome": "expectedError",
+            "assertions": [
+              {
+                "path": "$.code",
+                "equals": "ticket_payment_recovery_required"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000009"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000009"
+              },
+              {
+                "path": "$.paymentStatus",
+                "equals": "undefined"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-saved-null",
+          "title": "Uložená karta: null",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/saved-card/12250000-0000-4000-8000-000000000010/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "12250000-0003-4000-8000-000000000010"
+            },
+            "body": {
+              "savedPaymentCardId": "12250000-0004-4000-8000-000000000001",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              },
+              "isSdkUsed": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "undefined"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000010"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-recovery-null",
+          "title": "Opakovat stejný pokus: null",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/saved-card/12250000-0000-4000-8000-000000000010/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "12250000-0003-4000-8000-000000000010"
+            },
+            "body": {
+              "savedPaymentCardId": "12250000-0004-4000-8000-000000000001",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              },
+              "isSdkUsed": false
+            }
+          },
+          "expected": {
+            "status": 409,
+            "outcome": "expectedError",
+            "assertions": [
+              {
+                "path": "$.code",
+                "equals": "ticket_payment_recovery_required"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0000-4000-8000-000000000010"
+              },
+              {
+                "path": "$.paymentId",
+                "equals": "12250000-0001-4000-8000-000000000010"
+              },
+              {
+                "sourcePath": "$",
+                "regex": "^(?![\\s\\S]*\"paymentStatus\"\\s*:)[\\s\\S]*$"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-apple-pay",
+          "title": "apple-pay: společný stav platby",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/apple-pay/12250000-0000-4000-8000-000000000002/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "{{uuid}}"
+            },
+            "body": {
+              "paymentData": "synthetic-wallet-token",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              },
+              "isSdkUsed": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "inProgress"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "inProgress"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-google-pay",
+          "title": "google-pay: společný stav platby",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/google-pay/12250000-0000-4000-8000-000000000002/initiate",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "{{uuid}}"
+            },
+            "body": {
+              "paymentData": "synthetic-wallet-token",
+              "additionalBrowserData": {
+                "language": "cs",
+                "userAgent": "Klikatko #1225"
+              },
+              "isSdkUsed": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "inProgress"
+              },
+              {
+                "path": "$.booking.paymentState",
+                "equals": "inProgress"
+              },
+              {
+                "path": "$.booking.status",
+                "equals": "confirmed"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-create-prebooked",
+          "title": "Vytvořit objednávku: prebooked",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/bookings",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "{{uuid}}"
+            },
+            "body": {
+              "offerIds": [
+                "PREBOOKED"
+              ],
+              "sendConfirmationEmail": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "prebooked"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0002-4000-8000-000000000001"
+              },
+              {
+                "sourcePath": "$",
+                "regex": "^(?![\\s\\S]*\"paymentState\"\\s*:)[\\s\\S]*$"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-detail-prebooked",
+          "title": "Detail: prebooked bez platby",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/12250000-0002-4000-8000-000000000001",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "prebooked"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0002-4000-8000-000000000001"
+              },
+              {
+                "sourcePath": "$",
+                "regex": "^(?![\\s\\S]*\"paymentState\"\\s*:)[\\s\\S]*$"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-create-confirmed",
+          "title": "Vytvořit objednávku: confirmed",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/bookings",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "{{uuid}}"
+            },
+            "body": {
+              "offerIds": [
+                "CONFIRMED"
+              ],
+              "sendConfirmationEmail": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0002-4000-8000-000000000002"
+              },
+              {
+                "sourcePath": "$",
+                "regex": "^(?![\\s\\S]*\"paymentState\"\\s*:)[\\s\\S]*$"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-detail-confirmed",
+          "title": "Detail: confirmed bez platby",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/12250000-0002-4000-8000-000000000002",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0002-4000-8000-000000000002"
+              },
+              {
+                "sourcePath": "$",
+                "regex": "^(?![\\s\\S]*\"paymentState\"\\s*:)[\\s\\S]*$"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-create-fulfilled",
+          "title": "Vytvořit objednávku: fulfilled",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/bookings",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "{{uuid}}"
+            },
+            "body": {
+              "offerIds": [
+                "FULFILLED"
+              ],
+              "sendConfirmationEmail": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "fulfilled"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0002-4000-8000-000000000003"
+              },
+              {
+                "sourcePath": "$",
+                "regex": "^(?![\\s\\S]*\"paymentState\"\\s*:)[\\s\\S]*$"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-detail-fulfilled",
+          "title": "Detail: fulfilled bez platby",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/12250000-0002-4000-8000-000000000003",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "fulfilled"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0002-4000-8000-000000000003"
+              },
+              {
+                "sourcePath": "$",
+                "regex": "^(?![\\s\\S]*\"paymentState\"\\s*:)[\\s\\S]*$"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-create-cancelled",
+          "title": "Vytvořit objednávku: cancelled",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/bookings",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}",
+              "Idempotency-Key": "{{uuid}}"
+            },
+            "body": {
+              "offerIds": [
+                "CANCELLED"
+              ],
+              "sendConfirmationEmail": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "cancelled"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0002-4000-8000-000000000004"
+              },
+              {
+                "sourcePath": "$",
+                "regex": "^(?![\\s\\S]*\"paymentState\"\\s*:)[\\s\\S]*$"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-detail-cancelled",
+          "title": "Detail: cancelled bez platby",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/12250000-0002-4000-8000-000000000004",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "cancelled"
+              },
+              {
+                "path": "$.bookingId",
+                "equals": "12250000-0002-4000-8000-000000000004"
+              },
+              {
+                "sourcePath": "$",
+                "regex": "^(?![\\s\\S]*\"paymentState\"\\s*:)[\\s\\S]*$"
+              }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1225-history",
+          "title": "Historie: stejné enumy a stránkování",
+          "requiresContext": [
+            "ticket1225Token"
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/bookings-search",
+            "headers": {
+              "Authorization": "Bearer {{context.ticket1225Token}}"
+            },
+            "body": {
+              "limit": 20,
+              "offset": 0
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.total",
+                "equals": 14
+              },
+              {
+                "path": "$.limit",
+                "equals": 20
+              },
+              {
+                "path": "$.offset",
+                "equals": 0
+              },
+              {
+                "path": "$.items",
+                "lengthEquals": 14
+              },
+              {
+                "path": "$.items[0].paymentState",
+                "equals": "created"
+              },
+              {
+                "path": "$.items[1].paymentState",
+                "equals": "inProgress"
+              },
+              {
+                "path": "$.items[2].paymentState",
+                "equals": "paid"
+              },
+              {
+                "path": "$.items[3].paymentState",
+                "equals": "canceledByUser"
+              },
+              {
+                "path": "$.items[4].paymentState",
+                "equals": "canceledByGateway"
+              },
+              {
+                "path": "$.items[5].paymentState",
+                "equals": "inRefundProcess"
+              },
+              {
+                "path": "$.items[6].paymentState",
+                "equals": "refunded"
+              },
+              {
+                "path": "$.items[7].paymentState",
+                "equals": "undefined"
+              },
+              {
+                "path": "$.items[8].paymentState",
+                "equals": "undefined"
+              },
+              {
+                "path": "$.items[10].status",
+                "equals": "prebooked"
+              },
+              {
+                "path": "$.items[11].status",
+                "equals": "confirmed"
+              },
+              {
+                "path": "$.items[12].status",
+                "equals": "fulfilled"
+              },
+              {
+                "path": "$.items[13].status",
+                "equals": "cancelled"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

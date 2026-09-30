@@ -1,0 +1,132 @@
+{
+  "version": 1,
+  "projectId": "pidlitacka",
+  "name": "Task 1200 — kód nově koupené jízdenky",
+  "description": "Lokální nákup nulově naceněné testovací jízdenky přes veřejné API PID BE a kontrola číselného kódu v detailu stejného kusu.",
+  "scenarios": [
+    {
+      "id": "pidlitacka-task-1200-purchase-detail",
+      "title": "LOCAL — koupit jízdenku a ověřit Kód jízdenky",
+      "description": "Nacenění, vytvoření objednávky a načtení detailu právě vydané jízdenky. Bez externí platební brány díky testovacímu produktu za 0 Kč.",
+      "requiresAuth": true,
+      "smoke": false,
+      "manualInputRequired": false,
+      "requiredEnvironment": {
+        "projectId": "pidlitacka",
+        "environmentId": "pidlitacka-local-aspire",
+        "targetBaseUrl": "http://localhost:5065"
+      },
+      "tags": ["Jízdenky", "Nákup", "Detail", "task-1200", "LOCAL"],
+      "app": {
+        "section": "tickets",
+        "title": "Kód jízdenky",
+        "subtitle": "#1200 — nákup a detail"
+      },
+      "instructions": [
+        "Scénář patří k tasku #1200: https://gitlab.com/operator-ict/mobility/mos-pid/pid-litacka-aplikace/pid-litacka-2.0/pid-litacka-2.0-general/-/work_items/1200",
+        "Pouze LOCAL ASPIRE proti pracovním verzím Tickets a PID BE; testovací produkt 1200001 musí být publikovaný, prodejný a mít cenu 0 Kč.",
+        "Nabídka a booking jdou přes veřejné endpointy PID BE. Nulová cena potvrdí booking bez platební brány; worker následně vydá fulfillment.",
+        "Kontrola bookingu se opakuje do vydání. Detail načítá fulfillmentId právě z této objednávky a porovnává nezměněný raw ticketNumber. Starší jízdenka test nesplní.",
+        "Kód se v API vrací jako desetinný řetězec; formátování po trojicích patří mobilnímu klientovi. Tento scénář neověřuje nový BackOffice ani FE emulátor."
+      ],
+      "steps": [
+        {
+          "id": "ticket-1200-offer",
+          "title": "Nacenit testovací jízdenku",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/offers",
+            "body": { "productId": 1200001, "amount": 1, "validSince": "{{nowPlus2Minutes}}", "zones": [] }
+          },
+          "extract": { "ticket1200OfferId": "$.offers[0].offerId" },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.offers[0].offerId", "notEmpty": true },
+              { "path": "$.offers[0].productId", "equals": 1200001 },
+              { "path": "$.offers[0].price.amount", "equals": 0 }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1200-booking",
+          "title": "Koupit jízdenku za 0 Kč",
+          "requiresContext": ["ticket1200OfferId"],
+          "fields": [
+            { "name": "bookingKey", "label": "Idempotency-Key", "value": "{{uuid}}", "hidden": true }
+          ],
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/bookings",
+            "headers": { "Idempotency-Key": "{{form.bookingKey}}" },
+            "body": {
+              "offerIds": ["{{context.ticket1200OfferId}}"],
+              "amount": 1,
+              "activateAfterPayment": false,
+              "sendConfirmationEmail": false
+            }
+          },
+          "extract": { "ticket1200BookingId": "$.bookingId" },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.bookingId", "notEmpty": true },
+              { "path": "$.provisionalPrice.amount", "equals": 0 }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1200-booking-readback",
+          "title": "Počkat na vydanou jízdenku",
+          "requiresContext": ["ticket1200BookingId"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.ticket1200BookingId}}"
+          },
+          "extract": {
+            "ticket1200FulfillmentId": "$.fulfillments[0].fulfillmentId",
+            "ticket1200Number": "$.fulfillments[0].ticketNumber"
+          },
+          "expected": {
+            "status": 200,
+            "warnings": [
+              {
+                "appMessage": "Čekám na vydání jízdenky.",
+                "message": "Booking je potvrzený, worker zatím nevydal fulfillment.",
+                "blockAdvance": true,
+                "autoRetry": { "delaySeconds": 2, "maxAttempts": 30, "label": "Čekám na vydání jízdenky" },
+                "when": [{ "path": "$.fulfillments.length", "equals": 0 }]
+              }
+            ],
+            "assertions": [
+              { "path": "$.bookingId", "equals": "{{context.ticket1200BookingId}}" },
+              { "path": "$.status", "equals": "FULFILLED" },
+              { "path": "$.confirmedPrice.amount", "equals": 0 },
+              { "path": "$.fulfillments[0].fulfillmentId", "notEmpty": true },
+              { "sourcePath": "$.fulfillments[0].ticketNumber", "regex": "^[0-9]{10,19}$" }
+            ]
+          }
+        },
+        {
+          "id": "ticket-1200-detail",
+          "title": "Zobrazit detail zakoupené jízdenky",
+          "requiresContext": ["ticket1200FulfillmentId", "ticket1200Number"],
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/{{context.ticket1200FulfillmentId}}",
+            "headers": { "X-Device-Id": "{{auth.deviceId}}" }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              { "path": "$.fulfillment.fulfillmentId", "equals": "{{context.ticket1200FulfillmentId}}" },
+              { "path": "$.fulfillment.bookingId", "equals": "{{context.ticket1200BookingId}}" },
+              { "path": "$.fulfillment.ticketNumber", "equals": "{{context.ticket1200Number}}" },
+              { "sourcePath": "$.fulfillment.ticketNumber", "regex": "^[0-9]{10,19}$" }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

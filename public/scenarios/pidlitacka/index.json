@@ -3,6 +3,18 @@
   "defaultPackId": "pidlitacka-feature-729",
   "packs": [
     {
+      "id": "pidlitacka-task-1225-status-enums",
+      "name": "PidLitacka – #1225: jednotné stavy platby a bookingu",
+      "description": "Lokální kontraktní test skutečného PID BE s řízenými Tickets odpověďmi. Bez platební brány a bez emulátoru.",
+      "file": "task-1225-status-enums.json"
+    },
+    {
+      "id": "pidlitacka-task-1200-ticket-number",
+      "name": "PidLitacka – #1200: kód zakoupené jízdenky",
+      "description": "Lokální nákup nulově naceněné jízdenky a kontrola jejího detailu v PID BE.",
+      "file": "task-1200-ticket-number.json"
+    },
+    {
       "id": "pidlitacka-task-1162-own-coupons",
       "name": "PidLitacka – #1162: vlastní kupóny a propojené účty",
       "description": "Read-only regrese přehledu kupónů pro smíšený a prázdný vlastní účet; vyžaduje ověřená MOS data.",

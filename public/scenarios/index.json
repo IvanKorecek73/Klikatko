@@ -343,6 +343,11 @@
           "id": "pidlitacka-integration",
           "name": "INTEGRAČNÍ",
           "targetBaseUrl": "https://pidl2-backend.int.pidlitacka.cz/"
+        },
+        {
+          "id": "pidlitacka-local-1225",
+          "name": "LOCAL #1225 — kontrakt",
+          "targetBaseUrl": "http://127.0.0.1:5125"
         }
       ]
     },

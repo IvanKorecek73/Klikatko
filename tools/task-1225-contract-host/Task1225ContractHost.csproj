@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PidLitackaRepositoryRoot Condition="'$(PidLitackaRepositoryRoot)' == ''">$(MSBuildThisFileDirectory)..\..\..\pid-litacka-2.0-backend</PidLitackaRepositoryRoot>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(PidLitackaRepositoryRoot)\tests\PidLitacka.Application.Tests\PidLitacka.Application.Tests.csproj" />
+    <ProjectReference Include="$(PidLitackaRepositoryRoot)\src\PidLitacka.WebApi\PidLitacka.WebApi.csproj" />
+  </ItemGroup>
+</Project>
