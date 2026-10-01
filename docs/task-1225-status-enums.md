@@ -90,3 +90,17 @@ Zachovány všechny původní response tokeny, nullable absence a recovery. Nov�
 bookings-search a jeho převod na upstream ověřuje BE HTTP/OpenAPI sada (v celé solution
 4 671 PASS / 0 FAIL / 1 SKIP externího HSM). Tento opakovaný běh byl proveden runnerem;
 původní UI doklad 14:57 zůstává výše samostatným dokladem dřívější revize.
+
+## Opakování po opravách MR !466
+
+1. 10. 2026 14:10:08–14:10:10 Europe/Prague: znovu sestavený host nad BE 5e85fbef
+s výsledným diffem oprav MR !466, následně commitnutým jako
+[c3ef26e2](https://gitlab.com/operator-ict/mobility/mos-pid/pid-litacka-aplikace/pid-litacka-2.0/pid-litacka-2.0-backend/-/commit/c3ef26e2a08055f4a5e762f55539eeb429be8431).
+Stejný scénář, LOCAL #1225 a proxy target 127.0.0.1:5125:
+runner **62/62 PASS**, [sanitizovaný protokol](test-results/task-1225/mr466-runner-report.json).
+Nové podmínky pro null/chybějící items, volitelné pole filtru a omezení enumu v OpenAPI
+ověřují regresní BE testy; celá solution **4 677 PASS / 0 FAIL / 1 SKIP** externího HSM.
+První širší BE běh narazil na vypnutý Docker a povinnost polí ve schématu; po spuštění
+Dockeru a opravě schématu prošel i PostgreSQL. Scénář ani engine Klikátka nebyly upravovány.
+Jde o runner nad skutečnou HTTP pipeline s Tickets fixtures. Původní UI protokol a obrazovka
+nad starší revizí zůstávají historickými doklady; tento běh neověřuje živou platbu ani emulátor.
