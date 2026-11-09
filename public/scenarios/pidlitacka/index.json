@@ -141,10 +141,10 @@
       "file": "parking-basic.json"
     },
     {
-      "id": "pidlitacka-task-1289-capping-int",
-      "name": "Task1289 — INT: úplná capping sada",
-      "description": "Skutečný PID/TS INT, oddělené testovací skupiny int1289-20261109-*, GDPay PRE sandbox a nasazený worker/HSM.",
-      "file": "task-1289-capping-int.json"
+      "id": "pidlitacka-task-1289-capping-int-regular",
+      "name": "Task1289 — INT: běžný tarif Praha",
+      "description": "Dospělý867/868→883 a senior898/899→901; doplatky a automatický strop nad běžným katalogem.",
+      "file": "task-1289-capping-int-regular.json"
     }
   ]
 }

@@ -1,0 +1,2226 @@
+{
+  "version": 1,
+  "projectId": "pidlitacka",
+  "name": "Task1289 — INT: běžný tarif Praha",
+  "description": "Dospělý a senior: skutečný doplatek i automatický strop nad běžným katalogem INT.",
+  "scenarios": [
+    {
+      "id": "cap1289-int-regular-adult",
+      "title": "INT #1289 — běžný tarif adult: 82 + 58 = 140",
+      "description": "Běžný INT katalog, skutečné veřejné PID API a bankovní sandbox; bez syntetických produktů.",
+      "requiresAuth": false,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "tickets",
+        "capping",
+        "payment",
+        "booking",
+        "activation"
+      ],
+      "app": {
+        "section": "tickets",
+        "title": "Capping běžných jízdenek",
+        "subtitle": "INT #1289 — běžný tarif adult: 82 + 58 = 140"
+      },
+      "requiredEnvironment": {
+        "projectId": "pidlitacka",
+        "environmentId": "pidlitacka-integration",
+        "targetBaseUrl": "https://pidl2-backend.int.pidlitacka.cz"
+      },
+      "instructions": [
+        "Pouze PID INT; běžné tarifní produkty867/868/883 a898/899/901.",
+        "Testovací bankovní platby dokončuje uživatel; po návratu vyčkat skutečného Paid/Fulfilled.",
+        "60s ochranu neměnit. Aktivace jsou navazující v rámci tarifního dne."
+      ],
+      "steps": [
+        {
+          "id": "session",
+          "title": "Nová anonymní INT testovací identita",
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/anonymous",
+            "body": {
+              "deviceId": "{{uuid}}",
+              "deviceName": "INT regular capping adult",
+              "deviceLanguage": "cs"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.identityId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capToken": "$.accessToken",
+            "capIdentity": "$.identityId"
+          },
+          "remember": {
+            "capRunKey1": "{{uuid}}"
+          }
+        },
+        {
+          "id": "device",
+          "title": "Registrovat skutečné TS zařízení",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "body": {
+              "deviceIdentifier": "{{uuid}}",
+              "deviceModel": "INT capping #1289",
+              "platform": "Android"
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{uuid}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.deviceId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capDevice": "$.deviceId"
+          }
+        },
+        {
+          "id": "empty",
+          "title": "Prázdný souhrn je explicitní complete/none",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/capping",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "X-Device-Id": "{{context.capDevice}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.evaluationStatus",
+                "equals": "complete"
+              },
+              {
+                "path": "$.offerAvailability",
+                "equals": "none"
+              }
+            ]
+          }
+        },
+        {
+          "id": "offer-0",
+          "title": "Ocenit běžný produkt 867",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/offers",
+            "body": {
+              "productId": 867,
+              "amount": 1,
+              "validSince": "{{nowPlus2Minutes}}",
+              "zones": [
+                "P",
+                "0",
+                "B"
+              ]
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.offers[0].offerId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capOffer0": "$.offers[0].offerId"
+          }
+        },
+        {
+          "id": "offer-1",
+          "title": "Ocenit běžný produkt 868",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/offers",
+            "body": {
+              "productId": 868,
+              "amount": 1,
+              "validSince": "{{nowPlus2Minutes}}",
+              "zones": [
+                "P",
+                "0",
+                "B"
+              ]
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.offers[0].offerId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capOffer1": "$.offers[0].offerId"
+          }
+        },
+        {
+          "id": "source-booking",
+          "title": "Vytvořit běžný zdrojový booking",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/bookings",
+            "body": {
+              "offerIds": [
+                "{{context.capOffer0}}",
+                "{{context.capOffer1}}"
+              ],
+              "deviceId": "{{context.capDevice}}",
+              "activateAfterPayment": false,
+              "sendConfirmationEmail": false
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{uuid}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "prebooked"
+              },
+              {
+                "path": "$.provisionalPrice.amount",
+                "equals": 82
+              }
+            ]
+          },
+          "extract": {
+            "capSourceBooking": "$.bookingId"
+          }
+        },
+        {
+          "id": "source-payment",
+          "title": "Zahájit skutečnou testovací platbu GDPay PRE",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "body": {
+              "bookingId": "{{context.capSourceBooking}}",
+              "returnUrlFromPaymentGateway": "pid-litacka-payment://ticket/{{context.capSourceBooking}}",
+              "language": "cs",
+              "saveCard": false
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{uuid}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.paymentId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.paymentUrl",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capGatewayUrl": "$.paymentUrl",
+            "capPaymentId": "$.paymentId"
+          }
+        },
+        {
+          "id": "source-payment-gateway",
+          "title": "Zaplatit na skutečné testovací bráně ČSOB",
+          "customAction": "showPaymentGatewayLink",
+          "requiresContext": [
+            "capGatewayUrl",
+            "capPaymentId"
+          ],
+          "paymentGateway": {
+            "url": "{{context.capGatewayUrl}}",
+            "paymentId": "{{context.capPaymentId}}"
+          }
+        },
+        {
+          "id": "source-paid",
+          "title": "Vyčkat potvrzení a vydání skutečným TS workerem",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.capSourceBooking}}",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.bookingId",
+                "notEmpty": true
+              }
+            ],
+            "warnings": [
+              {
+                "when": [
+                  {
+                    "path": "$.status",
+                    "notEquals": "fulfilled"
+                  }
+                ],
+                "appMessage": "Čekám na potvrzení/vydání",
+                "message": "Čekání na skutečné zpracování workerem/schedulerem.",
+                "blockAdvance": true,
+                "autoRetry": {
+                  "delaySeconds": 3,
+                  "maxAttempts": 60,
+                  "label": "Čekám na potvrzení/vydání"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "source-pieces",
+          "title": "Původní kusy jsou dostupné k aktivaci",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.capSourceBooking}}",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.paymentState",
+                "equals": "paid"
+              },
+              {
+                "path": "$.fulfillments[0].status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "path": "$.fulfillments",
+                "lengthEquals": 2
+              },
+              {
+                "regex": "\"productId\"\\s*:\\s*867(?=[,}])",
+                "label": "Skutečný běžný produkt 867"
+              },
+              {
+                "regex": "\"productId\"\\s*:\\s*868(?=[,}])",
+                "label": "Skutečný běžný produkt 868"
+              }
+            ]
+          },
+          "extract": {
+            "capSource0": "$.fulfillments[0].fulfillmentId",
+            "capSource1": "$.fulfillments[1].fulfillmentId",
+            "capSource2": "$.fulfillments[2].fulfillmentId"
+          }
+        },
+        {
+          "id": "activate-0",
+          "title": "Aktivovat původní kus 1",
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.capSource0}}",
+            "body": {
+              "zones": [
+                "P",
+                "0",
+                "B"
+              ],
+              "validSince": "{{nowPlus2Minutes}}",
+              "deviceId": "{{context.capDevice}}"
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{uuid}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.capSource0}}"
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.activationProtectionUntil",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capSourceSince": "$.validSince",
+            "capSourceProtection": "$.activationProtectionUntil"
+          }
+        },
+        {
+          "id": "below-threshold",
+          "title": "below-threshold",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/capping",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "X-Device-Id": "{{context.capDevice}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.evaluationStatus",
+                "equals": "complete"
+              },
+              {
+                "path": "$.offerAvailability",
+                "equals": "none"
+              }
+            ]
+          }
+        },
+        {
+          "id": "activate-1",
+          "title": "Aktivovat druhý běžný produkt bez překryvu",
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.capSource1}}",
+            "body": {
+              "zones": [
+                "P",
+                "0",
+                "B"
+              ],
+              "validSince": "{{nowPlusMinutes:94}}",
+              "deviceId": "{{context.capDevice}}"
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{uuid}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.capSource1}}"
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.activationProtectionUntil",
+                "notEmpty": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "offer-summary",
+          "title": "Nabídka doplatku: zaplaceno80 / denní120 / zbývá40",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/capping",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "X-Device-Id": "{{context.capDevice}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.evaluationStatus",
+                "equals": "complete"
+              },
+              {
+                "path": "$.offerAvailability",
+                "equals": "available"
+              },
+              {
+                "path": "$.days[0].series[0].paidContribution.amount",
+                "equals": 82
+              },
+              {
+                "path": "$.days[0].series[0].remainingAmount.amount",
+                "equals": 58
+              },
+              {
+                "path": "$.days[0].series[0].dailyPrice.amount",
+                "equals": 140
+              },
+              {
+                "path": "$.days[0].series[0].targetProductId",
+                "equals": 883
+              }
+            ]
+          },
+          "extract": {
+            "capSeries": "$.preferredSeriesId",
+            "capDay": "$.days[0].tariffDate"
+          }
+        },
+        {
+          "id": "topup",
+          "title": "Vytvořit/replay doplatek jedné řady",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/capping-bookings",
+            "body": {
+              "deviceId": "{{context.capDevice}}",
+              "tariffDate": "{{context.capDay}}",
+              "seriesId": "{{context.capSeries}}",
+              "expectedAmount": 58
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{context.capRunKey1}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.provisionalPrice.amount",
+                "equals": 58
+              },
+              {
+                "path": "$.bookingId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capTopup": "$.bookingId"
+          }
+        },
+        {
+          "id": "pending",
+          "title": "Rezervace doplatku je pending, ještě není náhrada",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/capping",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "X-Device-Id": "{{context.capDevice}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.days[0].series[0].state",
+                "equals": "topUpPaymentPending"
+              },
+              {
+                "path": "$.days[0].series[0].bookingId",
+                "equals": "{{context.capTopup}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "replay",
+          "title": "Vytvořit/replay doplatek jedné řady",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/capping-bookings",
+            "body": {
+              "deviceId": "{{context.capDevice}}",
+              "tariffDate": "{{context.capDay}}",
+              "seriesId": "{{context.capSeries}}",
+              "expectedAmount": 58
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{context.capRunKey1}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.bookingId",
+                "equals": "{{context.capTopup}}"
+              },
+              {
+                "path": "$.fulfillments",
+                "lengthEquals": 0
+              }
+            ]
+          }
+        },
+        {
+          "id": "key-conflict",
+          "title": "Změněné tělo pod stejným klíčem je409",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/capping-bookings",
+            "body": {
+              "deviceId": "{{context.capDevice}}",
+              "tariffDate": "{{context.capDay}}",
+              "seriesId": "{{context.capSeries}}",
+              "expectedAmount": 59
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{context.capRunKey1}}"
+            }
+          },
+          "expected": {
+            "status": 409,
+            "assertions": []
+          }
+        },
+        {
+          "id": "topup-payment",
+          "title": "Zahájit skutečnou testovací platbu GDPay PRE",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "body": {
+              "bookingId": "{{context.capTopup}}",
+              "returnUrlFromPaymentGateway": "pid-litacka-payment://ticket/{{context.capTopup}}",
+              "language": "cs",
+              "saveCard": false
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{uuid}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.paymentId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.paymentUrl",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capGatewayUrl": "$.paymentUrl",
+            "capPaymentId": "$.paymentId"
+          }
+        },
+        {
+          "id": "topup-payment-gateway",
+          "title": "Zaplatit na skutečné testovací bráně ČSOB",
+          "customAction": "showPaymentGatewayLink",
+          "requiresContext": [
+            "capGatewayUrl",
+            "capPaymentId"
+          ],
+          "paymentGateway": {
+            "url": "{{context.capGatewayUrl}}",
+            "paymentId": "{{context.capPaymentId}}"
+          }
+        },
+        {
+          "id": "topup-paid",
+          "title": "Vyčkat potvrzení a vydání skutečným TS workerem",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.capTopup}}",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.bookingId",
+                "notEmpty": true
+              }
+            ],
+            "warnings": [
+              {
+                "when": [
+                  {
+                    "path": "$.status",
+                    "notEquals": "fulfilled"
+                  }
+                ],
+                "appMessage": "Čekám na potvrzení/vydání",
+                "message": "Čekání na skutečné zpracování workerem/schedulerem.",
+                "blockAdvance": true,
+                "autoRetry": {
+                  "delaySeconds": 3,
+                  "maxAttempts": 60,
+                  "label": "Čekám na potvrzení/vydání"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "replacement",
+          "title": "Doplatek vydal denní náhradu s původní platností",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.capTopup}}",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.paymentState",
+                "equals": "paid"
+              },
+              {
+                "path": "$.status",
+                "equals": "fulfilled"
+              },
+              {
+                "path": "$.fulfillments[0].productId",
+                "equals": 883
+              },
+              {
+                "path": "$.fulfillments[0].validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.fulfillments[0].validSince",
+                "equals": "{{context.capSourceSince}}"
+              }
+            ]
+          },
+          "extract": {
+            "capReplacement": "$.fulfillments[0].fulfillmentId"
+          }
+        },
+        {
+          "id": "capped",
+          "title": "Souhrn potvrzuje skutečnou náhradu",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/capping",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "X-Device-Id": "{{context.capDevice}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.offerAvailability",
+                "equals": "none"
+              },
+              {
+                "path": "$.days[0].series[0].state",
+                "equals": "capped"
+              },
+              {
+                "path": "$.days[0].series[0].replacementFulfillmentId",
+                "equals": "{{context.capReplacement}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "source-history",
+          "title": "Původní kus v historii odkazuje na náhradu",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.capSourceBooking}}",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillments[0].cappedByFulfillmentId",
+                "equals": "{{context.capReplacement}}"
+              },
+              {
+                "path": "$.fulfillments[1].cappedByFulfillmentId",
+                "equals": "{{context.capReplacement}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "invoice",
+          "title": "Stáhnout skutečně vygenerovaný PDF doklad doplatku",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/document/{{context.capTopup}}?documentType=Invoice",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "^%PDF-",
+                "label": "Skutečný PDF soubor"
+              }
+            ]
+          }
+        },
+        {
+          "id": "history",
+          "title": "Historie obsahuje zdrojový i doplatkový booking",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/bookings-search",
+            "body": {
+              "limit": 20,
+              "offset": 0
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "lengthAtLeast": 2
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "cap1289-int-regular-senior",
+      "title": "INT #1289 — běžný tarif senior: 41 + 29 = 70",
+      "description": "Běžný INT katalog, skutečné veřejné PID API a bankovní sandbox; bez syntetických produktů.",
+      "requiresAuth": false,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "tickets",
+        "capping",
+        "payment",
+        "booking",
+        "activation"
+      ],
+      "app": {
+        "section": "tickets",
+        "title": "Capping běžných jízdenek",
+        "subtitle": "INT #1289 — běžný tarif senior: 41 + 29 = 70"
+      },
+      "requiredEnvironment": {
+        "projectId": "pidlitacka",
+        "environmentId": "pidlitacka-integration",
+        "targetBaseUrl": "https://pidl2-backend.int.pidlitacka.cz"
+      },
+      "instructions": [
+        "Pouze PID INT; běžné tarifní produkty867/868/883 a898/899/901.",
+        "Testovací bankovní platby dokončuje uživatel; po návratu vyčkat skutečného Paid/Fulfilled.",
+        "60s ochranu neměnit. Aktivace jsou navazující v rámci tarifního dne."
+      ],
+      "steps": [
+        {
+          "id": "session",
+          "title": "Nová anonymní INT testovací identita",
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/anonymous",
+            "body": {
+              "deviceId": "{{uuid}}",
+              "deviceName": "INT regular capping senior",
+              "deviceLanguage": "cs"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.identityId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capToken": "$.accessToken",
+            "capIdentity": "$.identityId"
+          },
+          "remember": {
+            "capRunKey1": "{{uuid}}"
+          }
+        },
+        {
+          "id": "device",
+          "title": "Registrovat skutečné TS zařízení",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "body": {
+              "deviceIdentifier": "{{uuid}}",
+              "deviceModel": "INT capping #1289",
+              "platform": "Android"
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{uuid}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.deviceId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capDevice": "$.deviceId"
+          }
+        },
+        {
+          "id": "empty",
+          "title": "Prázdný souhrn je explicitní complete/none",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/capping",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "X-Device-Id": "{{context.capDevice}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.evaluationStatus",
+                "equals": "complete"
+              },
+              {
+                "path": "$.offerAvailability",
+                "equals": "none"
+              }
+            ]
+          }
+        },
+        {
+          "id": "offer-0",
+          "title": "Ocenit běžný produkt 898",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/offers",
+            "body": {
+              "productId": 898,
+              "amount": 1,
+              "validSince": "{{nowPlus2Minutes}}",
+              "zones": [
+                "P",
+                "0",
+                "B"
+              ]
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.offers[0].offerId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capOffer0": "$.offers[0].offerId"
+          }
+        },
+        {
+          "id": "offer-1",
+          "title": "Ocenit běžný produkt 899",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/offers",
+            "body": {
+              "productId": 899,
+              "amount": 1,
+              "validSince": "{{nowPlus2Minutes}}",
+              "zones": [
+                "P",
+                "0",
+                "B"
+              ]
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.offers[0].offerId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capOffer1": "$.offers[0].offerId"
+          }
+        },
+        {
+          "id": "source-booking",
+          "title": "Vytvořit běžný zdrojový booking",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/bookings",
+            "body": {
+              "offerIds": [
+                "{{context.capOffer0}}",
+                "{{context.capOffer1}}"
+              ],
+              "deviceId": "{{context.capDevice}}",
+              "activateAfterPayment": false,
+              "sendConfirmationEmail": false
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{uuid}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "prebooked"
+              },
+              {
+                "path": "$.provisionalPrice.amount",
+                "equals": 41
+              }
+            ]
+          },
+          "extract": {
+            "capSourceBooking": "$.bookingId"
+          }
+        },
+        {
+          "id": "source-payment",
+          "title": "Zahájit skutečnou testovací platbu GDPay PRE",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "body": {
+              "bookingId": "{{context.capSourceBooking}}",
+              "returnUrlFromPaymentGateway": "pid-litacka-payment://ticket/{{context.capSourceBooking}}",
+              "language": "cs",
+              "saveCard": false
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{uuid}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.paymentId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.paymentUrl",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capGatewayUrl": "$.paymentUrl",
+            "capPaymentId": "$.paymentId"
+          }
+        },
+        {
+          "id": "source-payment-gateway",
+          "title": "Zaplatit na skutečné testovací bráně ČSOB",
+          "customAction": "showPaymentGatewayLink",
+          "requiresContext": [
+            "capGatewayUrl",
+            "capPaymentId"
+          ],
+          "paymentGateway": {
+            "url": "{{context.capGatewayUrl}}",
+            "paymentId": "{{context.capPaymentId}}"
+          }
+        },
+        {
+          "id": "source-paid",
+          "title": "Vyčkat potvrzení a vydání skutečným TS workerem",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.capSourceBooking}}",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.bookingId",
+                "notEmpty": true
+              }
+            ],
+            "warnings": [
+              {
+                "when": [
+                  {
+                    "path": "$.status",
+                    "notEquals": "fulfilled"
+                  }
+                ],
+                "appMessage": "Čekám na potvrzení/vydání",
+                "message": "Čekání na skutečné zpracování workerem/schedulerem.",
+                "blockAdvance": true,
+                "autoRetry": {
+                  "delaySeconds": 3,
+                  "maxAttempts": 60,
+                  "label": "Čekám na potvrzení/vydání"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "source-pieces",
+          "title": "Původní kusy jsou dostupné k aktivaci",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.capSourceBooking}}",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.paymentState",
+                "equals": "paid"
+              },
+              {
+                "path": "$.fulfillments[0].status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "path": "$.fulfillments",
+                "lengthEquals": 2
+              },
+              {
+                "regex": "\"productId\"\\s*:\\s*898(?=[,}])",
+                "label": "Skutečný běžný produkt 898"
+              },
+              {
+                "regex": "\"productId\"\\s*:\\s*899(?=[,}])",
+                "label": "Skutečný běžný produkt 899"
+              }
+            ]
+          },
+          "extract": {
+            "capSource0": "$.fulfillments[0].fulfillmentId",
+            "capSource1": "$.fulfillments[1].fulfillmentId",
+            "capSource2": "$.fulfillments[2].fulfillmentId"
+          }
+        },
+        {
+          "id": "activate-0",
+          "title": "Aktivovat původní kus 1",
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.capSource0}}",
+            "body": {
+              "zones": [
+                "P",
+                "0",
+                "B"
+              ],
+              "validSince": "{{nowPlus2Minutes}}",
+              "deviceId": "{{context.capDevice}}"
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{uuid}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.capSource0}}"
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.activationProtectionUntil",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capSourceSince": "$.validSince",
+            "capSourceProtection": "$.activationProtectionUntil"
+          }
+        },
+        {
+          "id": "below-threshold",
+          "title": "below-threshold",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/capping",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "X-Device-Id": "{{context.capDevice}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.evaluationStatus",
+                "equals": "complete"
+              },
+              {
+                "path": "$.offerAvailability",
+                "equals": "none"
+              }
+            ]
+          }
+        },
+        {
+          "id": "activate-1",
+          "title": "Aktivovat druhý běžný produkt bez překryvu",
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.capSource1}}",
+            "body": {
+              "zones": [
+                "P",
+                "0",
+                "B"
+              ],
+              "validSince": "{{nowPlusMinutes:94}}",
+              "deviceId": "{{context.capDevice}}"
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{uuid}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.capSource1}}"
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.activationProtectionUntil",
+                "notEmpty": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "offer-summary",
+          "title": "Nabídka doplatku: zaplaceno80 / denní120 / zbývá40",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/capping",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "X-Device-Id": "{{context.capDevice}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.evaluationStatus",
+                "equals": "complete"
+              },
+              {
+                "path": "$.offerAvailability",
+                "equals": "available"
+              },
+              {
+                "path": "$.days[0].series[0].paidContribution.amount",
+                "equals": 41
+              },
+              {
+                "path": "$.days[0].series[0].remainingAmount.amount",
+                "equals": 29
+              },
+              {
+                "path": "$.days[0].series[0].dailyPrice.amount",
+                "equals": 70
+              },
+              {
+                "path": "$.days[0].series[0].targetProductId",
+                "equals": 901
+              }
+            ]
+          },
+          "extract": {
+            "capSeries": "$.preferredSeriesId",
+            "capDay": "$.days[0].tariffDate"
+          }
+        },
+        {
+          "id": "topup",
+          "title": "Vytvořit/replay doplatek jedné řady",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/capping-bookings",
+            "body": {
+              "deviceId": "{{context.capDevice}}",
+              "tariffDate": "{{context.capDay}}",
+              "seriesId": "{{context.capSeries}}",
+              "expectedAmount": 29
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{context.capRunKey1}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.provisionalPrice.amount",
+                "equals": 29
+              },
+              {
+                "path": "$.bookingId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capTopup": "$.bookingId"
+          }
+        },
+        {
+          "id": "pending",
+          "title": "Rezervace doplatku je pending, ještě není náhrada",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/capping",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "X-Device-Id": "{{context.capDevice}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.days[0].series[0].state",
+                "equals": "topUpPaymentPending"
+              },
+              {
+                "path": "$.days[0].series[0].bookingId",
+                "equals": "{{context.capTopup}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "replay",
+          "title": "Vytvořit/replay doplatek jedné řady",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/capping-bookings",
+            "body": {
+              "deviceId": "{{context.capDevice}}",
+              "tariffDate": "{{context.capDay}}",
+              "seriesId": "{{context.capSeries}}",
+              "expectedAmount": 29
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{context.capRunKey1}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.bookingId",
+                "equals": "{{context.capTopup}}"
+              },
+              {
+                "path": "$.fulfillments",
+                "lengthEquals": 0
+              }
+            ]
+          }
+        },
+        {
+          "id": "key-conflict",
+          "title": "Změněné tělo pod stejným klíčem je409",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/capping-bookings",
+            "body": {
+              "deviceId": "{{context.capDevice}}",
+              "tariffDate": "{{context.capDay}}",
+              "seriesId": "{{context.capSeries}}",
+              "expectedAmount": 30
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{context.capRunKey1}}"
+            }
+          },
+          "expected": {
+            "status": 409,
+            "assertions": []
+          }
+        },
+        {
+          "id": "topup-payment",
+          "title": "Zahájit skutečnou testovací platbu GDPay PRE",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "body": {
+              "bookingId": "{{context.capTopup}}",
+              "returnUrlFromPaymentGateway": "pid-litacka-payment://ticket/{{context.capTopup}}",
+              "language": "cs",
+              "saveCard": false
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{uuid}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.paymentId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.paymentUrl",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capGatewayUrl": "$.paymentUrl",
+            "capPaymentId": "$.paymentId"
+          }
+        },
+        {
+          "id": "topup-payment-gateway",
+          "title": "Zaplatit na skutečné testovací bráně ČSOB",
+          "customAction": "showPaymentGatewayLink",
+          "requiresContext": [
+            "capGatewayUrl",
+            "capPaymentId"
+          ],
+          "paymentGateway": {
+            "url": "{{context.capGatewayUrl}}",
+            "paymentId": "{{context.capPaymentId}}"
+          }
+        },
+        {
+          "id": "topup-paid",
+          "title": "Vyčkat potvrzení a vydání skutečným TS workerem",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.capTopup}}",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.bookingId",
+                "notEmpty": true
+              }
+            ],
+            "warnings": [
+              {
+                "when": [
+                  {
+                    "path": "$.status",
+                    "notEquals": "fulfilled"
+                  }
+                ],
+                "appMessage": "Čekám na potvrzení/vydání",
+                "message": "Čekání na skutečné zpracování workerem/schedulerem.",
+                "blockAdvance": true,
+                "autoRetry": {
+                  "delaySeconds": 3,
+                  "maxAttempts": 60,
+                  "label": "Čekám na potvrzení/vydání"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "replacement",
+          "title": "Doplatek vydal denní náhradu s původní platností",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.capTopup}}",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.paymentState",
+                "equals": "paid"
+              },
+              {
+                "path": "$.status",
+                "equals": "fulfilled"
+              },
+              {
+                "path": "$.fulfillments[0].productId",
+                "equals": 901
+              },
+              {
+                "path": "$.fulfillments[0].validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.fulfillments[0].validSince",
+                "equals": "{{context.capSourceSince}}"
+              }
+            ]
+          },
+          "extract": {
+            "capReplacement": "$.fulfillments[0].fulfillmentId"
+          }
+        },
+        {
+          "id": "capped",
+          "title": "Souhrn potvrzuje skutečnou náhradu",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/capping",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "X-Device-Id": "{{context.capDevice}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.offerAvailability",
+                "equals": "none"
+              },
+              {
+                "path": "$.days[0].series[0].state",
+                "equals": "capped"
+              },
+              {
+                "path": "$.days[0].series[0].replacementFulfillmentId",
+                "equals": "{{context.capReplacement}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "source-history",
+          "title": "Původní kus v historii odkazuje na náhradu",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.capSourceBooking}}",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillments[0].cappedByFulfillmentId",
+                "equals": "{{context.capReplacement}}"
+              },
+              {
+                "path": "$.fulfillments[1].cappedByFulfillmentId",
+                "equals": "{{context.capReplacement}}"
+              }
+            ]
+          }
+        },
+        {
+          "id": "invoice",
+          "title": "Stáhnout skutečně vygenerovaný PDF doklad doplatku",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/document/{{context.capTopup}}?documentType=Invoice",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "regex": "^%PDF-",
+                "label": "Skutečný PDF soubor"
+              }
+            ]
+          }
+        },
+        {
+          "id": "history",
+          "title": "Historie obsahuje zdrojový i doplatkový booking",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/bookings-search",
+            "body": {
+              "limit": 20,
+              "offset": 0
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.items",
+                "lengthAtLeast": 2
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "cap1289-int-regular-auto",
+      "title": "INT #1289 — běžný tarif: automatický strop po4×36 Kč",
+      "description": "Běžný INT katalog, skutečné veřejné PID API a bankovní sandbox; bez syntetických produktů.",
+      "requiresAuth": false,
+      "smoke": false,
+      "manualInputRequired": true,
+      "tags": [
+        "tickets",
+        "capping",
+        "payment",
+        "booking",
+        "activation"
+      ],
+      "app": {
+        "section": "tickets",
+        "title": "Capping běžných jízdenek",
+        "subtitle": "INT #1289 — běžný tarif: automatický strop po4×36 Kč"
+      },
+      "requiredEnvironment": {
+        "projectId": "pidlitacka",
+        "environmentId": "pidlitacka-integration",
+        "targetBaseUrl": "https://pidl2-backend.int.pidlitacka.cz"
+      },
+      "instructions": [
+        "Pouze PID INT; běžné tarifní produkty867/868/883 a898/899/901.",
+        "Testovací bankovní platby dokončuje uživatel; po návratu vyčkat skutečného Paid/Fulfilled.",
+        "60s ochranu neměnit. Aktivace jsou navazující v rámci tarifního dne."
+      ],
+      "steps": [
+        {
+          "id": "session",
+          "title": "Nová anonymní INT testovací identita",
+          "request": {
+            "method": "POST",
+            "path": "/v1/auth/anonymous",
+            "body": {
+              "deviceId": "{{uuid}}",
+              "deviceName": "INT regular capping auto",
+              "deviceLanguage": "cs"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.identityId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capToken": "$.accessToken",
+            "capIdentity": "$.identityId"
+          },
+          "remember": {}
+        },
+        {
+          "id": "device",
+          "title": "Registrovat skutečné TS zařízení",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/devices",
+            "body": {
+              "deviceIdentifier": "{{uuid}}",
+              "deviceModel": "INT capping #1289",
+              "platform": "Android"
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{uuid}}"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "assertions": [
+              {
+                "path": "$.deviceId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capDevice": "$.deviceId"
+          }
+        },
+        {
+          "id": "offer",
+          "title": "Ocenit čtyři běžné30min jízdenky po36Kč",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/offers",
+            "body": {
+              "productId": 867,
+              "amount": 4,
+              "validSince": "{{nowPlus2Minutes}}",
+              "zones": [
+                "P",
+                "0",
+                "B"
+              ]
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.offers[0].offerId",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capOffer": "$.offers[0].offerId"
+          }
+        },
+        {
+          "id": "source-booking",
+          "title": "Vytvořit booking čtyř běžných kusů za144Kč",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/bookings",
+            "body": {
+              "offerIds": [
+                "{{context.capOffer}}"
+              ],
+              "deviceId": "{{context.capDevice}}",
+              "activateAfterPayment": false,
+              "sendConfirmationEmail": false
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{uuid}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.status",
+                "equals": "prebooked"
+              }
+            ]
+          },
+          "extract": {
+            "capSourceBooking": "$.bookingId"
+          }
+        },
+        {
+          "id": "source-payment",
+          "title": "Zahájit skutečnou testovací platbu GDPay PRE",
+          "request": {
+            "method": "POST",
+            "path": "/v1/client/tickets/purchase/payment/card/initiate",
+            "body": {
+              "bookingId": "{{context.capSourceBooking}}",
+              "returnUrlFromPaymentGateway": "pid-litacka-payment://ticket/{{context.capSourceBooking}}",
+              "language": "cs",
+              "saveCard": false
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{uuid}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.paymentId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.paymentUrl",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capGatewayUrl": "$.paymentUrl",
+            "capPaymentId": "$.paymentId"
+          }
+        },
+        {
+          "id": "source-payment-gateway",
+          "title": "Zaplatit na skutečné testovací bráně ČSOB",
+          "customAction": "showPaymentGatewayLink",
+          "requiresContext": [
+            "capGatewayUrl",
+            "capPaymentId"
+          ],
+          "paymentGateway": {
+            "url": "{{context.capGatewayUrl}}",
+            "paymentId": "{{context.capPaymentId}}"
+          }
+        },
+        {
+          "id": "source-paid",
+          "title": "Vyčkat potvrzení a vydání skutečným TS workerem",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.capSourceBooking}}",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.bookingId",
+                "notEmpty": true
+              }
+            ],
+            "warnings": [
+              {
+                "when": [
+                  {
+                    "path": "$.status",
+                    "notEquals": "fulfilled"
+                  }
+                ],
+                "appMessage": "Čekám na potvrzení/vydání",
+                "message": "Čekání na skutečné zpracování workerem/schedulerem.",
+                "blockAdvance": true,
+                "autoRetry": {
+                  "delaySeconds": 3,
+                  "maxAttempts": 60,
+                  "label": "Čekám na potvrzení/vydání"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "source-pieces",
+          "title": "Původní kusy jsou dostupné k aktivaci",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.capSourceBooking}}",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.paymentState",
+                "equals": "paid"
+              },
+              {
+                "path": "$.fulfillments[0].status",
+                "equals": "AVAILABLE"
+              },
+              {
+                "path": "$.fulfillments",
+                "lengthEquals": 4
+              },
+              {
+                "path": "$.fulfillments[0].productId",
+                "equals": 867
+              },
+              {
+                "path": "$.fulfillments[1].productId",
+                "equals": 867
+              },
+              {
+                "path": "$.fulfillments[2].productId",
+                "equals": 867
+              },
+              {
+                "path": "$.fulfillments[3].productId",
+                "equals": 867
+              }
+            ]
+          },
+          "extract": {
+            "capSource0": "$.fulfillments[0].fulfillmentId",
+            "capSource1": "$.fulfillments[1].fulfillmentId",
+            "capSource2": "$.fulfillments[2].fulfillmentId",
+            "capSource3": "$.fulfillments[3].fulfillmentId"
+          }
+        },
+        {
+          "id": "activate-0",
+          "title": "Aktivovat původní kus 1",
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.capSource0}}",
+            "body": {
+              "zones": [
+                "P",
+                "0",
+                "B"
+              ],
+              "validSince": "{{nowPlusMinutes:2}}",
+              "deviceId": "{{context.capDevice}}"
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{uuid}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.capSource0}}"
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.activationProtectionUntil",
+                "notEmpty": true
+              }
+            ]
+          },
+          "extract": {
+            "capSourceSince": "$.validSince",
+            "capSourceProtection": "$.activationProtectionUntil"
+          }
+        },
+        {
+          "id": "activate-1",
+          "title": "Aktivovat původní kus 2",
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.capSource1}}",
+            "body": {
+              "zones": [
+                "P",
+                "0",
+                "B"
+              ],
+              "validSince": "{{nowPlusMinutes:34}}",
+              "deviceId": "{{context.capDevice}}"
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{uuid}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.capSource1}}"
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.activationProtectionUntil",
+                "notEmpty": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "activate-2",
+          "title": "Aktivovat původní kus 3",
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.capSource2}}",
+            "body": {
+              "zones": [
+                "P",
+                "0",
+                "B"
+              ],
+              "validSince": "{{nowPlusMinutes:66}}",
+              "deviceId": "{{context.capDevice}}"
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{uuid}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.capSource2}}"
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.activationProtectionUntil",
+                "notEmpty": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "activate-3",
+          "title": "Aktivovat čtvrtou30min jízdenku",
+          "request": {
+            "method": "PATCH",
+            "path": "/v1/client/tickets/{{context.capSource3}}",
+            "body": {
+              "zones": [
+                "P",
+                "0",
+                "B"
+              ],
+              "validSince": "{{nowPlusMinutes:98}}",
+              "deviceId": "{{context.capDevice}}"
+            },
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "Idempotency-Key": "{{uuid}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillmentId",
+                "equals": "{{context.capSource3}}"
+              },
+              {
+                "path": "$.validSince",
+                "notEmpty": true
+              },
+              {
+                "path": "$.activationProtectionUntil",
+                "notEmpty": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "auto-wait",
+          "title": "Vyčkat automatického stropu140Kč bez doplatku",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/capping",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "X-Device-Id": "{{context.capDevice}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.deviceId",
+                "equals": "{{context.capDevice}}"
+              }
+            ],
+            "warnings": [
+              {
+                "when": [
+                  {
+                    "path": "$.days[0].series[0].state",
+                    "notEquals": "capped"
+                  }
+                ],
+                "appMessage": "Čekám na automatický strop",
+                "message": "Čekání na skutečné zpracování workerem/schedulerem.",
+                "blockAdvance": true,
+                "autoRetry": {
+                  "delaySeconds": 3,
+                  "maxAttempts": 60,
+                  "label": "Čekám na automatický strop"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "auto-capped",
+          "title": "Automatická náhrada883: zaplaceno144Kč, denní cena140Kč",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/capping",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}",
+              "X-Device-Id": "{{context.capDevice}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.offerAvailability",
+                "equals": "none"
+              },
+              {
+                "path": "$.days[0].series[0].state",
+                "equals": "capped"
+              },
+              {
+                "path": "$.days[0].series[0].replacementFulfillmentId",
+                "notEmpty": true
+              },
+              {
+                "path": "$.days[0].series[0].dailyPrice.amount",
+                "equals": 140
+              },
+              {
+                "path": "$.days[0].series[0].paidContribution.amount",
+                "equals": 144
+              },
+              {
+                "path": "$.days[0].series[0].targetProductId",
+                "equals": 883
+              }
+            ]
+          },
+          "extract": {
+            "capReplacement": "$.days[0].series[0].replacementFulfillmentId"
+          }
+        },
+        {
+          "id": "auto-sources",
+          "title": "Všechny čtyři původní kusy jsou nahrazené",
+          "request": {
+            "method": "GET",
+            "path": "/v1/client/tickets/purchase/payment/bookings/{{context.capSourceBooking}}",
+            "headers": {
+              "Authorization": "Bearer {{context.capToken}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "assertions": [
+              {
+                "path": "$.fulfillments[0].cappedByFulfillmentId",
+                "equals": "{{context.capReplacement}}"
+              },
+              {
+                "path": "$.fulfillments[1].cappedByFulfillmentId",
+                "equals": "{{context.capReplacement}}"
+              },
+              {
+                "path": "$.fulfillments[2].cappedByFulfillmentId",
+                "equals": "{{context.capReplacement}}"
+              },
+              {
+                "path": "$.fulfillments[3].cappedByFulfillmentId",
+                "equals": "{{context.capReplacement}}"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
