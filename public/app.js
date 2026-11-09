@@ -16533,6 +16533,7 @@ function resolveTemplate(template, { fieldValues, requestContext = null }) {
     .replaceAll("{{hex64}}", randomHex(32))
     .replaceAll("{{now}}", new Date().toISOString())
     .replaceAll("{{nowPlus2Minutes}}", new Date(Date.now() + 2 * 60 * 1000).toISOString())
+    .replace(/\{\{nowPlusMinutes:(-?\d+)\}\}/g, (_, minutes) => new Date(Date.now() + Number(minutes) * 60 * 1000).toISOString())
     .replaceAll("{{today}}", new Date().toISOString().slice(0, 10))
     .replaceAll("{{todayPlus365}}", new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
     .replace(/\{\{browser\.([a-zA-Z0-9_]+)\}\}/g, (_, name) => String(getBrowserRuntimeValue(name) ?? ""))

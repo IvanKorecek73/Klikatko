@@ -139,6 +139,12 @@
       "name": "PidLitacka - Parkování",
       "description": "První ruční pack pro základní parkovací scénáře nad veřejným API parkování.",
       "file": "parking-basic.json"
+    },
+    {
+      "id": "pidlitacka-task-1289-capping-int",
+      "name": "Task1289 — INT: úplná capping sada",
+      "description": "Skutečný PID/TS INT, oddělené testovací skupiny int1289-20261109-*, GDPay PRE sandbox a nasazený worker/HSM.",
+      "file": "task-1289-capping-int.json"
     }
   ]
 }
